@@ -159,11 +159,6 @@ export default function LandingPage() {
           <span className="cam-photo cam-photo-1" aria-hidden />
           <span className="cam-photo cam-photo-2" aria-hidden />
 
-          {/* Folded paper note */}
-          <div className="cam-note" aria-hidden>
-            <span>{L.dialogueQuestion}</span>
-          </div>
-
           {/* Camcorder / VHS frame */}
           <div className="cam-frame" aria-hidden>
             <div className="cam-scanlines" />
