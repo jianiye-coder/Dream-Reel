@@ -2818,6 +2818,14 @@ body:has(.dream-landing)::after {
   overflow-x: auto; scrollbar-width: none; padding-bottom: 2px;
 }
 .chips-inner::-webkit-scrollbar { display: none; }
+.agent-decision-bar { padding-bottom: 0.35rem; }
+.agent-decision-copy {
+  flex-shrink: 0;
+  color: rgba(225, 217, 248, 0.78);
+  font-size: 0.75rem;
+  line-height: 1.5;
+  padding: 0.28rem 0.2rem;
+}
 .chip {
   flex-shrink: 0;
   background: rgba(72, 54, 128, 0.22);
@@ -2831,6 +2839,21 @@ body:has(.dream-landing)::after {
   border-color: rgba(182, 162, 235, 0.38);
   color: rgba(218, 208, 248, 0.92);
   transform: translateY(-1px);
+}
+.chip-primary {
+  background: rgba(210, 187, 255, 0.26);
+  border-color: rgba(221, 205, 255, 0.5);
+  color: rgba(246, 240, 255, 0.96);
+}
+.chip-static {
+  cursor: default;
+  opacity: 0.78;
+}
+.chip-static:hover {
+  transform: none;
+  background: rgba(72, 54, 128, 0.22);
+  border-color: rgba(155, 135, 212, 0.22);
+  color: rgba(190, 175, 228, 0.7);
 }
 
 .input-wrapper {

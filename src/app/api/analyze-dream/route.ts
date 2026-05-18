@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { auth } from "@/auth";
 import { checkAndConsumeUsage } from "@/lib/billing";
+import { ZH_DREAM_EMOTION_CALIBRATION } from "@/lib/dreamEmotionCalibration";
+import { getRealityQuestion, mentionsRealityContext } from "@/lib/dreamQuestions";
 
 export const runtime = "nodejs";
 
@@ -50,14 +52,8 @@ const analysisSchema = z.object({
 
 const ZH_SYSTEM_PROMPT = `你是一个梦境分析助手。用户会提供一段梦境描述，以及可选的睡前情境（昨晚吃的食物、睡前活动）。请从中提取以下信息并以 JSON 返回：
 
-- mood（情绪）：用 2–4 个字概括梦境的主要情绪，从以下词汇中选最贴切的一个（也可以是其变体或组合）：
-  · 焦虑类（紧张、不安、惊恐、担忧、恐惧、惶恐、噩梦、逃跑、被追）
-  · 压抑类（悲伤、伤心、难过、孤独、失落、沮丧、绝望、压抑、低落）
-  · 困惑类（困惑、迷失、茫然、迷糊、疑惑、混乱、奇异、荒诞）
-  · 怀旧类（怀旧、回忆、思念、童年、往事、故乡、怀念）
-  · 兴奋类（兴奋、好奇、神奇、奇幻、冒险、惊喜、探索、自由）
-  · 平静类（平静、宁静、温暖、愉快、轻松、清明）
-  若梦境情绪复杂，选主导情绪。若实在无法判断则返回空字符串
+- mood（情绪）：用 2–4 个字概括梦境的主导情绪。必须参考下方“梦境情绪标注校准”，并从允许的主情绪标签中选最贴切的一个。若梦境情绪复杂，仍然只输出一个主导情绪；禁止输出“混合”。若实在无法判断则返回空字符串
+${ZH_DREAM_EMOTION_CALIBRATION}
 - title（标题）：为这场梦取一个短标题，4–10 个中文字符，像私人梦境档案标题，不要加书名号、引号或标点。标题要来自梦里的核心场景、人物或意象，例如"月光楼梯间""不存在的相册""海边教室"
 - stressScore（压力评分）：1（平静舒适）到 5（极度紧张）的整数，若无法判断则返回 null
 - people（人物）：梦境中出现的具体人物，每项不超过 6 字，最多 5 个，若无则返回空数组。归一化规则：
@@ -143,15 +139,11 @@ type OpenAIResponse = {
 
 const OPENAI_MODEL = "gpt-4o-mini";
 const OPENAI_TIMEOUT_MS = 60_000;
-const REALITY_QUESTION_ZH = "这跟你最近现实生活所发生的事情，有没有什么关系？";
-const REALITY_QUESTION_EN = "Does this connect to anything that has happened in your real life recently?";
 
 function ensureRealityQuestion(questions: string[], lang: "zh" | "en") {
-  const requiredQuestion = lang === "en" ? REALITY_QUESTION_EN : REALITY_QUESTION_ZH;
+  const requiredQuestion = getRealityQuestion(lang);
   const alreadyIncluded = questions.some((question) =>
-    lang === "en"
-      ? question.toLowerCase().includes("real life") || question.toLowerCase().includes("recently")
-      : question.includes("现实生活") || question.includes("最近"),
+    mentionsRealityContext(question, lang),
   );
 
   if (alreadyIncluded) return questions.slice(0, 3);

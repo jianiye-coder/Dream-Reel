@@ -5,6 +5,8 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
+import type { DreamAgentMemory, DreamAgentNextAction, DreamAgentStage } from "@/lib/dreamFollowUpAgent";
+import { getRealityQuestion } from "@/lib/dreamQuestions";
 import { buildDreamImagePrompt } from "@/lib/imagePrompt";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { LangToggle } from "@/components/LangToggle";
@@ -34,14 +36,14 @@ function getTodayDate() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-type ConvStage = "exploring" | "deepening" | "ready";
-
 interface ChatMessage {
   id: string;
   role: "user" | "assistant";
   content: string;
   questions?: string[];
-  stage?: ConvStage;
+  stage?: DreamAgentStage;
+  nextAction?: DreamAgentNextAction;
+  memory?: DreamAgentMemory;
 }
 
 interface AnalysisResult {
@@ -263,6 +265,19 @@ export default function JournalPage() {
     return ai[ai.length - 1]?.questions ?? [];
   }, [messages]);
 
+  const latestAgentDecision = useMemo(() => {
+    const ai = messages.filter((m) => m.role === "assistant" && m.nextAction);
+    return ai[ai.length - 1] ?? null;
+  }, [messages]);
+  const agentReadyToAnalyze = latestAgentDecision?.nextAction === "ready_to_analyze";
+  const agentDecisionCopy = lang === "zh"
+    ? "Agent 判断：这场梦的信息已经足够整理。"
+    : "Agent decision: this dream is ready to organize.";
+  const organizeDreamLabel = (() => {
+    if (isAnalyzing) return J.analyzingBtn;
+    return lang === "zh" ? "整理这场梦" : "Organize this dream";
+  })();
+
   const activeDreamText =
     mode === "chat"
       ? messages.filter((m) => m.role === "user").map((m) => m.content).join("\n\n")
@@ -359,7 +374,9 @@ export default function JournalPage() {
       const data = (await res.json()) as {
         message?: string;
         questions?: string[];
-        stage?: ConvStage;
+        stage?: DreamAgentStage;
+        nextAction?: DreamAgentNextAction;
+        memory?: DreamAgentMemory;
         error?: string;
       };
 
@@ -375,6 +392,8 @@ export default function JournalPage() {
           content: data.message ?? "……",
           questions: data.questions ?? [],
           stage: data.stage,
+          nextAction: data.nextAction,
+          memory: data.memory,
         },
       ]);
     } catch (err) {
@@ -630,6 +649,7 @@ export default function JournalPage() {
   function enterDreamChat() {
     const text = quickText.trim();
     if (!text || !generatedImageUrl) return;
+    const realityQuestion = getRealityQuestion(lang);
 
     const contextLines = [
       lang === "zh" ? "我已经把你的梦境显影成了一张图。" : "Your dream image has finished developing.",
@@ -640,11 +660,7 @@ export default function JournalPage() {
     if (analysis?.locations?.length) {
       contextLines.push(lang === "zh" ? `反复浮现的地点：${analysis.locations.join("、")}。` : `Places that surfaced: ${analysis.locations.join(", ")}.`);
     }
-    contextLines.push(
-      lang === "zh"
-        ? "这跟你最近现实生活所发生的事情，有没有什么关系？"
-        : "Does this connect to anything that has happened in your real life recently?",
-    );
+    contextLines.push(realityQuestion);
 
     setMessages([
       { id: "welcome", role: "assistant", content: J.welcome },
@@ -653,12 +669,18 @@ export default function JournalPage() {
         id: `a-image-${Date.now()}`,
         role: "assistant",
         content: contextLines.join("\n\n"),
-        questions: [
-          lang === "zh"
-            ? "这跟你最近现实生活所发生的事情，有没有什么关系？"
-            : "Does this connect to anything that has happened in your real life recently?",
-        ],
+        questions: [realityQuestion],
         stage: "deepening",
+        nextAction: "ask_followup",
+        memory: {
+          missingDetails: [
+            lang === "zh" ? "现实生活关联" : "real-life connection",
+          ],
+          observedSignals: [
+            ...(analysis?.mood ? [analysis.mood] : []),
+            ...(analysis?.locations ?? []),
+          ],
+        },
       },
     ]);
     setMode("chat");
@@ -1088,6 +1110,24 @@ export default function JournalPage() {
       {/* Sleep log — step 2 */}
 
       {/* Question chips — chat mode only */}
+      {mode === "chat" && step === "dream" && agentReadyToAnalyze && (
+        <div className="chips-bar agent-decision-bar">
+          <div className="chips-inner">
+            <span className="agent-decision-copy">
+              {agentDecisionCopy}
+            </span>
+            <button className="chip chip-primary" onClick={() => void analyzeDream()}>
+              {organizeDreamLabel}
+            </button>
+            {latestAgentDecision.memory?.observedSignals?.slice(0, 3).map((signal) => (
+              <span key={signal} className="chip chip-static">
+                {signal}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
       {mode === "chat" && step === "dream" && latestQuestions.length > 0 && (
         <div className="chips-bar">
           <div className="chips-inner">
