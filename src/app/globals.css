@@ -489,9 +489,9 @@ body:has(.mist-page)::before {
   grid-template-columns: minmax(0, 1fr) minmax(30rem, 0.9fr);
   align-items: center;
   gap: 6rem;
-  width: min(1280px, calc(100% - 4rem));
+  width: min(1120px, calc(100% - 2rem));
   margin: 0 auto;
-  padding: 10rem 0 8rem;
+  padding: 0;
 }
 
 .hero-copy {
