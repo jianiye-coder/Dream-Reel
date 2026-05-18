@@ -169,56 +169,11 @@ export default function LandingPage() {
             <img src="/dream-photo-3.jpg" alt="" aria-hidden />
           </span>
 
-          {/* Camcorder / VHS frame */}
-          <div className="cam-frame" aria-hidden>
-            <div className="cam-scanlines" />
-            <div className="cam-grain" />
-            <div className="cam-vignette" />
-
-            {/* Top HUD */}
-            <div className="cam-hud-top">
-              <span className="cam-rec"><i />REC</span>
-              <span className="cam-ts">2024·03·14 · 04:18 AM</span>
-            </div>
-
-            {/* Dream footage body */}
-            <div className="cam-body">
-              <div className="dream-footage" role="img" aria-label={L.heroFragments[0]}>
-                <span className="dream-haze haze-one" />
-                <span className="dream-haze haze-two" />
-                <span className="dream-light light-one" />
-                <span className="dream-light light-two" />
-                <span className="dream-road">
-                  <i className="road-line road-line-left" />
-                  <i className="road-line road-line-right" />
-                  <i className="road-line road-line-mid" />
-                </span>
-                <span className="dream-runner runner-ghost runner-ghost-one" />
-                <span className="dream-runner runner-ghost runner-ghost-two" />
-                <span className="dream-runner">
-                  <i className="runner-head" />
-                  <i className="runner-torso" />
-                  <i className="runner-arm runner-arm-front" />
-                  <i className="runner-arm runner-arm-back" />
-                  <i className="runner-leg runner-leg-front" />
-                  <i className="runner-leg runner-leg-back" />
-                </span>
-                <span className="dream-shadow" />
-                <p className="cam-label dream-footage-label">DREAM LOG</p>
-                <p className="cam-entry dream-footage-title">{L.heroFragments[0]}</p>
-              </div>
-            </div>
-
-            {/* Subtitle bar */}
-            <div className="cam-subtitle">
-              <span>{L.heroFragments[2]}</span>
-            </div>
-
-            {/* Bottom HUD */}
-            <div className="cam-hud-bot">
-              <span>SP ◉ AUTO</span>
-              <span className="cam-counter">00:04:18:22</span>
-            </div>
+          {/* Film still — main focal image */}
+          <div className="hero-film-still" aria-hidden>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/dream-photo-1.jpg" alt="" aria-hidden />
+            <span className="hero-film-caption">2024 · 03 · 14 · 04:18</span>
           </div>
         </div>
       </section>

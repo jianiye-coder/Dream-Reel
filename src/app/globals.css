@@ -1528,7 +1528,51 @@ body:has(.dream-landing)::after {
 
 /* ─── Camcorder / VHS Frame ────────────────────────────────── */
 
-/* Main VHS screen */
+/* Film still — replaces VHS frame */
+.hero-film-still {
+  position: absolute;
+  top: 3rem;
+  right: 0;
+  width: min(20rem, 90%);
+  aspect-ratio: 4 / 3;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow:
+    0 28px 72px rgba(0, 0, 0, 0.6),
+    0 0 0 1px rgba(0, 0, 0, 0.2);
+  background: #06090c;
+}
+.hero-film-still img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  filter: saturate(0.72) contrast(1.08) brightness(0.82);
+  display: block;
+}
+.hero-film-still::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at center, transparent 30%, rgba(0, 0, 0, 0.5) 100%);
+  pointer-events: none;
+  z-index: 1;
+}
+.hero-film-caption {
+  position: absolute;
+  bottom: 0.7rem;
+  left: 0.85rem;
+  z-index: 2;
+  font-family: var(--font-sub), "Courier New", monospace;
+  font-size: 0.5rem;
+  letter-spacing: 0.18em;
+  color: rgba(200, 182, 148, 0.42);
+  pointer-events: none;
+}
+
+/* Main VHS screen — kept for reference but no longer used */
 .cam-frame {
   position: absolute;
   inset: 2.5rem 0 auto auto;
@@ -2065,13 +2109,13 @@ body:has(.dream-landing)::after {
   position: absolute;
   width: 9rem;
   height: 11rem;
-  bottom: 4rem;
-  left: 0;
-  transform: rotate(-8deg);
+  bottom: 2rem;
+  left: -1rem;
+  transform: rotate(-10deg);
   border: 3.5px solid #e8e3d4;
   border-bottom-width: 2.4rem;
   background: #0a0a0a;
-  z-index: 1;
+  z-index: 2;
 }
 .cam-photo-1 img {
   position: absolute;
@@ -2097,13 +2141,13 @@ body:has(.dream-landing)::after {
   position: absolute;
   width: 8.5rem;
   height: 10rem;
-  bottom: 0;
-  right: -2rem;
-  transform: rotate(10deg);
+  bottom: -1rem;
+  right: -3rem;
+  transform: rotate(9deg);
   border: 3px solid #ddd7c6;
   border-bottom-width: 2rem;
   background: #0a0a0a;
-  z-index: 1;
+  z-index: 2;
 }
 .cam-photo-2 img {
   position: absolute;
