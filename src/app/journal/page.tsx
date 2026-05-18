@@ -1233,7 +1233,6 @@ export default function JournalPage() {
                 placeholder={J.placeholder}
                 className="main-input"
                 rows={1}
-                disabled={isTyping}
               />
               <button
                 type="button"
