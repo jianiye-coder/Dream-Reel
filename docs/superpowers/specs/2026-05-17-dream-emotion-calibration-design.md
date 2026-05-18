@@ -2,7 +2,7 @@
 
 ## Goal
 
-Use the annotated dream emotion dataset as calibration examples for the existing dream analysis prompt. This should make `/api/analyze-dream` return more stable dream-specific moods such as `恐惧`, `焦虑`, `怀旧`, `平静`, `惊奇`, and `混合`-aware dominant labels without changing the product database or UI.
+Use the annotated dream emotion dataset as calibration examples for the existing dream analysis prompt. This should make `/api/analyze-dream` return more stable dream-specific moods such as `恐惧`, `焦虑`, `怀旧`, `平静`, and `惊奇` without changing the product database or UI. `混合` may be used only as internal tone guidance in examples; it must not be returned as the final `mood`.
 
 ## Scope
 
@@ -12,6 +12,7 @@ In scope:
 - Include the dream emotion label guide, annotation rules, and the 12 pre-labeled examples created from the current dataset.
 - Import the calibration text into `src/app/api/analyze-dream/route.ts`.
 - Update the Chinese analysis prompt so `mood` and `stressScore` follow the calibration examples.
+- Require `mood` to be one dominant emotion label, never `混合`.
 - Keep the API response shape unchanged.
 
 Out of scope:
@@ -28,6 +29,7 @@ Out of scope:
 
 - Allowed primary emotion labels.
 - Rules for selecting one dominant emotion.
+- A rule that `混合` describes tone only and is not an allowed final mood.
 - Stress score guidance from 1 to 5.
 - Examples with dream text, primary emotion, secondary emotions, score, tone, trigger source, and short rationale.
 
