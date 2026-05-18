@@ -486,12 +486,12 @@ body:has(.mist-page)::before {
 .hero-section {
   min-height: 100svh;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 26rem;
-  align-items: start;
-  gap: 2rem;
-  width: min(1180px, calc(100% - 2rem));
+  grid-template-columns: minmax(0, 1fr) minmax(30rem, 0.9fr);
+  align-items: center;
+  gap: 6rem;
+  width: min(1280px, calc(100% - 4rem));
   margin: 0 auto;
-  padding: 7rem 0 5rem;
+  padding: 10rem 0 8rem;
 }
 
 .hero-copy {
@@ -1496,7 +1496,7 @@ body:has(.dream-landing)::after {
 }
 
 .immersive-hero {
-  grid-template-columns: minmax(0, 0.95fr) minmax(20rem, 0.9fr);
+  grid-template-columns: minmax(0, 1fr) minmax(30rem, 0.85fr);
 }
 
 .hero-copy {
@@ -1506,8 +1506,7 @@ body:has(.dream-landing)::after {
 .immersive-hero .hero-copy {
   opacity: 1;
   filter: none;
-  align-self: start;
-  margin-top: 2rem;
+  align-self: center;
 }
 
 .immersive-hero .hero-copy h1 {
@@ -2066,8 +2065,8 @@ body:has(.dream-landing)::after {
   position: absolute;
   width: 8.5rem;
   height: 10rem;
-  top: 0.5rem;
-  left: -0.5rem;
+  top: -2rem;
+  left: 2rem;
   transform: rotate(-9deg);
   border: 3.5px solid #e8e3d4;
   border-bottom-width: 2.2rem;
@@ -2683,28 +2682,34 @@ body:has(.dream-landing)::after {
 
 .voices-stream {
   position: relative;
-  padding: 2rem 0 0;
+  padding: 2rem 0 8rem;
 }
 
 .voices-stream::before {
   content: "";
   position: absolute;
   left: 50%;
-  top: 13rem;
+  top: 0;
   bottom: 0;
   width: 1px;
-  background: linear-gradient(180deg, rgba(250, 218, 156, 0.42), rgba(250, 218, 156, 0.02));
+  background: linear-gradient(
+    180deg,
+    transparent 0%,
+    rgba(250, 218, 156, 0.36) 8%,
+    rgba(250, 218, 156, 0.36) 88%,
+    transparent 100%
+  );
 }
 
 .voices-intro {
-  max-width: 740px;
-  margin: 0 auto 4rem;
+  max-width: 640px;
+  margin: 0 auto 7rem;
   text-align: center;
 }
 
 .voice-current {
   display: grid;
-  gap: 4rem;
+  gap: 7rem;
 }
 
 .voice-item {

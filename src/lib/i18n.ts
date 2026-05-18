@@ -194,8 +194,8 @@ const zh = {
         ],
       },
     ] as { name: string; price: string; cadence: string; badge: string; cta: string; features: string[] }[],
-    voicesEyebrow: "",
-    voicesTitle: "",
+    voicesEyebrow: "梦与意识",
+    voicesTitle: "有人比你更早看见这些",
     voices: [
       {
         name: "西格蒙德·弗洛伊德",
@@ -615,8 +615,8 @@ const en: typeof zh = {
         ],
       },
     ],
-    voicesEyebrow: "",
-    voicesTitle: "",
+    voicesEyebrow: "Dreams & consciousness",
+    voicesTitle: "Others saw this before you did",
     voices: [
       {
         name: "Sigmund Freud",
