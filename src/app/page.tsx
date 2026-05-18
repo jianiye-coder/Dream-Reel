@@ -3,12 +3,10 @@
 import Image from "next/image";
 import Link from "next/link";
 import type { PointerEvent } from "react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { LangToggle } from "@/components/LangToggle";
-
-const fragmentClassNames = ["fragment-one", "fragment-two", "fragment-three", "fragment-four", "fragment-five"];
 
 const archiveNodeClassNames = ["node-one", "node-two", "node-three", "node-four"];
 
@@ -22,89 +20,11 @@ const sleepNights = [
   { rem: 32, light: 35, deep: 18, awake: 5, logged: true },
 ];
 
-const ZH_SPIRIT_MESSAGES = [
-  "有些梦不是故事，是情绪留下的脚印。",
-  "你以为你忘了，其实只是没被记录。",
-  "今晚醒来以后，先别解锁手机。",
-  "这个场景，好像不是第一次出现。",
-  "昨晚你又去了哪里？",
-];
-
-const EN_SPIRIT_MESSAGES = [
-  "Some dreams aren't stories. They're footprints of feeling.",
-  "You didn't forget. It was just never written down.",
-  "When you wake tonight, don't reach for your phone first.",
-  "This scene feels familiar, doesn't it?",
-  "Where did you go last night?",
-];
-
 export default function LandingPage() {
   const { lang, T } = useLanguage();
   const L = T.landing;
   const pageRef = useRef<HTMLElement>(null);
   const router = useRouter();
-
-  // Spirit refs
-  const spiritWrapRef = useRef<HTMLDivElement>(null);
-  const targetPos = useRef({ x: -200, y: -200 });
-  const currentPos = useRef({ x: -200, y: -200 });
-  const [spiritMessage, setSpiritMessage] = useState("");
-  const [showMessage, setShowMessage] = useState(false);
-  const msgTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  // Intro state
-  const [introDone, setIntroDone] = useState(false);
-  const [introFading, setIntroFading] = useState(false);
-
-  const dismissIntro = useCallback(() => {
-    setIntroFading(true);
-    setTimeout(() => setIntroDone(true), 800);
-  }, []);
-
-  // Auto-dismiss intro
-  useEffect(() => {
-    const t1 = setTimeout(() => setIntroFading(true), 3800);
-    const t2 = setTimeout(() => setIntroDone(true), 4600);
-    return () => {
-      clearTimeout(t1);
-      clearTimeout(t2);
-    };
-  }, []);
-
-  // Mouse lerp for spirit
-  useEffect(() => {
-    const onMove = (e: MouseEvent) => {
-      targetPos.current = { x: e.clientX, y: e.clientY };
-    };
-    window.addEventListener("mousemove", onMove);
-
-    let raf: number;
-    const tick = () => {
-      const lp = 0.06;
-      currentPos.current.x += (targetPos.current.x - currentPos.current.x) * lp;
-      currentPos.current.y += (targetPos.current.y - currentPos.current.y) * lp;
-      if (spiritWrapRef.current) {
-        spiritWrapRef.current.style.transform =
-          `translate(${currentPos.current.x - 22}px, ${currentPos.current.y - 22}px)`;
-      }
-      raf = requestAnimationFrame(tick);
-    };
-    raf = requestAnimationFrame(tick);
-
-    return () => {
-      window.removeEventListener("mousemove", onMove);
-      cancelAnimationFrame(raf);
-    };
-  }, []);
-
-  const handleSpiritClick = useCallback(() => {
-    const messages = lang === "zh" ? ZH_SPIRIT_MESSAGES : EN_SPIRIT_MESSAGES;
-    const msg = messages[Math.floor(Math.random() * messages.length)];
-    setSpiritMessage(msg);
-    setShowMessage(true);
-    if (msgTimerRef.current) clearTimeout(msgTimerRef.current);
-    msgTimerRef.current = setTimeout(() => setShowMessage(false), 3000);
-  }, [lang]);
 
   useEffect(() => {
     const root = pageRef.current;
@@ -121,6 +41,15 @@ export default function LandingPage() {
 
     root.querySelectorAll(".reveal-dream").forEach((element) => observer.observe(element));
     return () => observer.disconnect();
+  }, []);
+
+  // Landscape parallax
+  useEffect(() => {
+    const onScroll = () => {
+      document.documentElement.style.setProperty("--lh-scroll", String(window.scrollY));
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
   const openRoute = (href: string) => (event: React.MouseEvent<HTMLAnchorElement>) => {
@@ -158,122 +87,81 @@ export default function LandingPage() {
 
   return (
     <>
-      {/* Opening cinematic sequence */}
-      {!introDone && (
-        <div className={`dream-intro${introFading ? " dream-intro-fading" : ""}`} aria-hidden>
-          <div className="intro-content">
-            <div className="intro-copy">
-              <span className="intro-line" style={{ animationDelay: "0.8s" }}>
-                {lang === "zh" ? "你昨晚去过的地方" : "The places you visited last night"}
-              </span>
-              <span className="intro-line intro-line-2">
-                {lang === "zh" ? "正在慢慢消失。" : "are already fading."}
-              </span>
-              <span className="intro-line intro-line-3">
-                {lang === "zh" ? "但有些场景，其实一直在重复。" : "But some scenes keep coming back."}
-              </span>
-            </div>
-            <div className="intro-spirit-large" aria-hidden>
-              <div className="spirit-aura" />
-              <div className="spirit-core" />
-              <div className="spirit-orbit" />
-              <div className="spirit-orbit-2" />
-            </div>
-          </div>
-          <button className="intro-skip" onClick={dismissIntro}>
-            {lang === "zh" ? "跳过" : "Skip"}
-          </button>
-        </div>
-      )}
-
-      {/* Spirit character — follows mouse */}
-      {introDone && (
-        <div ref={spiritWrapRef} className="dream-spirit-wrap" aria-hidden>
-          <button
-            type="button"
-            className="dream-spirit"
-            onClick={handleSpiritClick}
-            tabIndex={-1}
-            aria-label={lang === "zh" ? "梦境小精灵" : "Dream spirit"}
-          >
-            <div className="spirit-aura" />
-            <div className="spirit-core" />
-            <div className="spirit-orbit" />
-            <div className="spirit-orbit-2" />
-            {showMessage && (
-              <div className="spirit-msg" role="status">
-                {spiritMessage}
-              </div>
-            )}
-          </button>
-        </div>
-      )}
-
       <main
         ref={pageRef}
         className="dream-landing"
         onPointerMove={handlePointerMove}
         onPointerUpCapture={handleNavPointer}
       >
-        <div className="dream-sky" aria-hidden>
-          <span className="moon-glow" />
-          <span className="dream-cloud cloud-one" />
-          <span className="dream-cloud cloud-two" />
-          <span className="dream-cloud cloud-three" />
-          <span className="film-ribbon ribbon-one" />
-          <span className="film-ribbon ribbon-two" />
-          <span className="memory-page page-one" />
-          <span className="memory-page page-two" />
-          <span className="bedroom-window" />
-          <span className="landing-particle particle-one" />
-          <span className="landing-particle particle-two" />
-          <span className="landing-particle particle-three" />
-          <span className="landing-particle particle-four" />
-        </div>
+        <section className="landscape-hero" aria-label="Hero">
+          {/* Sky */}
+          <div className="lh-sky" aria-hidden />
 
-        <nav className="landing-nav" aria-label="Main navigation">
-          <Link
-            href="/"
-            className="landing-logo"
-            aria-label="Dream Reel home"
-            data-top-nav-link
-            onClick={openRoute("/")}
-          >
-            <Image src="/dream-reel-logo.png" alt="" aria-hidden width={36} height={36} className="logo-img" />
-            <span>Dream Reel</span>
-          </Link>
+          {/* Moon */}
+          <div className="lh-moon" aria-hidden />
 
-          <div className="nav-center">
-            {L.navItems.map((item) => (
-              <a
-                key={item.label}
-                href={item.href}
-                data-top-nav-link
-                onClick={openRoute(item.href)}
-              >
-                {item.label}
-              </a>
-            ))}
-          </div>
+          {/* Film-frame silhouettes */}
+          <span className="lh-film lh-film-1" aria-hidden />
+          <span className="lh-film lh-film-2" aria-hidden />
+          <span className="lh-film lh-film-3" aria-hidden />
 
-          <div className="landing-nav-actions">
-            <LangToggle className="nav-cta" />
-            <a
-              href="/journal"
-              className="nav-cta"
+          {/* Ambient particles */}
+          <span className="lh-particle lh-p1" aria-hidden />
+          <span className="lh-particle lh-p2" aria-hidden />
+          <span className="lh-particle lh-p3" aria-hidden />
+          <span className="lh-particle lh-p4" aria-hidden />
+          <span className="lh-particle lh-p5" aria-hidden />
+
+          {/* Terrain layers — back to front */}
+          <div className="lh-layer lh-l1" aria-hidden />
+          <div className="lh-layer lh-l2" aria-hidden />
+          <div className="lh-layer lh-l3" aria-hidden />
+          <div className="lh-layer lh-l4" aria-hidden />
+
+          {/* Nav floats above the landscape */}
+          <nav className="landing-nav" aria-label="Main navigation">
+            <Link
+              href="/"
+              className="landing-logo"
+              aria-label="Dream Reel home"
               data-top-nav-link
-              onClick={openRoute("/journal")}
+              onClick={openRoute("/")}
             >
-              {L.navCta}
-            </a>
-          </div>
-        </nav>
+              <Image src="/dream-reel-logo.png" alt="" aria-hidden width={36} height={36} className="logo-img" />
+              <span>Dream Reel</span>
+            </Link>
 
-        <section className="hero-section immersive-hero">
-          <div className="hero-copy">
+            <div className="nav-center">
+              {L.navItems.map((item) => (
+                <a
+                  key={item.label}
+                  href={item.href}
+                  data-top-nav-link
+                  onClick={openRoute(item.href)}
+                >
+                  {item.label}
+                </a>
+              ))}
+            </div>
+
+            <div className="landing-nav-actions">
+              <LangToggle className="nav-cta" />
+              <a
+                href="/journal"
+                className="nav-cta"
+                data-top-nav-link
+                onClick={openRoute("/journal")}
+              >
+                {L.navCta}
+              </a>
+            </div>
+          </nav>
+
+          {/* Hero copy — centered above terrain */}
+          <div className="lh-content">
             <p className="hero-kicker">{L.heroKicker}</p>
-            <h1>DREAM REEL</h1>
-            <p className="hero-subtitle">{L.heroSubtitle}</p>
+            <h1 className="lh-title">DREAM REEL</h1>
+            <p className="lh-subtitle">{L.heroSubtitle}</p>
             <div className="hero-actions">
               <Link href="/journal" className="hero-button hero-button-primary">
                 {L.heroCta1}
@@ -284,23 +172,9 @@ export default function LandingPage() {
             </div>
           </div>
 
-          <div className="hero-memory-field" aria-label="Animated dream archive preview">
-            <div className="dream-image-preview" aria-hidden>
-              <span className="image-moon" />
-              <span className="image-window" />
-              <span className="image-page" />
-            </div>
-
-            <div className="dialogue-preview">
-              <p>{L.dialogueLabel}</p>
-              <span>{L.dialogueQuestion}</span>
-            </div>
-
-            {L.heroFragments.map((text, i) => (
-              <span key={i} className={`hero-fragment ${fragmentClassNames[i]}`}>
-                {text}
-              </span>
-            ))}
+          {/* Scroll cue */}
+          <div className="lh-scroll-hint" aria-hidden>
+            <span />
           </div>
         </section>
 
@@ -448,3 +322,4 @@ export default function LandingPage() {
     </>
   );
 }
+
