@@ -154,23 +154,45 @@ export default function LandingPage() {
           </div>
         </div>
 
-        <div className="hero-memory-field" aria-label="Animated dream archive preview">
-          <div className="dream-image-preview" aria-hidden>
-            <span className="image-moon" />
-            <span className="image-window" />
-            <span className="image-page" />
-          </div>
+        <div className="hero-memory-field" aria-label="Dream recording preview">
+          {/* Scattered polaroid cards behind the frame */}
+          <span className="cam-photo cam-photo-1" aria-hidden />
+          <span className="cam-photo cam-photo-2" aria-hidden />
 
-          <div className="dialogue-preview">
-            <p>{L.dialogueLabel}</p>
+          {/* Folded paper note */}
+          <div className="cam-note" aria-hidden>
             <span>{L.dialogueQuestion}</span>
           </div>
 
-          {L.heroFragments.map((text, i) => (
-            <span key={i} className={`hero-fragment ${fragmentClassNames[i]}`}>
-              {text}
-            </span>
-          ))}
+          {/* Camcorder / VHS frame */}
+          <div className="cam-frame" aria-hidden>
+            <div className="cam-scanlines" />
+            <div className="cam-grain" />
+            <div className="cam-vignette" />
+
+            {/* Top HUD */}
+            <div className="cam-hud-top">
+              <span className="cam-rec"><i />REC</span>
+              <span className="cam-ts">2024·03·14 · 04:18 AM</span>
+            </div>
+
+            {/* Dream footage body */}
+            <div className="cam-body">
+              <p className="cam-label">DREAM LOG</p>
+              <p className="cam-entry">{L.heroFragments[0]}</p>
+            </div>
+
+            {/* Subtitle bar */}
+            <div className="cam-subtitle">
+              <span>{L.heroFragments[2]}</span>
+            </div>
+
+            {/* Bottom HUD */}
+            <div className="cam-hud-bot">
+              <span>SP ◉ AUTO</span>
+              <span className="cam-counter">00:04:18:22</span>
+            </div>
+          </div>
         </div>
       </section>
 

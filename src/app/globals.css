@@ -514,7 +514,7 @@ body:has(.mist-page)::before {
 .hero-copy h1 {
   margin-top: 1.2rem;
   color: #fff9ef;
-  font-family: Georgia, "Times New Roman", serif;
+  font-family: var(--font-serif), Georgia, "Times New Roman", serif;
   font-size: clamp(4.7rem, 12vw, 10.8rem);
   font-weight: 500;
   line-height: 0.86;
@@ -642,7 +642,7 @@ body:has(.mist-page)::before {
 .section-heading h2 {
   margin-top: 0.8rem;
   color: #fff9ef;
-  font-family: Georgia, "Times New Roman", serif;
+  font-family: var(--font-serif), Georgia, "Times New Roman", serif;
   font-size: clamp(2.4rem, 6vw, 4.8rem);
   font-weight: 500;
   letter-spacing: 0.08em;
@@ -769,7 +769,7 @@ body:has(.mist-page)::before {
 .dream-card-content h3 {
   margin-top: 1rem;
   color: #fff9ef;
-  font-family: Georgia, "Times New Roman", serif;
+  font-family: var(--font-serif), Georgia, "Times New Roman", serif;
   font-size: clamp(2.1rem, 5vw, 4.2rem);
   font-weight: 500;
   line-height: 1;
@@ -882,7 +882,7 @@ body:has(.mist-page)::before {
 .feature-copy h2 {
   margin-top: 0.8rem;
   color: #fff9ef;
-  font-family: Georgia, "Times New Roman", serif;
+  font-family: var(--font-serif), Georgia, "Times New Roman", serif;
   font-size: clamp(2.1rem, 5vw, 4.2rem);
   font-weight: 500;
   line-height: 1;
@@ -1018,7 +1018,7 @@ body:has(.mist-page)::before {
 .inspiration-intro h2 {
   margin-top: 0.8rem;
   color: #fff9ef;
-  font-family: Georgia, "Times New Roman", serif;
+  font-family: var(--font-serif), Georgia, "Times New Roman", serif;
   font-size: clamp(2.5rem, 6vw, 5rem);
   font-weight: 500;
   line-height: 0.98;
@@ -1194,7 +1194,7 @@ body:has(.mist-page)::before {
 .inspiration-copy h3 {
   margin-top: 0.65rem;
   color: #fff9ef;
-  font-family: Georgia, "Times New Roman", serif;
+  font-family: var(--font-serif), Georgia, "Times New Roman", serif;
   font-size: clamp(1.6rem, 3vw, 2.3rem);
   font-weight: 500;
   letter-spacing: 0.04em;
@@ -1203,7 +1203,7 @@ body:has(.mist-page)::before {
 .inspiration-copy blockquote {
   margin-top: 0.95rem;
   color: rgba(255, 248, 232, 0.86);
-  font-family: Georgia, "Times New Roman", serif;
+  font-family: var(--font-serif), Georgia, "Times New Roman", serif;
   font-size: 1.05rem;
   line-height: 1.55;
 }
@@ -1472,7 +1472,7 @@ body:has(.dream-landing)::after {
   line-height: 1.18;
   letter-spacing: 0;
   margin: 0 0 0.8rem;
-  font-family: Georgia, "Times New Roman", serif;
+  font-family: var(--font-serif), Georgia, "Times New Roman", serif;
 }
 
 .feature-flow-copy {
@@ -1523,8 +1523,237 @@ body:has(.dream-landing)::after {
 .hero-memory-field {
   position: relative;
   min-height: 34rem;
-  transform: translate3d(calc(var(--mx) * 24px), calc(var(--my) * 18px), 0);
-  transition: transform 0.18s ease-out;
+  transform: translate3d(calc(var(--mx) * 14px), calc(var(--my) * 10px), 0);
+  transition: transform 0.22s ease-out;
+}
+
+/* ─── Camcorder / VHS Frame ────────────────────────────────── */
+
+/* Main VHS screen */
+.cam-frame {
+  position: absolute;
+  inset: 2.5rem 0 auto auto;
+  width: min(22rem, 90%);
+  aspect-ratio: 4 / 3;
+  background: #060d08;
+  border-radius: 3px;
+  overflow: hidden;
+  border: 1px solid rgba(100, 140, 100, 0.12);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.04),
+    0 28px 72px rgba(0, 0, 0, 0.62),
+    inset 0 0 50px rgba(0, 0, 0, 0.5);
+  animation: cam-warble 12s ease-in-out infinite;
+}
+
+/* CRT scan lines */
+.cam-scanlines {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 2;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent 0px,
+    transparent 2px,
+    rgba(0, 0, 0, 0.14) 2px,
+    rgba(0, 0, 0, 0.14) 3px
+  );
+}
+
+/* Film grain */
+.cam-grain {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 3;
+  opacity: 0.6;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.82' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23g)' opacity='0.22'/%3E%3C/svg%3E");
+}
+
+/* CRT vignette */
+.cam-vignette {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 4;
+  background: radial-gradient(ellipse 85% 80% at 50% 50%, transparent 38%, rgba(0, 0, 0, 0.72) 100%);
+}
+
+/* Top HUD bar */
+.cam-hud-top {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  z-index: 5;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5rem 0.7rem;
+  background: linear-gradient(to bottom, rgba(0, 0, 0, 0.45), transparent);
+}
+
+/* REC indicator */
+.cam-rec {
+  display: flex;
+  align-items: center;
+  gap: 0.32rem;
+  font-family: var(--font-sub), "Courier New", monospace;
+  font-size: 0.58rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  color: #ff3232;
+}
+.cam-rec i {
+  display: block;
+  width: 5px; height: 5px;
+  border-radius: 50%;
+  background: #ff3232;
+  box-shadow: 0 0 5px #ff3232;
+  animation: cam-blink 1.4s step-end infinite;
+}
+
+/* Timestamp */
+.cam-ts {
+  font-family: var(--font-sub), "Courier New", monospace;
+  font-size: 0.56rem;
+  letter-spacing: 0.06em;
+  color: rgba(195, 230, 195, 0.65);
+}
+
+/* Dream footage content */
+.cam-body {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  z-index: 5;
+  padding: 1rem;
+  width: 100%;
+}
+.cam-label {
+  font-family: var(--font-sub), "Courier New", monospace;
+  font-size: 0.46rem;
+  letter-spacing: 0.34em;
+  color: rgba(140, 190, 140, 0.38);
+  margin-bottom: 0.75rem;
+}
+.cam-entry {
+  font-family: var(--font-serif), Georgia, "Times New Roman", serif;
+  font-size: clamp(1rem, 2.5vw, 1.2rem);
+  font-style: italic;
+  color: rgba(222, 238, 222, 0.80);
+  line-height: 1.6;
+  text-shadow: 0 0 18px rgba(140, 200, 140, 0.18);
+}
+
+/* Subtitle bar at bottom of footage */
+.cam-subtitle {
+  position: absolute;
+  bottom: 2.4rem;
+  left: 0; right: 0;
+  z-index: 5;
+  text-align: center;
+  padding: 0 1rem;
+}
+.cam-subtitle span {
+  display: inline-block;
+  font-family: var(--font-sub), "Courier New", monospace;
+  font-size: 0.62rem;
+  letter-spacing: 0.06em;
+  color: rgba(255, 255, 255, 0.72);
+  background: rgba(0, 0, 0, 0.52);
+  padding: 0.18rem 0.5rem;
+  border-radius: 1px;
+}
+
+/* Bottom HUD bar */
+.cam-hud-bot {
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  z-index: 5;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.42rem 0.7rem;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.45), transparent);
+  font-family: var(--font-sub), "Courier New", monospace;
+  font-size: 0.5rem;
+  letter-spacing: 0.1em;
+  color: rgba(170, 215, 170, 0.45);
+}
+.cam-counter { color: rgba(195, 230, 195, 0.65); }
+
+/* Tape warble glitch */
+@keyframes cam-warble {
+  0%, 88%, 100% { transform: translateX(0); filter: brightness(1); }
+  89%  { transform: translateX(1.5px); filter: brightness(1.04); }
+  90%  { transform: translateX(-1px); filter: brightness(0.97); }
+  91%  { transform: translateX(0.5px); }
+  92%  { transform: translateX(0); filter: brightness(1); }
+}
+
+@keyframes cam-blink {
+  0%, 49% { opacity: 1; }
+  50%, 100% { opacity: 0; }
+}
+
+/* Polaroid cards (scattered behind) */
+.cam-photo {
+  position: absolute;
+  display: block;
+  box-shadow: 2px 6px 20px rgba(0, 0, 0, 0.55);
+}
+.cam-photo-1 {
+  width: 8.5rem;
+  height: 10rem;
+  top: 0.5rem;
+  left: -0.5rem;
+  transform: rotate(-9deg);
+  background:
+    linear-gradient(180deg, #d8d2c0 0%, #cfc8b4 100%);
+  border: 3px solid #ebe5d2;
+  border-bottom-width: 2rem;
+}
+.cam-photo-2 {
+  width: 7.5rem;
+  height: 9rem;
+  bottom: 4.5rem;
+  right: -1.5rem;
+  transform: rotate(7deg);
+  background:
+    linear-gradient(180deg, #c8c2b0 0%, #c0b9a4 100%);
+  border: 3px solid #ddd7c4;
+  border-bottom-width: 1.8rem;
+}
+
+/* Folded paper note */
+.cam-note {
+  position: absolute;
+  bottom: 1.5rem;
+  left: -0.5rem;
+  width: 11rem;
+  background: #f0ebda;
+  padding: 0.85rem 0.8rem 0.7rem;
+  transform: rotate(2.5deg);
+  box-shadow: 2px 5px 16px rgba(0, 0, 0, 0.38);
+  z-index: 1;
+}
+.cam-note::before {
+  content: '';
+  position: absolute;
+  top: 0; right: 0;
+  width: 1.1rem; height: 1.1rem;
+  background: linear-gradient(225deg, #d8d2bf 50%, transparent 50%);
+}
+.cam-note span {
+  display: block;
+  font-family: var(--font-sub), "Courier New", monospace;
+  font-size: 0.6rem;
+  line-height: 1.7;
+  color: #3e3120;
+  letter-spacing: 0.03em;
 }
 
 .dream-image-preview {
@@ -1614,7 +1843,7 @@ body:has(.dream-landing)::after {
 .dialogue-preview span {
   display: block;
   margin-top: 0.5rem;
-  font-family: Georgia, "Times New Roman", serif;
+  font-family: var(--font-serif), Georgia, "Times New Roman", serif;
   font-size: 1.35rem;
   line-height: 1.45;
 }
@@ -1655,7 +1884,7 @@ body:has(.dream-landing)::after {
   font-size: clamp(1.92rem, 4vw, 3.2rem);
   font-weight: 500;
   letter-spacing: 0.04em;
-  font-family: Georgia, "Times New Roman", "Songti SC", serif;
+  font-family: var(--font-serif), Georgia, "Times New Roman", "Songti SC", serif;
 }
 
 .archive-opening h2,
@@ -1664,7 +1893,7 @@ body:has(.dream-landing)::after {
 .soundtrack-copy h2 {
   margin-top: 0.9rem;
   color: #fff9ef;
-  font-family: Georgia, "Times New Roman", serif;
+  font-family: var(--font-serif), Georgia, "Times New Roman", serif;
   font-size: clamp(2rem, 4vw, 3.2rem);
   font-weight: 500;
   line-height: 1.05;
@@ -1742,7 +1971,7 @@ body:has(.dream-landing)::after {
 .archive-node h3 {
   margin-top: 0.45rem;
   color: #fff9ef;
-  font-family: Georgia, "Times New Roman", serif;
+  font-family: var(--font-serif), Georgia, "Times New Roman", serif;
   font-size: clamp(1.3rem, 2vw, 1.6rem);
   font-weight: 500;
 }
@@ -1989,7 +2218,7 @@ body:has(.dream-landing)::after {
 
 .sleep-night strong {
   color: rgba(250, 218, 156, 0.76);
-  font-family: Georgia, "Times New Roman", serif;
+  font-family: var(--font-serif), Georgia, "Times New Roman", serif;
   font-size: 0.68rem;
   letter-spacing: 0.34em;
 }
@@ -2070,7 +2299,7 @@ body:has(.dream-landing)::after {
 .sleep-metrics article h3 {
   margin-top: 0.8rem;
   color: #fff9ef;
-  font-family: Georgia, "Times New Roman", serif;
+  font-family: var(--font-serif), Georgia, "Times New Roman", serif;
   font-size: clamp(1.3rem, 2vw, 1.6rem);
   font-weight: 500;
   line-height: 1.08;
@@ -2142,7 +2371,7 @@ body:has(.dream-landing)::after {
 
 .voice-item h3 {
   color: #fff9ef;
-  font-family: Georgia, "Times New Roman", serif;
+  font-family: var(--font-serif), Georgia, "Times New Roman", serif;
   font-size: clamp(1.3rem, 2vw, 1.6rem);
   font-weight: 500;
   letter-spacing: 0.04em;
@@ -2366,7 +2595,7 @@ body:has(.dream-landing)::after {
 }
 
 .dream-landing :is(h1, h2, h3) {
-  font-family: Georgia, "Times New Roman", "Songti SC", serif;
+  font-family: var(--font-serif), Georgia, "Times New Roman", "Songti SC", serif;
 }
 
 .hero-copy h1,
@@ -2473,7 +2702,7 @@ body:has(.dream-landing)::after {
 }
 
 .voice-item span {
-  font-family: Georgia, "Times New Roman", "Songti SC", serif;
+  font-family: var(--font-serif), Georgia, "Times New Roman", "Songti SC", serif;
   font-style: italic;
   font-size: clamp(0.94rem, 1.15vw, 1.08rem);
   line-height: 1.85;
@@ -2550,7 +2779,7 @@ body:has(.dream-landing)::after {
 .soundtrack-copy p {
   font-size: var(--landing-section-title);
   letter-spacing: 0.04em;
-  font-family: Georgia, "Times New Roman", "Songti SC", serif;
+  font-family: var(--font-serif), Georgia, "Times New Roman", "Songti SC", serif;
 }
 
 .features-intro {
@@ -2571,7 +2800,7 @@ body:has(.dream-landing)::after {
 
 .features-intro h2 {
   color: #fff9ef;
-  font-family: Georgia, "Times New Roman", "Songti SC", serif;
+  font-family: var(--font-serif), Georgia, "Times New Roman", "Songti SC", serif;
   font-size: clamp(1.92rem, 4vw, 3.2rem);
   font-weight: 500;
   line-height: 1.05;
@@ -3298,7 +3527,7 @@ body:has(.dream-landing)::after {
   max-width: 38rem;
   margin: 0.75rem auto 0;
   color: #fff9ef;
-  font-family: Georgia, "Times New Roman", serif;
+  font-family: var(--font-serif), Georgia, "Times New Roman", serif;
   font-size: clamp(1.8rem, 4.2vw, 3.7rem);
   font-weight: 500;
   line-height: 1.05;
@@ -3665,7 +3894,7 @@ body:has(.mist-page)::after {
 
 .archive-page :is(h1, h2, h3) {
   color: #fff9ef;
-  font-family: Georgia, "Times New Roman", "Songti SC", serif;
+  font-family: var(--font-serif), Georgia, "Times New Roman", "Songti SC", serif;
   letter-spacing: 0.025em;
 }
 
@@ -4065,7 +4294,7 @@ body:has(.mist-page)::after {
 
 .quick-ritual-header h1 {
   color: rgba(246, 238, 255, 0.9);
-  font-family: Georgia, "Times New Roman", serif;
+  font-family: var(--font-serif), Georgia, "Times New Roman", serif;
   font-size: clamp(1.25rem, 3vw, 1.9rem);
   font-weight: 400;
   letter-spacing: 0.035em;
@@ -4108,7 +4337,7 @@ body:has(.mist-page)::after {
 }
 .quick-textarea::placeholder {
   color: rgba(210, 198, 238, 0.28);
-  font-family: Georgia, "Times New Roman", serif;
+  font-family: var(--font-serif), Georgia, "Times New Roman", serif;
   font-style: italic;
 }
 
@@ -4231,7 +4460,7 @@ body:has(.mist-page)::after {
 
 .image-prompt-textarea::placeholder {
   color: rgba(175, 158, 222, 0.22);
-  font-family: Georgia, "Times New Roman", serif;
+  font-family: var(--font-serif), Georgia, "Times New Roman", serif;
   font-style: italic;
 }
 
@@ -4321,7 +4550,7 @@ body:has(.mist-page)::after {
 .quick-choice-panel p {
   margin: 0 0 0.22rem;
   color: rgba(255, 249, 239, 0.88);
-  font-family: Georgia, "Times New Roman", "Songti SC", serif;
+  font-family: var(--font-serif), Georgia, "Times New Roman", "Songti SC", serif;
   font-size: 1rem;
   letter-spacing: 0.02em;
 }
@@ -4427,7 +4656,7 @@ body:has(.mist-page)::after {
 
 .memory-field-copy p {
   color: rgba(246, 238, 255, 0.88);
-  font-family: Georgia, "Times New Roman", serif;
+  font-family: var(--font-serif), Georgia, "Times New Roman", serif;
   font-size: 1rem;
   letter-spacing: 0.03em;
 }
@@ -4504,7 +4733,7 @@ body:has(.mist-page)::after {
 .pricing-copy h2 {
   margin-top: 0.8rem;
   color: rgba(248, 241, 228, 0.94);
-  font-family: Georgia, "Times New Roman", serif;
+  font-family: var(--font-serif), Georgia, "Times New Roman", serif;
   font-size: clamp(2rem, 4.4vw, 4.1rem);
   font-weight: 400;
   line-height: 1.05;
@@ -4575,7 +4804,7 @@ body:has(.mist-page)::after {
 }
 
 .pricing-reel-head strong {
-  font-family: Georgia, "Times New Roman", serif;
+  font-family: var(--font-serif), Georgia, "Times New Roman", serif;
   font-size: 2.4rem;
   font-weight: 400;
 }
@@ -4667,7 +4896,7 @@ body:has(.mist-page)::after {
   max-width: 38rem;
   margin-top: 0.85rem;
   color: rgba(255, 249, 239, 0.94);
-  font-family: Georgia, "Times New Roman", serif;
+  font-family: var(--font-serif), Georgia, "Times New Roman", serif;
   font-size: clamp(1.9rem, 3vw, 2.7rem);
   font-weight: 400;
   line-height: 1.1;
@@ -4825,4 +5054,27 @@ body:has(.mist-page)::after {
   .save-btn {
     grid-column: 1 / -1;
   }
+}
+
+/* ─── Typography — Typewriter / Subtitle small text ────────── */
+
+.hero-kicker,
+.feature-flow-eyebrow,
+.features-intro p,
+.archive-opening p,
+.archive-node p,
+.film-slide-mood,
+.film-slide-date,
+.sleep-live,
+.sleep-strip-header span,
+.privacy-eyebrow,
+.voices-intro p,
+.soundtrack-copy p,
+.voice-item small,
+.mist-label,
+.save-status-text,
+.developing-sleep-invite p,
+.quick-choice-eyebrow {
+  font-family: var(--font-sub), "Courier New", Courier, monospace;
+  letter-spacing: 0.04em;
 }
