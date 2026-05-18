@@ -172,7 +172,7 @@ export default function LandingPage() {
           {/* Film still — main focal image */}
           <div className="hero-film-still" aria-hidden>
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/dream-photo-1.jpg" alt="" aria-hidden />
+            <img src="/dream-photo-4.jpg" alt="" aria-hidden />
             <span className="hero-film-caption">2024 · 03 · 14 · 04:18</span>
           </div>
         </div>
