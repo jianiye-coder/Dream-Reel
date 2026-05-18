@@ -1710,7 +1710,7 @@ body:has(.dream-landing)::after {
     0 0 0 1px rgba(0, 0, 0, 0.15);
 }
 
-/* Photo 1 — deep night, warm orange light source (street / train window feel) */
+/* Photo 1 */
 .cam-photo-1 {
   width: 8.5rem;
   height: 10rem;
@@ -1719,25 +1719,25 @@ body:has(.dream-landing)::after {
   transform: rotate(-9deg);
   border: 3.5px solid #e8e3d4;
   border-bottom-width: 2.2rem;
-  background:
-    radial-gradient(ellipse 55% 70% at 74% 58%, rgba(220, 95, 25, 0.52) 0%, transparent 58%),
-    radial-gradient(ellipse 45% 35% at 80% 12%, rgba(255, 155, 45, 0.28) 0%, transparent 52%),
-    radial-gradient(ellipse 65% 45% at 22% 22%, rgba(14, 28, 58, 0.9) 0%, transparent 68%),
-    radial-gradient(ellipse 80% 60% at 40% 75%, rgba(8, 14, 30, 0.95) 0%, transparent 70%),
-    linear-gradient(155deg, #08101e 0%, #0f0c06 45%, #1c0b04 75%, #09080e 100%);
+  background: #0a0a0a;
+}
+.cam-photo-1 img {
+  width: 100%;
+  height: calc(100% - 2.2rem + 3.5px);
+  object-fit: cover;
+  object-position: center;
+  display: block;
+  filter: saturate(0.88) contrast(1.04);
 }
 .cam-photo-1::after {
   content: '';
   position: absolute;
-  inset: 0;
-  background:
-    radial-gradient(ellipse at center, transparent 35%, rgba(0, 0, 0, 0.55) 100%),
-    url("data:image/svg+xml,%3Csvg viewBox='0 0 120 120' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.78' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23g)' opacity='0.18'/%3E%3C/svg%3E");
-  mix-blend-mode: multiply;
-  opacity: 0.7;
+  inset: 0 0 2.2rem;
+  background: radial-gradient(ellipse at center, transparent 40%, rgba(0, 0, 0, 0.38) 100%);
+  pointer-events: none;
 }
 
-/* Photo 2 — hazy, faded memory (blue-purple mist, pale gold) */
+/* Photo 2 */
 .cam-photo-2 {
   width: 7.5rem;
   height: 9rem;
@@ -1746,23 +1746,22 @@ body:has(.dream-landing)::after {
   transform: rotate(7deg);
   border: 3px solid #ddd7c6;
   border-bottom-width: 1.9rem;
-  background:
-    radial-gradient(ellipse 60% 40% at 55% 28%, rgba(195, 155, 255, 0.22) 0%, transparent 60%),
-    radial-gradient(ellipse 40% 55% at 78% 72%, rgba(255, 195, 110, 0.16) 0%, transparent 55%),
-    radial-gradient(ellipse 70% 50% at 20% 60%, rgba(55, 70, 130, 0.38) 0%, transparent 65%),
-    radial-gradient(ellipse 50% 35% at 50% 10%, rgba(170, 145, 210, 0.18) 0%, transparent 55%),
-    linear-gradient(175deg, #13101e 0%, #0e0d18 50%, #110f1a 100%);
-  filter: saturate(0.82) brightness(0.92);
+  background: #0a0a0a;
+}
+.cam-photo-2 img {
+  width: 100%;
+  height: calc(100% - 1.9rem + 3px);
+  object-fit: cover;
+  object-position: center top;
+  display: block;
+  filter: saturate(0.82) brightness(0.9);
 }
 .cam-photo-2::after {
   content: '';
   position: absolute;
-  inset: 0;
-  background:
-    radial-gradient(ellipse at center, transparent 40%, rgba(0, 0, 0, 0.5) 100%),
-    url("data:image/svg+xml,%3Csvg viewBox='0 0 120 120' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.78' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23g)' opacity='0.16'/%3E%3C/svg%3E");
-  mix-blend-mode: multiply;
-  opacity: 0.65;
+  inset: 0 0 1.9rem;
+  background: radial-gradient(ellipse at center, transparent 40%, rgba(0, 0, 0, 0.35) 100%);
+  pointer-events: none;
 }
 
 .dream-image-preview {

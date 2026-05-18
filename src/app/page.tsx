@@ -156,8 +156,14 @@ export default function LandingPage() {
 
         <div className="hero-memory-field" aria-label="Dream recording preview">
           {/* Scattered polaroid cards behind the frame */}
-          <span className="cam-photo cam-photo-1" aria-hidden />
-          <span className="cam-photo cam-photo-2" aria-hidden />
+          <span className="cam-photo cam-photo-1" aria-hidden>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/dream-photo-1.jpg" alt="" aria-hidden />
+          </span>
+          <span className="cam-photo cam-photo-2" aria-hidden>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/dream-photo-2.jpg" alt="" aria-hidden />
+          </span>
 
           {/* Camcorder / VHS frame */}
           <div className="cam-frame" aria-hidden>
