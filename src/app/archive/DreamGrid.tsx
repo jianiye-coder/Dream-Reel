@@ -1770,7 +1770,7 @@ export default function DreamGrid({ entries }: { entries: DreamEntry[] }) {
           ) : null}
         </div>
 
-        <div className="mist-card rounded-[2rem] p-4 sm:p-6" style={{ overflow: "visible" }}>
+        <div className="mist-card rounded-[2rem] p-4 sm:p-6">
           <div className="flex items-center justify-between gap-3">
             <div>
               <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-[#9a8dbe]">{G.recentEyebrow}</p>
@@ -1779,7 +1779,7 @@ export default function DreamGrid({ entries }: { entries: DreamEntry[] }) {
           </div>
 
           <div className="film-drawer">
-            {localEntries.slice(0, 10).map((entry, i) => (
+            {localEntries.slice(0, 12).map((entry, i) => (
               <button
                 key={entry.id}
                 type="button"
