@@ -2124,6 +2124,38 @@ body:has(.dream-landing)::after {
   z-index: 1;
 }
 
+/* Photo 3 — upper right, above cam-frame */
+.cam-photo-3 {
+  position: absolute;
+  width: 8rem;
+  height: 9.5rem;
+  top: -4rem;
+  right: -2rem;
+  transform: rotate(6deg);
+  border: 3px solid #e2ddd0;
+  border-bottom-width: 2rem;
+  background: #0a0a0a;
+  z-index: 1;
+}
+.cam-photo-3 img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  display: block;
+  filter: saturate(0.85) contrast(1.02) brightness(0.92);
+}
+.cam-photo-3::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at center, transparent 40%, rgba(0, 0, 0, 0.32) 100%);
+  pointer-events: none;
+  z-index: 1;
+}
+
 .dream-image-preview {
   position: absolute;
   inset: 4rem 2rem auto auto;

@@ -164,6 +164,10 @@ export default function LandingPage() {
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src="/dream-photo-2.jpg" alt="" aria-hidden />
           </span>
+          <span className="cam-photo cam-photo-3" aria-hidden>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/dream-photo-3.jpg" alt="" aria-hidden />
+          </span>
 
           {/* Camcorder / VHS frame */}
           <div className="cam-frame" aria-hidden>
