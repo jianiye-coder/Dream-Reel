@@ -2063,14 +2063,15 @@ body:has(.dream-landing)::after {
 /* Photo 1 */
 .cam-photo-1 {
   position: absolute;
-  width: 8.5rem;
-  height: 10rem;
-  top: -2rem;
-  left: 2rem;
-  transform: rotate(-9deg);
+  width: 9rem;
+  height: 11rem;
+  bottom: 4rem;
+  left: 0;
+  transform: rotate(-8deg);
   border: 3.5px solid #e8e3d4;
-  border-bottom-width: 2.2rem;
+  border-bottom-width: 2.4rem;
   background: #0a0a0a;
+  z-index: 1;
 }
 .cam-photo-1 img {
   position: absolute;
@@ -2094,14 +2095,15 @@ body:has(.dream-landing)::after {
 /* Photo 2 */
 .cam-photo-2 {
   position: absolute;
-  width: 7.5rem;
-  height: 9rem;
-  bottom: 4rem;
-  right: -1.5rem;
-  transform: rotate(7deg);
+  width: 8.5rem;
+  height: 10rem;
+  bottom: 0;
+  right: -2rem;
+  transform: rotate(10deg);
   border: 3px solid #ddd7c6;
-  border-bottom-width: 1.9rem;
+  border-bottom-width: 2rem;
   background: #0a0a0a;
+  z-index: 1;
 }
 .cam-photo-2 img {
   position: absolute;
