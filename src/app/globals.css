@@ -1624,14 +1624,249 @@ body:has(.dream-landing)::after {
 /* Dream footage content */
 .cam-body {
   position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  text-align: center;
+  inset: 0;
   z-index: 5;
-  padding: 1rem;
   width: 100%;
+  overflow: hidden;
 }
+
+.dream-footage {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background:
+    radial-gradient(ellipse at 50% 44%, rgba(140, 190, 136, 0.16), transparent 22%),
+    radial-gradient(ellipse at 44% 36%, rgba(255, 244, 205, 0.1), transparent 14%),
+    linear-gradient(180deg, #061008 0%, #07150b 42%, #020503 100%);
+}
+
+.dream-footage::before,
+.dream-footage::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.dream-footage::before {
+  background:
+    repeating-linear-gradient(
+      90deg,
+      rgba(170, 210, 162, 0.04) 0 1px,
+      transparent 1px 26px
+    ),
+    linear-gradient(90deg, rgba(0, 0, 0, 0.5), transparent 28%, transparent 70%, rgba(0, 0, 0, 0.52));
+  opacity: 0.48;
+  animation: footage-drift 3.8s linear infinite;
+}
+
+.dream-footage::after {
+  background:
+    linear-gradient(180deg, transparent 0 68%, rgba(0, 0, 0, 0.6) 100%),
+    radial-gradient(ellipse at center, transparent 38%, rgba(0, 0, 0, 0.54) 100%);
+}
+
+.dream-haze,
+.dream-light,
+.dream-road,
+.dream-runner,
+.dream-shadow {
+  position: absolute;
+  display: block;
+}
+
+.dream-haze {
+  width: 130%;
+  height: 36%;
+  left: -15%;
+  border-radius: 50%;
+  filter: blur(14px);
+  opacity: 0.42;
+  background: linear-gradient(90deg, transparent, rgba(181, 228, 168, 0.15), transparent);
+  animation: haze-slide 5.6s ease-in-out infinite;
+}
+
+.haze-one {
+  top: 31%;
+}
+
+.haze-two {
+  top: 47%;
+  opacity: 0.28;
+  animation-delay: -2.1s;
+}
+
+.dream-light {
+  width: 2.7rem;
+  height: 5.4rem;
+  top: 24%;
+  border-radius: 50%;
+  background: radial-gradient(ellipse, rgba(255, 244, 205, 0.34), rgba(139, 184, 128, 0.12) 36%, transparent 68%);
+  filter: blur(7px);
+  opacity: 0.62;
+  animation: light-stutter 2.8s steps(2, end) infinite;
+}
+
+.light-one {
+  left: 22%;
+}
+
+.light-two {
+  right: 18%;
+  top: 29%;
+  transform: scale(0.74);
+  opacity: 0.4;
+  animation-delay: -0.7s;
+}
+
+.dream-road {
+  inset: 40% -18% 0;
+  transform: perspective(220px) rotateX(64deg);
+  transform-origin: center bottom;
+  background:
+    repeating-linear-gradient(
+      0deg,
+      rgba(166, 214, 156, 0.1) 0 2px,
+      transparent 2px 24px
+    ),
+    linear-gradient(90deg, transparent 0 12%, rgba(134, 180, 126, 0.13) 48%, transparent 88%);
+  border-top: 1px solid rgba(167, 222, 160, 0.08);
+  animation: road-pull 0.72s linear infinite;
+}
+
+.road-line {
+  position: absolute;
+  top: 0;
+  bottom: -4rem;
+  width: 1px;
+  background: linear-gradient(180deg, transparent, rgba(190, 232, 181, 0.34), transparent);
+  transform-origin: top;
+}
+
+.road-line-left {
+  left: 38%;
+  transform: rotate(9deg);
+}
+
+.road-line-right {
+  right: 38%;
+  transform: rotate(-9deg);
+}
+
+.road-line-mid {
+  left: 50%;
+  opacity: 0.34;
+}
+
+.dream-runner {
+  left: 48%;
+  bottom: 24%;
+  width: 2rem;
+  height: 4.2rem;
+  transform: translateX(-50%);
+  filter: drop-shadow(0 0 10px rgba(186, 234, 178, 0.24));
+  animation: runner-held 0.82s ease-in-out infinite;
+}
+
+.runner-head,
+.runner-torso,
+.runner-arm,
+.runner-leg {
+  position: absolute;
+  display: block;
+  background: rgba(218, 235, 214, 0.76);
+  box-shadow: 0 0 12px rgba(185, 230, 177, 0.22);
+}
+
+.runner-head {
+  left: 0.8rem;
+  top: 0.05rem;
+  width: 0.58rem;
+  height: 0.58rem;
+  border-radius: 50%;
+}
+
+.runner-torso {
+  left: 0.86rem;
+  top: 0.66rem;
+  width: 0.38rem;
+  height: 1.42rem;
+  border-radius: 999px;
+  transform: rotate(9deg);
+  transform-origin: top center;
+}
+
+.runner-arm,
+.runner-leg {
+  width: 0.24rem;
+  border-radius: 999px;
+  transform-origin: top center;
+}
+
+.runner-arm {
+  top: 0.82rem;
+  height: 1.12rem;
+}
+
+.runner-arm-front {
+  left: 1.04rem;
+  animation: runner-arm-front 0.82s ease-in-out infinite;
+}
+
+.runner-arm-back {
+  left: 0.95rem;
+  opacity: 0.72;
+  animation: runner-arm-back 0.82s ease-in-out infinite;
+}
+
+.runner-leg {
+  top: 1.9rem;
+  height: 1.74rem;
+}
+
+.runner-leg-front {
+  left: 1.03rem;
+  animation: runner-leg-front 0.82s ease-in-out infinite;
+}
+
+.runner-leg-back {
+  left: 0.95rem;
+  opacity: 0.7;
+  animation: runner-leg-back 0.82s ease-in-out infinite;
+}
+
+.runner-ghost {
+  opacity: 0.22;
+  filter: blur(3px);
+  background: rgba(205, 232, 198, 0.42);
+  border-radius: 44% 54% 48% 52%;
+  height: 3.9rem;
+  width: 1.15rem;
+  bottom: 24.5%;
+  animation: ghost-drag 0.82s ease-in-out infinite;
+}
+
+.runner-ghost-one {
+  left: 44%;
+}
+
+.runner-ghost-two {
+  left: 40%;
+  opacity: 0.13;
+  animation-delay: -0.18s;
+}
+
+.dream-shadow {
+  left: 50%;
+  bottom: 20%;
+  width: 5.8rem;
+  height: 0.9rem;
+  transform: translateX(-50%);
+  border-radius: 50%;
+  background: radial-gradient(ellipse, rgba(0, 0, 0, 0.68), transparent 72%);
+  animation: shadow-pulse 0.82s ease-in-out infinite;
+}
+
 .cam-label {
   font-family: var(--font-sub), "Courier New", monospace;
   font-size: 0.46rem;
@@ -1639,6 +1874,17 @@ body:has(.dream-landing)::after {
   color: rgba(140, 190, 140, 0.38);
   margin-bottom: 0.75rem;
 }
+
+.dream-footage-label {
+  position: absolute;
+  top: 42%;
+  left: 0;
+  right: 0;
+  z-index: 2;
+  text-align: center;
+  opacity: 0.46;
+}
+
 .cam-entry {
   font-family: var(--font-serif), Georgia, "Times New Roman", serif;
   font-size: clamp(1rem, 2.5vw, 1.2rem);
@@ -1646,6 +1892,19 @@ body:has(.dream-landing)::after {
   color: rgba(222, 238, 222, 0.80);
   line-height: 1.6;
   text-shadow: 0 0 18px rgba(140, 200, 140, 0.18);
+}
+
+.dream-footage-title {
+  position: absolute;
+  left: 50%;
+  bottom: 31%;
+  z-index: 2;
+  width: min(13rem, 78%);
+  margin: 0;
+  text-align: center;
+  transform: translateX(-50%);
+  opacity: 0.76;
+  animation: title-flicker 4.8s steps(1, end) infinite;
 }
 
 /* Subtitle bar at bottom of footage */
@@ -1666,6 +1925,7 @@ body:has(.dream-landing)::after {
   background: rgba(0, 0, 0, 0.52);
   padding: 0.18rem 0.5rem;
   border-radius: 1px;
+  animation: subtitle-flicker 3.6s steps(1, end) infinite;
 }
 
 /* Bottom HUD bar */
@@ -1699,6 +1959,97 @@ body:has(.dream-landing)::after {
   50%, 100% { opacity: 0; }
 }
 
+@keyframes footage-drift {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-26px); }
+}
+
+@keyframes haze-slide {
+  0%, 100% { transform: translateX(-6%) scaleX(1); opacity: 0.28; }
+  50% { transform: translateX(7%) scaleX(1.08); opacity: 0.48; }
+}
+
+@keyframes light-stutter {
+  0%, 72%, 100% { opacity: 0.56; }
+  73%, 76% { opacity: 0.26; }
+  77%, 81% { opacity: 0.72; }
+}
+
+@keyframes road-pull {
+  0% { background-position: 0 0, 0 0; }
+  100% { background-position: 0 24px, 0 0; }
+}
+
+@keyframes runner-held {
+  0%, 100% { transform: translateX(-50%) translateY(0) rotate(-1deg); }
+  25% { transform: translateX(calc(-50% + 3px)) translateY(-2px) rotate(1deg); }
+  50% { transform: translateX(calc(-50% - 2px)) translateY(1px) rotate(-2deg); }
+  75% { transform: translateX(calc(-50% + 1px)) translateY(-1px) rotate(1deg); }
+}
+
+@keyframes runner-arm-front {
+  0%, 100% { transform: rotate(58deg); }
+  50% { transform: rotate(-62deg); }
+}
+
+@keyframes runner-arm-back {
+  0%, 100% { transform: rotate(-56deg); }
+  50% { transform: rotate(64deg); }
+}
+
+@keyframes runner-leg-front {
+  0%, 100% { transform: rotate(-40deg); }
+  50% { transform: rotate(54deg); }
+}
+
+@keyframes runner-leg-back {
+  0%, 100% { transform: rotate(52deg); }
+  50% { transform: rotate(-46deg); }
+}
+
+@keyframes ghost-drag {
+  0%, 100% { transform: translateX(0) skewX(-12deg); opacity: 0.16; }
+  50% { transform: translateX(-8px) skewX(-18deg); opacity: 0.28; }
+}
+
+@keyframes shadow-pulse {
+  0%, 100% { transform: translateX(-50%) scaleX(0.86); opacity: 0.7; }
+  50% { transform: translateX(-50%) scaleX(1.14); opacity: 0.48; }
+}
+
+@keyframes title-flicker {
+  0%, 100% { opacity: 0.75; transform: translateX(-50%); }
+  42% { opacity: 0.38; transform: translateX(calc(-50% + 1px)); }
+  44% { opacity: 0.82; transform: translateX(calc(-50% - 1px)); }
+  46% { opacity: 0.62; transform: translateX(-50%); }
+}
+
+@keyframes subtitle-flicker {
+  0%, 100% { opacity: 1; }
+  54% { opacity: 0.62; }
+  56% { opacity: 0.9; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cam-frame,
+  .cam-rec i,
+  .dream-footage::before,
+  .dream-haze,
+  .dream-light,
+  .dream-road,
+  .dream-runner,
+  .runner-arm-front,
+  .runner-arm-back,
+  .runner-leg-front,
+  .runner-leg-back,
+  .runner-ghost,
+  .dream-shadow,
+  .dream-footage-title,
+  .cam-subtitle span {
+    animation: none;
+  }
+}
+
 /* Polaroid cards (scattered behind) */
 .cam-photo {
   position: absolute;
@@ -1712,6 +2063,7 @@ body:has(.dream-landing)::after {
 
 /* Photo 1 */
 .cam-photo-1 {
+  position: absolute;
   width: 8.5rem;
   height: 10rem;
   top: 0.5rem;
@@ -1722,8 +2074,10 @@ body:has(.dream-landing)::after {
   background: #0a0a0a;
 }
 .cam-photo-1 img {
+  position: absolute;
+  inset: 0 0 0 0;
   width: 100%;
-  height: calc(100% - 2.2rem + 3.5px);
+  height: 100%;
   object-fit: cover;
   object-position: center;
   display: block;
@@ -1732,13 +2086,15 @@ body:has(.dream-landing)::after {
 .cam-photo-1::after {
   content: '';
   position: absolute;
-  inset: 0 0 2.2rem;
-  background: radial-gradient(ellipse at center, transparent 40%, rgba(0, 0, 0, 0.38) 100%);
+  inset: 0;
+  background: radial-gradient(ellipse at center, transparent 40%, rgba(0, 0, 0, 0.32) 100%);
   pointer-events: none;
+  z-index: 1;
 }
 
 /* Photo 2 */
 .cam-photo-2 {
+  position: absolute;
   width: 7.5rem;
   height: 9rem;
   bottom: 4rem;
@@ -1749,8 +2105,10 @@ body:has(.dream-landing)::after {
   background: #0a0a0a;
 }
 .cam-photo-2 img {
+  position: absolute;
+  inset: 0 0 0 0;
   width: 100%;
-  height: calc(100% - 1.9rem + 3px);
+  height: 100%;
   object-fit: cover;
   object-position: center top;
   display: block;
@@ -1759,9 +2117,10 @@ body:has(.dream-landing)::after {
 .cam-photo-2::after {
   content: '';
   position: absolute;
-  inset: 0 0 1.9rem;
-  background: radial-gradient(ellipse at center, transparent 40%, rgba(0, 0, 0, 0.35) 100%);
+  inset: 0;
+  background: radial-gradient(ellipse at center, transparent 40%, rgba(0, 0, 0, 0.3) 100%);
   pointer-events: none;
+  z-index: 1;
 }
 
 .dream-image-preview {
