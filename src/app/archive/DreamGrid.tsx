@@ -1369,11 +1369,8 @@ export default function DreamGrid({ entries }: { entries: DreamEntry[] }) {
                         <p className="mt-0.5 line-clamp-1 text-xs font-semibold opacity-90">
                           {dreamDisplayTitle(lead)}
                         </p>
-                        <p className="mt-1 line-clamp-2 text-[11px] leading-4 opacity-80">
-                          {truncate(lead.cleanText.replace(/\s+/g, " "), 70)}
-                        </p>
 
-                        <div className="mt-3 flex flex-wrap gap-1.5">
+                        <div className="mt-2 flex flex-wrap gap-1.5">
                           {lead.symbols.slice(0, 2).map((item) => (
                             <span key={item} className="rounded-full bg-white/45 px-2 py-0.5 text-[10px] opacity-80">
                               {item}
@@ -1781,33 +1778,27 @@ export default function DreamGrid({ entries }: { entries: DreamEntry[] }) {
             </div>
           </div>
 
-          <div className="mt-5 grid gap-3">
-            {localEntries.slice(0, 8).map((entry) => (
+          <div className="film-drawer">
+            {localEntries.slice(0, 12).map((entry, i) => (
               <button
                 key={entry.id}
                 type="button"
                 onClick={() => setSelected(entry)}
-                className="flex flex-col gap-3 rounded-2xl border border-[rgba(176,168,197,0.2)] bg-white/40 p-4 text-left transition hover:bg-white/56 sm:flex-row sm:items-center"
+                className="film-slide"
+                style={{ "--film-i": i } as React.CSSProperties}
               >
-                <div className={`h-20 w-full shrink-0 overflow-hidden rounded-2xl bg-gradient-to-br ${moodGradient(entry.mood)} sm:w-28`}>
-                  {entry.imageUrl ? (
-                    <Image src={entry.imageUrl} alt="dream" width={320} height={200} unoptimized className="h-full w-full object-cover" />
-                  ) : null}
-                </div>
-
-                <div className="min-w-0 flex-1">
-                  <div className="mist-soft flex flex-wrap items-center gap-2 text-xs">
-                    <span>{formatDateTime(entry.capturedAt, lang)}</span>
-                    {entry.mood ? (
-                      <span className="rounded-full bg-white/60 px-2 py-0.5 text-[#7d7298]">{entry.mood}</span>
+                <div className="film-slide-inner">
+                  <div className={`film-slide-image bg-gradient-to-br ${moodGradient(entry.mood)}`}>
+                    {entry.imageUrl ? (
+                      <Image src={entry.imageUrl} alt="dream" width={320} height={420} unoptimized className="h-full w-full object-cover" />
                     ) : null}
+                    <div className="film-slide-grain" aria-hidden />
                   </div>
-                  <h3 className="mt-2 line-clamp-1 text-base font-semibold text-[#5f5673]">
-                    {dreamDisplayTitle(entry)}
-                  </h3>
-                  <p className="mt-2 line-clamp-2 text-sm leading-6 text-[#6b627f]">
-                    {truncate(entry.cleanText.replace(/\s+/g, " "), 120)}
-                  </p>
+                  <div className="film-slide-caption">
+                    <span className="film-slide-mood">{entry.mood || (lang === "zh" ? "无情绪" : "No mood")}</span>
+                    <p className="film-slide-title">{dreamDisplayTitle(entry)}</p>
+                    <p className="film-slide-date">{formatDateTime(entry.capturedAt, lang)}</p>
+                  </div>
                 </div>
               </button>
             ))}
