@@ -63,7 +63,7 @@ body::after {
 body:has(.dream-landing),
 body:has(.journal-root),
 body:has(.mist-page) {
-  background-color: #070712;
+  background-color: #0f1e2b;
 }
 
 body:has(.dream-landing)::after,
@@ -222,12 +222,12 @@ body:has(.mist-page)::before {
   position: relative;
   min-height: 100vh;
   overflow: hidden;
-  color: #f8f3ff;
+  color: #ddd0b0;
   background:
-    radial-gradient(circle at 18% 18%, rgba(139, 86, 190, 0.38), transparent 28%),
-    radial-gradient(circle at 78% 18%, rgba(244, 184, 199, 0.22), transparent 24%),
-    radial-gradient(circle at 70% 76%, rgba(86, 126, 209, 0.26), transparent 30%),
-    linear-gradient(135deg, #08091b 0%, #141136 42%, #2a1544 70%, #08091b 100%);
+    radial-gradient(circle at 22% 15%, rgba(30, 80, 110, 0.55), transparent 32%),
+    radial-gradient(circle at 75% 22%, rgba(20, 55, 80, 0.4), transparent 28%),
+    radial-gradient(circle at 50% 80%, rgba(10, 35, 55, 0.5), transparent 36%),
+    linear-gradient(160deg, #0c1b27 0%, #142233 38%, #1a2d40 62%, #0e1c2a 100%);
 }
 
 .dream-landing::before {
@@ -405,11 +405,11 @@ body:has(.mist-page)::before {
   align-items: center;
   gap: 1rem;
   padding: 0.8rem 0.95rem;
-  border: 1px solid rgba(255, 244, 225, 0.16);
+  border: 1px solid rgba(210, 185, 130, 0.14);
   border-radius: 999px;
-  background: rgba(12, 12, 33, 0.42);
-  box-shadow: 0 18px 70px rgba(0, 0, 0, 0.22);
-  backdrop-filter: blur(22px) saturate(135%);
+  background: rgba(8, 18, 28, 0.52);
+  box-shadow: 0 18px 70px rgba(0, 0, 0, 0.28);
+  backdrop-filter: blur(22px) saturate(120%);
   pointer-events: none;
 }
 
@@ -504,30 +504,56 @@ body:has(.mist-page)::before {
 .hero-kicker,
 .section-heading p,
 .feature-copy p {
-  color: rgba(250, 218, 156, 0.76);
-  font-size: 0.74rem;
-  font-weight: 800;
-  letter-spacing: 0.25em;
+  color: rgba(210, 185, 130, 0.72);
+  font-size: 0.7rem;
+  font-weight: 400;
+  letter-spacing: 0.32em;
   text-transform: uppercase;
+  font-family: var(--font-sub), "Courier New", monospace;
+}
+
+/* Star decoration */
+.hero-star {
+  display: block;
+  color: rgba(210, 185, 130, 0.55);
+  font-size: 0.85rem;
+  letter-spacing: 0;
+  margin: 0.9rem 0 0;
+}
+
+/* Display script title */
+.hero-title-display {
+  margin-top: 0.2rem;
+  color: #e6d8b4;
+  font-family: var(--font-display), var(--font-serif), Georgia, serif;
+  font-size: clamp(5.5rem, 14vw, 13rem);
+  font-weight: 400;
+  line-height: 0.88;
+  letter-spacing: -0.01em;
+  text-shadow:
+    0 0 60px rgba(220, 190, 120, 0.2),
+    0 20px 80px rgba(0, 0, 0, 0.4);
 }
 
 .hero-copy h1 {
   margin-top: 1.2rem;
-  color: #fff9ef;
+  color: #e6d8b4;
   font-family: var(--font-serif), Georgia, "Times New Roman", serif;
   font-size: clamp(4.7rem, 12vw, 10.8rem);
   font-weight: 500;
   line-height: 0.86;
   letter-spacing: 0.16em;
-  text-shadow: 0 0 40px rgba(247, 218, 168, 0.24), 0 18px 70px rgba(0, 0, 0, 0.36);
+  text-shadow: 0 0 40px rgba(220, 190, 120, 0.2), 0 18px 70px rgba(0, 0, 0, 0.36);
 }
 
 .hero-subtitle {
-  max-width: 560px;
-  margin: 1.45rem 0 0;
-  color: rgba(242, 233, 255, 0.82);
-  font-size: clamp(1rem, 2vw, 1.35rem);
-  line-height: 1.8;
+  max-width: 520px;
+  margin: 1.6rem 0 0;
+  color: rgba(200, 182, 140, 0.72);
+  font-size: clamp(0.88rem, 1.6vw, 1.1rem);
+  line-height: 1.85;
+  font-family: var(--font-sub), "Courier New", monospace;
+  letter-spacing: 0.03em;
 }
 
 .hero-actions {
@@ -552,17 +578,20 @@ body:has(.mist-page)::before {
 }
 
 .hero-button-primary {
-  border: 1px solid rgba(255, 244, 225, 0.44);
-  color: #201331;
-  background: linear-gradient(135deg, #fff8e7, #f7c98f 48%, #f2a6bd);
-  box-shadow: 0 0 32px rgba(250, 218, 156, 0.34);
+  border: 1px solid rgba(210, 185, 130, 0.5);
+  color: #0f1e2b;
+  background: linear-gradient(135deg, #e6d8b4 0%, #d4b87a 100%);
+  box-shadow: 0 0 28px rgba(210, 185, 120, 0.28);
+  font-family: var(--font-sub), "Courier New", monospace;
+  letter-spacing: 0.08em;
 }
 
 .hero-button-secondary {
-  border: 1px solid rgba(255, 244, 225, 0.24);
-  color: #fff8ea;
-  background: rgba(255, 255, 255, 0.08);
-  backdrop-filter: blur(20px);
+  border: 1px solid rgba(210, 185, 130, 0.22);
+  color: rgba(210, 185, 130, 0.85);
+  background: rgba(14, 30, 44, 0.4);
+  font-family: var(--font-sub), "Courier New", monospace;
+  letter-spacing: 0.08em;
 }
 
 .hero-button:hover {

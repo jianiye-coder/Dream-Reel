@@ -142,7 +142,8 @@ export default function LandingPage() {
       <section className="hero-section immersive-hero">
         <div className="hero-copy">
           <p className="hero-kicker">{L.heroKicker}</p>
-          <h1>DREAM REEL</h1>
+          <span className="hero-star" aria-hidden>✦</span>
+          <h1 className="hero-title-display">Dream Reel</h1>
           <p className="hero-subtitle">{L.heroSubtitle}</p>
           <div className="hero-actions">
             <Link href="/journal" className="hero-button hero-button-primary">

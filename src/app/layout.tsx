@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import { Cormorant_Garamond, Courier_Prime } from "next/font/google";
+import { Cormorant_Garamond, Courier_Prime, Pinyon_Script } from "next/font/google";
 import { SessionProvider } from "next-auth/react";
 import { LanguageProvider } from "@/contexts/LanguageContext";
 
@@ -9,6 +9,13 @@ const cormorant = Cormorant_Garamond({
   weight: ["300", "400", "500", "600", "700"],
   style: ["normal", "italic"],
   variable: "--font-serif",
+  display: "swap",
+});
+
+const pinyonScript = Pinyon_Script({
+  subsets: ["latin"],
+  weight: ["400"],
+  variable: "--font-display",
   display: "swap",
 });
 
@@ -34,7 +41,7 @@ export default function RootLayout({
   return (
     <html
       lang="zh-CN"
-      className={`h-full antialiased ${cormorant.variable} ${courierPrime.variable}`}
+      className={`h-full antialiased ${cormorant.variable} ${courierPrime.variable} ${pinyonScript.variable}`}
       suppressHydrationWarning
     >
       <body className="min-h-full flex flex-col">
