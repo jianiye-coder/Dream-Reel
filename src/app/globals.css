@@ -4826,3 +4826,247 @@ body:has(.mist-page)::after {
     grid-column: 1 / -1;
   }
 }
+
+/* ─── Dream Spirit ─────────────────────────────────────────── */
+
+.dream-spirit-wrap {
+  position: fixed;
+  top: 0; left: 0;
+  pointer-events: none;
+  z-index: 9000;
+  will-change: transform;
+}
+
+.dream-spirit {
+  position: relative;
+  width: 44px; height: 44px;
+  pointer-events: all;
+  cursor: pointer;
+  background: none;
+  border: none;
+  padding: 0;
+}
+
+.spirit-aura {
+  position: absolute;
+  inset: -30px;
+  background: radial-gradient(circle, rgba(255,248,232,0.18) 0%, rgba(190,155,255,0.1) 45%, transparent 70%);
+  border-radius: 50%;
+  animation: spirit-breathe 3.4s ease-in-out infinite;
+  pointer-events: none;
+}
+
+.spirit-core {
+  position: absolute;
+  top: 50%; left: 50%;
+  width: 7px; height: 7px;
+  background: rgba(255,249,239,0.96);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  box-shadow: 0 0 6px 3px rgba(255,248,228,0.5), 0 0 20px 9px rgba(210,185,255,0.22);
+  animation: spirit-pulse 2.8s ease-in-out infinite;
+}
+
+.spirit-orbit {
+  position: absolute;
+  inset: 6px;
+  border-radius: 50%;
+  animation: spirit-orbit-a 5.5s linear infinite;
+  pointer-events: none;
+}
+.spirit-orbit::before {
+  content: '';
+  position: absolute;
+  top: -2.5px; left: 50%;
+  width: 5px; height: 5px;
+  background: rgba(255,248,228,0.72);
+  border-radius: 50%;
+  transform: translateX(-50%);
+  box-shadow: 0 0 5px 2px rgba(255,248,228,0.38);
+}
+
+.spirit-orbit-2 {
+  position: absolute;
+  inset: 10px;
+  border-radius: 50%;
+  animation: spirit-orbit-b 8.2s linear infinite reverse;
+  pointer-events: none;
+}
+.spirit-orbit-2::before {
+  content: '';
+  position: absolute;
+  bottom: -2px; right: 4px;
+  width: 3.5px; height: 3.5px;
+  background: rgba(200,175,255,0.6);
+  border-radius: 50%;
+  box-shadow: 0 0 4px 1.5px rgba(200,175,255,0.3);
+}
+
+.spirit-msg {
+  position: absolute;
+  bottom: calc(100% + 14px);
+  left: 50%;
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: 200px;
+  text-align: center;
+  background: rgba(12, 8, 28, 0.9);
+  border: 1px solid rgba(200,175,255,0.2);
+  border-radius: 12px;
+  padding: 0.55rem 0.8rem;
+  font-size: 0.7rem;
+  line-height: 1.55;
+  color: rgba(228,220,255,0.88);
+  backdrop-filter: blur(14px);
+  pointer-events: none;
+  animation: spirit-msg-in 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  white-space: normal;
+}
+.spirit-msg::after {
+  content: '';
+  position: absolute;
+  top: 100%; left: 50%;
+  transform: translateX(-50%);
+  border: 5px solid transparent;
+  border-top-color: rgba(200,175,255,0.2);
+}
+
+@keyframes spirit-breathe {
+  0%, 100% { opacity: 0.65; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.15); }
+}
+@keyframes spirit-pulse {
+  0%, 100% { opacity: 0.82; transform: translate(-50%, -50%) scale(1); }
+  50% { opacity: 1; transform: translate(-50%, -50%) scale(1.25); }
+}
+@keyframes spirit-orbit-a {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+@keyframes spirit-orbit-b {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+@keyframes spirit-msg-in {
+  from { opacity: 0; transform: translateX(-50%) translateY(8px); }
+  to { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+/* ─── Opening sequence ─────────────────────────────────────── */
+
+.dream-intro {
+  position: fixed;
+  inset: 0;
+  z-index: 9800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgb(4, 3, 14);
+  overflow: hidden;
+}
+.dream-intro::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.35;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23g)' opacity='0.3'/%3E%3C/svg%3E");
+}
+.dream-intro.dream-intro-fading {
+  animation: intro-fade-out 0.8s ease forwards;
+}
+
+.intro-content {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(3rem, 10vw, 9rem);
+  width: 100%;
+  padding: 0 clamp(2rem, 8vw, 8rem);
+}
+
+.intro-copy {
+  flex: 1;
+  max-width: 36rem;
+}
+
+.intro-line {
+  font-family: Georgia, "Times New Roman", "Songti SC", serif;
+  font-size: clamp(1.3rem, 2.8vw, 2.1rem);
+  color: rgba(238, 230, 255, 0.9);
+  font-weight: 400;
+  line-height: 1.45;
+  opacity: 0;
+  animation: intro-line-in 0.9s ease forwards;
+  display: block;
+}
+.intro-line-2 { animation-delay: 1.5s; }
+.intro-line-3 {
+  animation-delay: 2.2s;
+  font-size: clamp(0.9rem, 1.6vw, 1.15rem);
+  color: rgba(185, 165, 220, 0.58);
+  margin-top: 0.6rem;
+}
+
+.intro-spirit-large {
+  flex-shrink: 0;
+  position: relative;
+  width: 100px; height: 100px;
+  opacity: 0;
+  animation: intro-spirit-in 1.4s cubic-bezier(0.23, 1, 0.32, 1) 0.15s forwards;
+}
+.intro-spirit-large .spirit-aura {
+  inset: -50px;
+  background: radial-gradient(circle, rgba(255,248,232,0.22) 0%, rgba(190,155,255,0.12) 40%, transparent 68%);
+  animation-duration: 3.4s;
+}
+.intro-spirit-large .spirit-core {
+  width: 14px; height: 14px;
+  box-shadow: 0 0 12px 6px rgba(255,248,228,0.5), 0 0 40px 18px rgba(210,185,255,0.22);
+}
+.intro-spirit-large .spirit-orbit { inset: 12px; }
+.intro-spirit-large .spirit-orbit::before { width: 9px; height: 9px; top: -4.5px; }
+.intro-spirit-large .spirit-orbit-2 { inset: 20px; }
+.intro-spirit-large .spirit-orbit-2::before { width: 6px; height: 6px; }
+
+.intro-skip {
+  position: absolute;
+  bottom: 2rem; right: 2.5rem;
+  z-index: 2;
+  font-size: 0.68rem;
+  color: rgba(180,162,220,0.38);
+  cursor: pointer;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  border: none;
+  background: none;
+  padding: 0.5rem 0.75rem;
+  transition: color 0.25s;
+  opacity: 0;
+  animation: intro-skip-in 0.6s ease 2.8s forwards;
+}
+.intro-skip:hover { color: rgba(200,185,240,0.72); }
+
+@keyframes intro-fade-out {
+  from { opacity: 1; }
+  to { opacity: 0; pointer-events: none; }
+}
+@keyframes intro-line-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes intro-spirit-in {
+  from { opacity: 0; transform: scale(0.08); filter: blur(24px); }
+  to { opacity: 1; transform: scale(1); filter: blur(0); }
+}
+@keyframes intro-skip-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dream-intro { display: none; }
+  .dream-spirit-wrap { display: none; }
+}
