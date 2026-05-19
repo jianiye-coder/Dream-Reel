@@ -169,6 +169,13 @@ export default function LandingPage() {
             <img src="/dream-photo-3.jpg" alt="" aria-hidden />
           </span>
 
+          {/* Floating dream fragments */}
+          {L.heroFragments.map((text, i) => (
+            <span key={i} className={`hero-fragment ${fragmentClassNames[i]}`} aria-hidden>
+              {text}
+            </span>
+          ))}
+
           {/* Film still — main focal image */}
           <div className="hero-film-still" aria-hidden>
             {/* eslint-disable-next-line @next/next/no-img-element */}
