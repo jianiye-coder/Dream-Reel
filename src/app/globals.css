@@ -5532,7 +5532,11 @@ body:has(.mist-page)::after {
 /* ─── Dream Reel Cinematic Landing ─────────────────────────── */
 
 body:has(.dream-reel-landing) {
-  background: #05070d;
+  background:
+    radial-gradient(circle at 18% 10%, rgba(92, 135, 255, 0.42), transparent 30rem),
+    radial-gradient(circle at 88% 14%, rgba(255, 110, 176, 0.34), transparent 28rem),
+    radial-gradient(circle at 44% 86%, rgba(92, 225, 211, 0.2), transparent 34rem),
+    #060814;
 }
 
 .dream-reel-landing {
@@ -5540,7 +5544,11 @@ body:has(.dream-reel-landing) {
   --my: 0;
   min-height: 100vh;
   overflow-x: hidden;
-  background: #05070d;
+  background:
+    radial-gradient(circle at calc(15% + (var(--mx) * 5%)) 8%, rgba(77, 125, 255, 0.44), transparent 28rem),
+    radial-gradient(circle at calc(88% - (var(--mx) * 8%)) 18%, rgba(255, 95, 169, 0.36), transparent 30rem),
+    radial-gradient(circle at 52% 54%, rgba(116, 92, 255, 0.22), transparent 36rem),
+    linear-gradient(180deg, #07101e 0%, #14102d 42%, #090916 100%);
   color: #f6f3ee;
 }
 
@@ -5557,8 +5565,11 @@ body:has(.dream-reel-landing) {
   display: flex;
   align-items: flex-end;
   padding: clamp(5.8rem, 9vw, 7rem) clamp(1.15rem, 4vw, 3rem) clamp(1.2rem, 3vw, 2.2rem);
-  border-bottom: 1px solid rgba(232, 229, 222, 0.16);
-  background: #0b111b;
+  border-bottom: 1px solid rgba(173, 205, 255, 0.28);
+  background:
+    radial-gradient(circle at 20% 20%, rgba(90, 150, 255, 0.32), transparent 28rem),
+    radial-gradient(circle at 82% 18%, rgba(255, 121, 181, 0.25), transparent 30rem),
+    #0b111b;
 }
 
 .reel-hero-image {
@@ -5567,7 +5578,7 @@ body:has(.dream-reel-landing) {
   transform:
     translate3d(calc(var(--mx) * -16px), calc(var(--my) * -12px), 0)
     scale(1.045);
-  filter: saturate(0.72) contrast(1.06) brightness(0.8);
+  filter: saturate(1.08) contrast(1.08) brightness(0.88);
   transition: transform 0.28s ease-out;
   z-index: -3;
 }
@@ -5583,9 +5594,10 @@ body:has(.dream-reel-landing) {
 .reel-hero::before {
   z-index: -2;
   background:
-    linear-gradient(180deg, rgba(9, 14, 22, 0.38) 0%, rgba(7, 10, 17, 0.08) 42%, rgba(3, 5, 10, 0.88) 100%),
-    linear-gradient(90deg, rgba(4, 6, 10, 0.62) 0%, rgba(4, 6, 10, 0.12) 42%, rgba(4, 6, 10, 0.54) 100%),
-    radial-gradient(ellipse at 52% 30%, rgba(164, 184, 233, 0.18), transparent 38%);
+    linear-gradient(180deg, rgba(7, 13, 28, 0.18) 0%, rgba(8, 12, 24, 0.04) 42%, rgba(3, 5, 12, 0.8) 100%),
+    linear-gradient(90deg, rgba(4, 9, 20, 0.52) 0%, rgba(4, 8, 20, 0.06) 42%, rgba(11, 7, 25, 0.42) 100%),
+    radial-gradient(ellipse at 54% 24%, rgba(109, 168, 255, 0.3), transparent 38%),
+    radial-gradient(ellipse at 78% 22%, rgba(255, 127, 190, 0.2), transparent 34%);
 }
 
 .reel-hero::after {
@@ -5654,7 +5666,7 @@ body:has(.dream-reel-landing) {
   bottom: 17%;
   width: 14rem;
   height: 9rem;
-  background: rgba(168, 181, 226, 0.18);
+  background: rgba(119, 164, 255, 0.34);
   filter: blur(44px);
 }
 
@@ -6017,4 +6029,56 @@ body:has(.dream-reel-landing) {
   .reel-feature-strip {
     grid-template-columns: 1fr;
   }
+}
+
+.dream-reel-landing .features-section {
+  background:
+    radial-gradient(circle at 8% 16%, rgba(95, 155, 255, 0.24), transparent 22rem),
+    radial-gradient(circle at 88% 38%, rgba(255, 104, 172, 0.2), transparent 24rem),
+    radial-gradient(circle at 50% 92%, rgba(101, 226, 213, 0.12), transparent 30rem);
+}
+
+.dream-reel-landing .dream-archive-space {
+  background:
+    radial-gradient(circle at 18% 10%, rgba(132, 96, 255, 0.28), transparent 28rem),
+    radial-gradient(circle at 78% 30%, rgba(57, 171, 255, 0.22), transparent 30rem),
+    radial-gradient(circle at 66% 74%, rgba(255, 120, 184, 0.18), transparent 30rem),
+    linear-gradient(180deg, rgba(11, 13, 34, 0.2), rgba(9, 9, 24, 0.86));
+}
+
+.dream-reel-landing .archive-opening h2,
+.dream-reel-landing .soundtrack-copy h2,
+.dream-reel-landing .privacy-copy h2,
+.dream-reel-landing .voices-intro h2,
+.dream-reel-landing .features-intro h2 {
+  text-shadow:
+    0 0 30px rgba(116, 164, 255, 0.2),
+    0 18px 70px rgba(0, 0, 0, 0.36);
+}
+
+.dream-reel-landing .archive-node,
+.dream-reel-landing .night-soundtrack,
+.dream-reel-landing .privacy-reel,
+.dream-reel-landing .voice-item {
+  border-color: rgba(185, 211, 255, 0.18);
+  background:
+    linear-gradient(145deg, rgba(116, 155, 255, 0.13), rgba(255, 113, 177, 0.07)),
+    rgba(255, 255, 255, 0.045);
+  box-shadow:
+    0 28px 90px rgba(0, 0, 0, 0.22),
+    0 0 52px rgba(84, 136, 255, 0.08);
+}
+
+.dream-reel-landing .feature-flow-eyebrow,
+.dream-reel-landing .archive-opening p,
+.dream-reel-landing .soundtrack-copy p,
+.dream-reel-landing .privacy-copy p,
+.dream-reel-landing .voices-intro p {
+  color: rgba(255, 190, 220, 0.86);
+}
+
+.dream-reel-landing .signal {
+  border-color: rgba(174, 207, 255, 0.24);
+  background: rgba(99, 139, 255, 0.12);
+  box-shadow: 0 0 28px rgba(95, 158, 255, 0.1);
 }
