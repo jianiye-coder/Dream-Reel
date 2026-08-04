@@ -28,7 +28,7 @@ export function getPool(): Pool {
 
 // Bump this whenever you add new migrations. ensureSchema will skip all DDL
 // once this version is recorded in the DB, making cold starts near-instant.
-const SCHEMA_VERSION = 3;
+const SCHEMA_VERSION = 4;
 
 let schemaReady = false;
 
@@ -123,6 +123,13 @@ export async function ensureSchema(): Promise<void> {
         status TEXT NOT NULL DEFAULT 'processed',
         processed_at TIMESTAMPTZ,
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `),
+    pool.query(`
+      CREATE TABLE IF NOT EXISTS ai_rate_limits (
+        scope_key TEXT PRIMARY KEY,
+        window_start TIMESTAMPTZ NOT NULL,
+        request_count INTEGER NOT NULL DEFAULT 0
       );
     `),
   ]);
@@ -232,6 +239,7 @@ export async function ensureSchema(): Promise<void> {
     pool.query("CREATE INDEX IF NOT EXISTS idx_subscriptions_user_id ON subscriptions (user_id);"),
     pool.query("CREATE INDEX IF NOT EXISTS idx_subscriptions_customer ON subscriptions (provider, provider_customer_id);"),
     pool.query("CREATE INDEX IF NOT EXISTS idx_usage_periods_user_period ON usage_periods (user_id, period_start, period_end);"),
+    pool.query("CREATE INDEX IF NOT EXISTS idx_ai_rate_limits_window_start ON ai_rate_limits (window_start);"),
   ]);
 
   // Record that this schema version is now applied

@@ -1,5 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
+import { auth } from "@/auth";
+import {
+  checkAiRateLimit,
+  checkAndConsumeUsage,
+  refundConsumedUsage,
+} from "@/lib/billing";
 import {
   buildDreamFollowUpAgentPrompt,
   inferAgentStage,
@@ -43,6 +49,25 @@ function buildContextLines(
 }
 
 export async function POST(req: NextRequest) {
+  const session = await auth() as { user?: { id?: string } } | null;
+  const userId = Number(session?.user?.id);
+  if (!Number.isInteger(userId) || userId <= 0) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  let consumedUsagePeriodId: number | undefined;
+
+  async function refundChatUsageOnce() {
+    if (!consumedUsagePeriodId) return;
+    const usagePeriodId = consumedUsagePeriodId;
+    consumedUsagePeriodId = undefined;
+    try {
+      await refundConsumedUsage(usagePeriodId, "analysis");
+    } catch (refundError) {
+      console.error("POST /api/chat-dream usage refund failed", refundError);
+    }
+  }
+
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
     return NextResponse.json({ error: "Missing OPENAI_API_KEY" }, { status: 500 });
@@ -61,6 +86,33 @@ export async function POST(req: NextRequest) {
   }
 
   const { messages, lang, preSleepMeal, preSleepActivity } = parsed.data;
+  const forwardedFor = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim();
+  const ipAddress = forwardedFor || req.headers.get("x-real-ip")?.trim() || "unknown";
+  const rateLimit = await checkAiRateLimit(userId, ipAddress);
+  if (!rateLimit.allowed) {
+    return NextResponse.json(
+      { error: "Too many requests" },
+      {
+        status: 429,
+        headers: { "Retry-After": String(rateLimit.retryAfterSeconds) },
+      },
+    );
+  }
+
+  const usage = await checkAndConsumeUsage(userId, "analysis");
+  if (!usage.allowed) {
+    return NextResponse.json(
+      {
+        error: lang === "en"
+          ? "Your monthly AI analysis limit is used up."
+          : "本月 AI 分析额度已用完。",
+        billingStatus: usage.status,
+      },
+      { status: 402 },
+    );
+  }
+  consumedUsagePeriodId = usage.usagePeriodId;
+
   const userTurns = messages.filter((m) => m.role === "user").length;
   const stage = inferAgentStage(userTurns);
   const contextLines = buildContextLines(lang, preSleepMeal, preSleepActivity);
@@ -92,14 +144,20 @@ export async function POST(req: NextRequest) {
 
     if (!upstream.ok) {
       const text = await upstream.text();
+      await refundChatUsageOnce();
       return NextResponse.json({ error: text || "AI service unavailable" }, { status: 502 });
     }
 
     const payload = (await upstream.json()) as ChatResponse;
     const content = payload.choices?.[0]?.message?.content ?? "";
+    if (!content.trim()) {
+      await refundChatUsageOnce();
+      return NextResponse.json({ error: "AI response was empty" }, { status: 422 });
+    }
     return NextResponse.json(parseDreamAgentContent(content, lang, stage));
   } catch (err) {
     console.error("POST /api/chat-dream failed", err);
+    await refundChatUsageOnce();
     if (err instanceof Error && err.name === "AbortError") {
       return NextResponse.json({ error: "Request timed out" }, { status: 504 });
     }

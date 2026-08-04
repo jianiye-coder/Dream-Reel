@@ -263,6 +263,57 @@ export async function refundConsumedUsage(usagePeriodId: number, kind: UsageKind
   );
 }
 
+export async function checkAiRateLimit(
+  userId: number,
+  ipAddress: string,
+): Promise<{ allowed: boolean; retryAfterSeconds: number }> {
+  await ensureSchema();
+  const pool = getPool();
+  const client = await pool.connect();
+  const windowSeconds = 60;
+  const scopes = [
+    { key: `user:${userId}`, limit: 12 },
+    { key: `ip:${ipAddress}`, limit: 30 },
+  ];
+
+  try {
+    await client.query("BEGIN");
+    let allowed = true;
+
+    for (const scope of scopes) {
+      const result = await client.query<{ request_count: number }>(
+        `
+          INSERT INTO ai_rate_limits (scope_key, window_start, request_count)
+          VALUES ($1, NOW(), 1)
+          ON CONFLICT (scope_key)
+          DO UPDATE SET
+            window_start = CASE
+              WHEN ai_rate_limits.window_start <= NOW() - ($2 * INTERVAL '1 second') THEN NOW()
+              ELSE ai_rate_limits.window_start
+            END,
+            request_count = CASE
+              WHEN ai_rate_limits.window_start <= NOW() - ($2 * INTERVAL '1 second') THEN 1
+              ELSE ai_rate_limits.request_count + 1
+            END
+          RETURNING request_count
+        `,
+        [scope.key, windowSeconds],
+      );
+      if (Number(result.rows[0]?.request_count ?? 0) > scope.limit) {
+        allowed = false;
+      }
+    }
+
+    await client.query("COMMIT");
+    return { allowed, retryAfterSeconds: windowSeconds };
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
 export async function getStripeCustomerId(userId: number): Promise<string | null> {
   const subscription = await getLatestSubscription(userId);
   return subscription?.provider_customer_id ?? null;
