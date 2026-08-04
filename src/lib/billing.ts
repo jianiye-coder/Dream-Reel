@@ -1,4 +1,5 @@
 import { ensureSchema, getPool } from "./db";
+import type { PoolClient } from "pg";
 
 export type PlanId = "free" | "plus";
 export type UsageKind = "dream_entries" | "analysis" | "image_generations";
@@ -267,9 +268,13 @@ export async function getStripeCustomerId(userId: number): Promise<string | null
   return subscription?.provider_customer_id ?? null;
 }
 
-export async function findUserIdForStripeCustomer(customerId: string, subscriptionId?: string | null): Promise<number | null> {
+export async function findUserIdForStripeCustomer(
+  customerId: string,
+  subscriptionId?: string | null,
+  client?: PoolClient,
+): Promise<number | null> {
   await ensureSchema();
-  const result = await getPool().query<{ user_id: number }>(
+  const result = await (client ?? getPool()).query<{ user_id: number }>(
     `
       SELECT user_id
       FROM subscriptions
@@ -295,9 +300,9 @@ export async function upsertStripeSubscription(input: {
   currentPeriodStart?: Date | null;
   currentPeriodEnd?: Date | null;
   cancelAtPeriodEnd?: boolean;
-}) {
+}, client?: PoolClient) {
   await ensureSchema();
-  await getPool().query(
+  await (client ?? getPool()).query(
     `
       INSERT INTO subscriptions (
         user_id, provider, provider_customer_id, provider_subscription_id,
@@ -328,21 +333,44 @@ export async function upsertStripeSubscription(input: {
   );
 }
 
-export async function recordStripeEvent(event: { id: string; type: string; payload: unknown }) {
+export async function processStripeEvent(
+  event: { id: string; type: string; payload: unknown },
+  handler: (client: PoolClient) => Promise<void>,
+): Promise<"processed" | "duplicate"> {
   await ensureSchema();
+  const client = await getPool().connect();
   try {
-    await getPool().query(
+    await client.query("BEGIN");
+    const inserted = await client.query<{ id: string }>(
       `
-        INSERT INTO payment_events (id, provider, type, payload)
-        VALUES ($1, 'stripe', $2, $3)
+        INSERT INTO payment_events (id, provider, type, payload, status)
+        VALUES ($1, 'stripe', $2, $3, 'pending')
+        ON CONFLICT (id) DO NOTHING
+        RETURNING id
       `,
       [event.id, event.type, JSON.stringify(event.payload)],
     );
-    return true;
-  } catch (error) {
-    if (typeof error === "object" && error && "code" in error && error.code === "23505") {
-      return false;
+
+    if (inserted.rows.length === 0) {
+      await client.query("ROLLBACK");
+      return "duplicate";
     }
+
+    await handler(client);
+    await client.query(
+      `
+        UPDATE payment_events
+        SET status = 'processed', processed_at = NOW()
+        WHERE id = $1
+      `,
+      [event.id],
+    );
+    await client.query("COMMIT");
+    return "processed";
+  } catch (error) {
+    await client.query("ROLLBACK");
     throw error;
+  } finally {
+    client.release();
   }
 }
