@@ -929,10 +929,19 @@ type AddingTag = { kind: KeywordArchiveKind; draft: string; selectedIds: Set<num
 type MergingTag = { kind: KeywordArchiveKind; label: string };
 type KeywordAliases = { people: Record<string, string>; locations: Record<string, string> };
 
-export default function DreamGrid({ entries }: { entries: DreamEntry[] }) {
+export default function DreamGrid({
+  entries,
+  nextCursor: initialNextCursor,
+}: {
+  entries: DreamEntry[];
+  nextCursor: string | null;
+}) {
   const { lang, T } = useLanguage();
   const G = T.archive.grid;
   const [localEntries, setLocalEntries] = useState(entries);
+  const [nextCursor, setNextCursor] = useState(initialNextCursor);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [loadMoreError, setLoadMoreError] = useState("");
   const [selected, setSelected] = useState<DreamEntry | null>(null);
   const [selectedDay, setSelectedDay] = useState<{ label: string; entries: DreamEntry[] } | null>(null);
   const [activeKeyword, setActiveKeyword] = useState<KeywordArchiveItem | null>(null);
@@ -1227,6 +1236,32 @@ export default function DreamGrid({ entries }: { entries: DreamEntry[] }) {
       if (remainingEntries.length === 0) return null;
       return { ...current, count: remainingEntries.length, entries: remainingEntries };
     });
+  }
+
+  async function loadMoreEntries() {
+    if (!nextCursor || loadingMore) return;
+    setLoadingMore(true);
+    setLoadMoreError("");
+    try {
+      const response = await fetch(`/api/dreams?limit=24&cursor=${encodeURIComponent(nextCursor)}`);
+      const payload = await response.json() as {
+        entries?: DreamEntry[];
+        nextCursor?: string | null;
+        error?: string;
+      };
+      if (!response.ok || !payload.entries) {
+        throw new Error(payload.error || "Could not load more dreams");
+      }
+      setLocalEntries((current) => {
+        const knownIds = new Set(current.map((entry) => entry.id));
+        return [...current, ...payload.entries!.filter((entry) => !knownIds.has(entry.id))];
+      });
+      setNextCursor(payload.nextCursor ?? null);
+    } catch (error) {
+      setLoadMoreError(error instanceof Error ? error.message : "Could not load more dreams");
+    } finally {
+      setLoadingMore(false);
+    }
   }
 
   if (localEntries.length === 0) {
@@ -1789,8 +1824,8 @@ export default function DreamGrid({ entries }: { entries: DreamEntry[] }) {
               >
                 <div className="film-slide-inner">
                   <div className={`film-slide-image bg-gradient-to-br ${moodGradient(entry.mood)}`}>
-                    {entry.imageUrl ? (
-                      <Image src={entry.imageUrl} alt="dream" width={320} height={420} unoptimized className="h-full w-full object-cover" />
+                    {entry.thumbnailUrl || entry.imageUrl ? (
+                      <Image src={entry.thumbnailUrl || entry.imageUrl!} alt="dream" width={320} height={420} unoptimized className="h-full w-full object-cover" />
                     ) : null}
                     <div className="film-slide-grain" aria-hidden />
                   </div>
@@ -1804,6 +1839,22 @@ export default function DreamGrid({ entries }: { entries: DreamEntry[] }) {
             ))}
           </div>
         </div>
+
+        {nextCursor ? (
+          <div className="text-center">
+            <button
+              type="button"
+              onClick={() => void loadMoreEntries()}
+              disabled={loadingMore}
+              className="mist-button-secondary rounded-full px-5 py-2.5 text-sm font-medium disabled:opacity-50"
+            >
+              {loadingMore
+                ? (lang === "zh" ? "加载中…" : "Loading…")
+                : (lang === "zh" ? "加载更早的梦境" : "Load older dreams")}
+            </button>
+            {loadMoreError ? <p className="mt-2 text-xs text-[#b88a95]">{loadMoreError}</p> : null}
+          </div>
+        ) : null}
       </div>
 
       {selectedDay && (

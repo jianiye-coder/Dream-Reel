@@ -28,11 +28,13 @@ function formatCountItems(items: CountItem[], noData: string): string {
 
 export default function ArchiveShell({
   entries,
+  nextCursor,
   recap,
   dataError,
   user,
 }: {
   entries: DreamEntry[];
+  nextCursor: string | null;
   recap: WeeklyRecapShape;
   dataError: string;
   user: { name?: string | null; email?: string | null; image?: string | null } | null;
@@ -149,7 +151,7 @@ export default function ArchiveShell({
           </div>
         </div>
 
-        <DreamGrid entries={entries} />
+        <DreamGrid entries={entries} nextCursor={nextCursor} />
       </main>
     </div>
   );

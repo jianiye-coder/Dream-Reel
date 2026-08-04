@@ -5,7 +5,7 @@ import {
   deleteDreamEntry,
   dreamEntryInputSchema,
   dreamEntryUpdateSchema,
-  listDreamEntries,
+  listDreamEntriesPage,
   updateDreamEntry,
 } from "@/lib/dreams";
 import { auth } from "@/auth";
@@ -21,6 +21,7 @@ function parseUserId(id: string | undefined): number | undefined {
 }
 
 export async function GET(request: NextRequest) {
+  const startedAt = performance.now();
   try {
     const session = await auth();
     const userId = parseUserId((session as { user?: { id?: string } } | null)?.user?.id);
@@ -28,9 +29,20 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "请先登录" }, { status: 401 });
     }
     const limit = Number(request.nextUrl.searchParams.get("limit") ?? "50");
-    const entries = await listDreamEntries(userId, limit);
-    return NextResponse.json({ entries });
+    const cursor = request.nextUrl.searchParams.get("cursor");
+    const page = await listDreamEntriesPage(userId, { limit, cursor });
+    const body = JSON.stringify(page);
+    return new NextResponse(body, {
+      headers: {
+        "Content-Type": "application/json",
+        "Server-Timing": `archive;dur=${(performance.now() - startedAt).toFixed(1)}`,
+        "X-Archive-Response-Bytes": String(Buffer.byteLength(body)),
+      },
+    });
   } catch (error) {
+    if (error instanceof RangeError) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
     console.error("GET /api/dreams failed", error);
     return NextResponse.json({ error: "无法加载归档记录" }, { status: 500 });
   }

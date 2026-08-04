@@ -1,5 +1,5 @@
 import { auth } from "@/auth";
-import { getWeeklyRecap, listDreamEntries } from "@/lib/dreams";
+import { getWeeklyRecap, listDreamEntriesPage } from "@/lib/dreams";
 import { redirect } from "next/navigation";
 import ArchiveShell from "./ArchiveShell";
 
@@ -21,13 +21,17 @@ export default async function ArchivePage() {
     topSymbols: [] as { item: string; count: number }[],
     stressByMood: [] as unknown[],
   };
-  let entries: Awaited<ReturnType<typeof listDreamEntries>> = [];
+  let entries: Awaited<ReturnType<typeof listDreamEntriesPage>>["entries"] = [];
+  let nextCursor: string | null = null;
 
   try {
-    [recap, entries] = await Promise.all([
+    const [weeklyRecap, page] = await Promise.all([
       getWeeklyRecap(userId),
-      listDreamEntries(userId, 10000),
+      listDreamEntriesPage(userId, { limit: 24 }),
     ]);
+    recap = weeklyRecap;
+    entries = page.entries;
+    nextCursor = page.nextCursor;
   } catch (error) {
     dataError =
       error instanceof Error
@@ -38,6 +42,7 @@ export default async function ArchivePage() {
   return (
     <ArchiveShell
       entries={entries}
+      nextCursor={nextCursor}
       recap={recap}
       dataError={dataError}
       user={session?.user ?? null}
