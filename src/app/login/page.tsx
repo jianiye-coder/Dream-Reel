@@ -6,11 +6,12 @@ import { signIn } from "next-auth/react";
 import { Suspense, useState } from "react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { LangToggle } from "@/components/LangToggle";
+import { getApiErrorMessage } from "@/lib/apiErrors";
 
 function LoginForm() {
   const searchParams = useSearchParams();
   const callbackUrl = searchParams.get("callbackUrl") ?? "/journal";
-  const { T } = useLanguage();
+  const { lang, T } = useLanguage();
   const L = T.login;
 
   const [tab, setTab] = useState<"signin" | "register">("signin");
@@ -36,7 +37,7 @@ function LoginForm() {
         });
         if (!res.ok) {
           const d = (await res.json()) as { error?: string };
-          setError(d.error ?? L.registerFailed);
+          setError(getApiErrorMessage(d.error, lang, L.registerFailed));
           return;
         }
       }

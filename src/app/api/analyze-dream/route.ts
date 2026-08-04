@@ -4,6 +4,7 @@ import { auth } from "@/auth";
 import { checkAndConsumeUsage, refundConsumedUsage } from "@/lib/billing";
 import { ZH_DREAM_EMOTION_CALIBRATION } from "@/lib/dreamEmotionCalibration";
 import { getRealityQuestion, mentionsRealityContext } from "@/lib/dreamQuestions";
+import { API_ERROR_CODES } from "@/lib/apiErrors";
 
 export const runtime = "nodejs";
 
@@ -180,7 +181,7 @@ function unwrapAnalysisPayload(raw: unknown) {
 export async function POST(request: NextRequest) {
   const session = await auth() as { user?: { id?: string } } | null;
   if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return NextResponse.json({ error: API_ERROR_CODES.unauthorized }, { status: 401 });
   }
 
   let consumedUsagePeriodId: number | undefined;
@@ -200,21 +201,21 @@ export async function POST(request: NextRequest) {
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) {
       return NextResponse.json(
-        { error: "缺少 OPENAI_API_KEY。" },
+        { error: API_ERROR_CODES.configurationError },
         { status: 500 },
       );
     }
 
     const parsed = requestSchema.safeParse(await request.json());
     if (!parsed.success) {
-      return NextResponse.json({ error: "Please provide dream content." }, { status: 400 });
+      return NextResponse.json({ error: API_ERROR_CODES.invalidRequest }, { status: 400 });
     }
 
     const { text, lang, preSleepMeal, preSleepActivity } = parsed.data;
     const usage = await checkAndConsumeUsage(Number(session.user.id), "analysis");
     if (!usage.allowed) {
       return NextResponse.json(
-        { error: lang === "en" ? "Your monthly AI analysis limit is used up. Upgrade to Plus or try again next month." : "本月 AI 分析额度已用完，请升级 Plus 或下月继续。", billingStatus: usage.status },
+        { error: API_ERROR_CODES.quotaExceeded, billingStatus: usage.status },
         { status: 402 },
       );
     }
@@ -265,7 +266,8 @@ export async function POST(request: NextRequest) {
     if (!upstream.ok) {
       const errorText = await upstream.text();
       await refundAnalysisUsageOnce();
-      return NextResponse.json({ error: errorText || "OpenAI 分析服务暂时不可用。" }, { status: 502 });
+      console.error("POST /api/analyze-dream upstream failed", errorText);
+      return NextResponse.json({ error: API_ERROR_CODES.upstreamError }, { status: 502 });
     }
 
     const payload = (await upstream.json()) as OpenAIResponse;
@@ -276,14 +278,14 @@ export async function POST(request: NextRequest) {
       raw = JSON.parse(content);
     } catch {
       await refundAnalysisUsageOnce();
-      return NextResponse.json({ error: "模型返回格式异常，请重试。" }, { status: 422 });
+      return NextResponse.json({ error: API_ERROR_CODES.invalidResponse }, { status: 422 });
     }
 
     const result = analysisSchema.safeParse(unwrapAnalysisPayload(raw));
     if (!result.success) {
       console.error("POST /api/analyze-dream parse failed", result.error.flatten(), raw);
       await refundAnalysisUsageOnce();
-      return NextResponse.json({ error: "分析结果解析失败，请重试。" }, { status: 422 });
+      return NextResponse.json({ error: API_ERROR_CODES.invalidResponse }, { status: 422 });
     }
 
     const cleaned = {
@@ -309,9 +311,9 @@ export async function POST(request: NextRequest) {
     console.error("POST /api/analyze-dream failed", error);
     await refundAnalysisUsageOnce();
     if (error instanceof Error && error.name === "AbortError") {
-      return NextResponse.json({ error: "OpenAI 响应超时，请稍后再试。" }, { status: 504 });
+      return NextResponse.json({ error: API_ERROR_CODES.timeout }, { status: 504 });
     }
 
-    return NextResponse.json({ error: "梦境分析失败。" }, { status: 500 });
+    return NextResponse.json({ error: API_ERROR_CODES.internalError }, { status: 500 });
   }
 }

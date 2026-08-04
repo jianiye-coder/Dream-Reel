@@ -11,6 +11,7 @@ import {
   inferAgentStage,
   parseDreamAgentContent,
 } from "@/lib/dreamFollowUpAgent";
+import { API_ERROR_CODES } from "@/lib/apiErrors";
 
 export const runtime = "nodejs";
 
@@ -52,7 +53,7 @@ export async function POST(req: NextRequest) {
   const session = await auth() as { user?: { id?: string } } | null;
   const userId = Number(session?.user?.id);
   if (!Number.isInteger(userId) || userId <= 0) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return NextResponse.json({ error: API_ERROR_CODES.unauthorized }, { status: 401 });
   }
 
   let consumedUsagePeriodId: number | undefined;
@@ -70,19 +71,19 @@ export async function POST(req: NextRequest) {
 
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
-    return NextResponse.json({ error: "Missing OPENAI_API_KEY" }, { status: 500 });
+    return NextResponse.json({ error: API_ERROR_CODES.configurationError }, { status: 500 });
   }
 
   let body: unknown;
   try {
     body = await req.json();
   } catch {
-    return NextResponse.json({ error: "Invalid request" }, { status: 400 });
+    return NextResponse.json({ error: API_ERROR_CODES.invalidRequest }, { status: 400 });
   }
 
   const parsed = bodySchema.safeParse(body);
   if (!parsed.success) {
-    return NextResponse.json({ error: "Invalid params", details: parsed.error.flatten() }, { status: 400 });
+    return NextResponse.json({ error: API_ERROR_CODES.invalidRequest, details: parsed.error.flatten() }, { status: 400 });
   }
 
   const { messages, lang, preSleepMeal, preSleepActivity } = parsed.data;
@@ -91,7 +92,7 @@ export async function POST(req: NextRequest) {
   const rateLimit = await checkAiRateLimit(userId, ipAddress);
   if (!rateLimit.allowed) {
     return NextResponse.json(
-      { error: "Too many requests" },
+      { error: API_ERROR_CODES.rateLimited },
       {
         status: 429,
         headers: { "Retry-After": String(rateLimit.retryAfterSeconds) },
@@ -103,9 +104,7 @@ export async function POST(req: NextRequest) {
   if (!usage.allowed) {
     return NextResponse.json(
       {
-        error: lang === "en"
-          ? "Your monthly AI analysis limit is used up."
-          : "本月 AI 分析额度已用完。",
+        error: API_ERROR_CODES.quotaExceeded,
         billingStatus: usage.status,
       },
       { status: 402 },
@@ -144,25 +143,26 @@ export async function POST(req: NextRequest) {
 
     if (!upstream.ok) {
       const text = await upstream.text();
+      console.error("POST /api/chat-dream upstream failed", text);
       await refundChatUsageOnce();
-      return NextResponse.json({ error: text || "AI service unavailable" }, { status: 502 });
+      return NextResponse.json({ error: API_ERROR_CODES.upstreamError }, { status: 502 });
     }
 
     const payload = (await upstream.json()) as ChatResponse;
     const content = payload.choices?.[0]?.message?.content ?? "";
     if (!content.trim()) {
       await refundChatUsageOnce();
-      return NextResponse.json({ error: "AI response was empty" }, { status: 422 });
+      return NextResponse.json({ error: API_ERROR_CODES.invalidResponse }, { status: 422 });
     }
     return NextResponse.json(parseDreamAgentContent(content, lang, stage));
   } catch (err) {
     console.error("POST /api/chat-dream failed", err);
     await refundChatUsageOnce();
     if (err instanceof Error && err.name === "AbortError") {
-      return NextResponse.json({ error: "Request timed out" }, { status: 504 });
+      return NextResponse.json({ error: API_ERROR_CODES.timeout }, { status: 504 });
     }
     return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Conversation failed" },
+      { error: API_ERROR_CODES.internalError },
       { status: 500 },
     );
   }

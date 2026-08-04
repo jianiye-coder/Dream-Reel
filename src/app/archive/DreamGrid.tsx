@@ -7,6 +7,7 @@ import type { DreamEntry } from "@/lib/dreams";
 import { buildDreamImagePrompt } from "@/lib/imagePrompt";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { formatDateTime, formatMonthLabel } from "@/lib/i18n";
+import { getApiErrorMessage } from "@/lib/apiErrors";
 
 type DayBucket = {
   date: Date;
@@ -449,7 +450,8 @@ function DreamEditorModal({
         .flatMap(([field, messages]) => messages.map((message) => `${field}: ${message}`));
       const formErrors = payload.details?.formErrors ?? [];
       const detailText = [...fieldErrors, ...formErrors].join("；");
-      throw new Error(detailText ? `${payload.error || M.updateFailed}：${detailText}` : (payload.error || M.updateFailed));
+      const message = getApiErrorMessage(payload.error, lang, M.updateFailed);
+      throw new Error(detailText ? `${message}: ${detailText}` : message);
     }
 
     return payload.entry;
@@ -487,7 +489,7 @@ function DreamEditorModal({
         body: JSON.stringify({ id: entry.id }),
       });
       const payload = (await response.json()) as { error?: string };
-      if (!response.ok) throw new Error(payload.error || M.updateFailed);
+      if (!response.ok) throw new Error(getApiErrorMessage(payload.error, lang, M.updateFailed));
 
       onDeleted(entry.id);
     } catch (deleteError) {
@@ -534,7 +536,9 @@ function DreamEditorModal({
       });
       const payload = (await response.json()) as { imageUrl?: string; revisedPrompt?: string | null; error?: string };
       if (response.status === 402) { router.push("/pricing"); return; }
-      if (!response.ok || !payload.imageUrl) throw new Error(payload.error || M.noImageError);
+      if (!response.ok || !payload.imageUrl) {
+        throw new Error(getApiErrorMessage(payload.error, lang, M.noImageError));
+      }
 
       if (!form) return;
       const nextForm: DreamEditForm = { ...form, imageUrl: payload.imageUrl ?? null, assetStatus: "generated" };
@@ -584,7 +588,7 @@ function DreamEditorModal({
         error?: string;
       };
       if (response.status === 402) { router.push("/pricing"); return; }
-      if (!response.ok) throw new Error(payload.error || M.analyzeError);
+      if (!response.ok) throw new Error(getApiErrorMessage(payload.error, lang, M.analyzeError));
 
       setForm((current) => {
         if (!current) return current;
