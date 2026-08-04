@@ -1,11 +1,15 @@
 import { auth } from "@/auth";
 import { getWeeklyRecap, listDreamEntries } from "@/lib/dreams";
+import { redirect } from "next/navigation";
 import ArchiveShell from "./ArchiveShell";
 
 export default async function ArchivePage() {
   const session = await auth();
   const rawId = session?.user?.id ? parseInt(session.user.id, 10) : NaN;
-  const userId = isNaN(rawId) ? undefined : rawId;
+  const userId = Number.isInteger(rawId) && rawId > 0 ? rawId : undefined;
+  if (!userId) {
+    redirect("/login?callbackUrl=/archive");
+  }
 
   let dataError = "";
   let recap = {
@@ -22,7 +26,7 @@ export default async function ArchivePage() {
   try {
     [recap, entries] = await Promise.all([
       getWeeklyRecap(userId),
-      listDreamEntries(10000, userId),
+      listDreamEntries(userId, 10000),
     ]);
   } catch (error) {
     dataError =

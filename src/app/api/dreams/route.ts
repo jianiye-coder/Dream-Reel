@@ -17,15 +17,18 @@ const deleteSchema = z.object({ id: z.number().int().positive() });
 function parseUserId(id: string | undefined): number | undefined {
   if (!id) return undefined;
   const n = parseInt(id, 10);
-  return isNaN(n) ? undefined : n;
+  return Number.isInteger(n) && n > 0 ? n : undefined;
 }
 
 export async function GET(request: NextRequest) {
   try {
     const session = await auth();
     const userId = parseUserId((session as { user?: { id?: string } } | null)?.user?.id);
+    if (!userId) {
+      return NextResponse.json({ error: "请先登录" }, { status: 401 });
+    }
     const limit = Number(request.nextUrl.searchParams.get("limit") ?? "50");
-    const entries = await listDreamEntries(limit, userId);
+    const entries = await listDreamEntries(userId, limit);
     return NextResponse.json({ entries });
   } catch (error) {
     console.error("GET /api/dreams failed", error);
