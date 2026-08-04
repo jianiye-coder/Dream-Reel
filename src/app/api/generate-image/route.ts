@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { auth } from "@/auth";
 import { checkAndConsumeUsage, refundConsumedUsage } from "@/lib/billing";
+import { put } from "@vercel/blob";
+import { randomUUID } from "crypto";
+import sharp from "sharp";
 
 export const runtime = "nodejs";
 export const maxDuration = 180;
@@ -75,6 +78,12 @@ export async function POST(request: NextRequest) {
         { status: 500 },
       );
     }
+    if (!process.env.BLOB_READ_WRITE_TOKEN) {
+      return NextResponse.json(
+        { error: "图片存储尚未配置，当前无法生成图片。" },
+        { status: 503 },
+      );
+    }
 
     const usage = await checkAndConsumeUsage(userId, "image_generations");
     if (!usage.allowed) {
@@ -129,8 +138,27 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "图片生成结果为空。" }, { status: 422 });
     }
 
+    const imageId = randomUUID();
+    const imageBuffer = Buffer.from(b64, "base64");
+    const thumbnailBuffer = await sharp(imageBuffer)
+      .resize({ width: 480, height: 480, fit: "cover", withoutEnlargement: true })
+      .webp({ quality: 76 })
+      .toBuffer();
+    const [imageBlob] = await Promise.all([
+      put(`dream-images/${imageId}.png`, imageBuffer, {
+        access: "public",
+        addRandomSuffix: false,
+        contentType: "image/png",
+      }),
+      put(`dream-images/${imageId}-thumb.webp`, thumbnailBuffer, {
+        access: "public",
+        addRandomSuffix: false,
+        contentType: "image/webp",
+      }),
+    ]);
+
     return NextResponse.json({
-      imageUrl: `data:image/png;base64,${b64}`,
+      imageUrl: imageBlob.url,
       revisedPrompt: null,
     });
   } catch (error) {

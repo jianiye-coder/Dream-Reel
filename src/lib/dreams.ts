@@ -64,6 +64,7 @@ export type DreamEntry = {
   locations: string[];
   symbols: string[];
   imageUrl: string | null;
+  thumbnailUrl: string | null;
   assetStatus: string | null;
   // Sleep tracking
   sleepStart: string | null;
@@ -115,6 +116,7 @@ function mapDreamRow(row: Record<string, unknown>): DreamEntry {
     locations: Array.isArray(row.locations) ? (row.locations as string[]) : [],
     symbols: Array.isArray(row.symbols) ? (row.symbols as string[]) : [],
     imageUrl: row.image_url == null ? null : String(row.image_url),
+    thumbnailUrl: getThumbnailUrl(row.image_url == null ? null : String(row.image_url)),
     assetStatus: row.asset_status == null ? null : String(row.asset_status),
     sleepStart: row.sleep_start == null ? null : String(row.sleep_start),
     wakeTime: row.wake_time == null ? null : String(row.wake_time),
@@ -123,6 +125,78 @@ function mapDreamRow(row: Record<string, unknown>): DreamEntry {
     preSleepActivity: row.pre_sleep_activity == null ? null : String(row.pre_sleep_activity),
     sleepInsight: row.sleep_insight == null ? null : String(row.sleep_insight),
     visualBrief: row.visual_brief == null ? null : String(row.visual_brief),
+  };
+}
+
+function getThumbnailUrl(imageUrl: string | null): string | null {
+  if (!imageUrl || !imageUrl.includes("/dream-images/")) return imageUrl;
+  return imageUrl.endsWith(".png")
+    ? imageUrl.replace(/\.png$/, "-thumb.webp")
+    : imageUrl;
+}
+
+type DreamCursor = { capturedAt: string; id: number };
+
+function decodeDreamCursor(cursor: string): DreamCursor {
+  try {
+    const parsed = JSON.parse(Buffer.from(cursor, "base64url").toString("utf8")) as Partial<DreamCursor>;
+    const capturedAt = new Date(parsed.capturedAt ?? "");
+    if (!Number.isInteger(parsed.id) || Number(parsed.id) <= 0 || Number.isNaN(capturedAt.getTime())) {
+      throw new Error("invalid");
+    }
+    return { capturedAt: capturedAt.toISOString(), id: Number(parsed.id) };
+  } catch {
+    throw new RangeError("Invalid archive cursor");
+  }
+}
+
+function encodeDreamCursor(entry: DreamEntry): string {
+  return Buffer.from(JSON.stringify({
+    capturedAt: entry.capturedAt,
+    id: entry.id,
+  })).toString("base64url");
+}
+
+export type DreamEntryPage = {
+  entries: DreamEntry[];
+  nextCursor: string | null;
+};
+
+export async function listDreamEntriesPage(
+  userId: number,
+  options: { limit?: number; cursor?: string | null } = {},
+): Promise<DreamEntryPage> {
+  await ensureSchema();
+  const pool = getPool();
+  const limit = Math.min(Math.max(options.limit ?? 24, 1), 100);
+  const cursor = options.cursor ? decodeDreamCursor(options.cursor) : null;
+  const result = cursor
+    ? await pool.query(
+        `
+          SELECT * FROM dream_entries
+          WHERE user_id = $1
+            AND (captured_at, id) < ($2::timestamptz, $3::bigint)
+          ORDER BY captured_at DESC, id DESC
+          LIMIT $4
+        `,
+        [userId, cursor.capturedAt, cursor.id, limit + 1],
+      )
+    : await pool.query(
+        `
+          SELECT * FROM dream_entries
+          WHERE user_id = $1
+          ORDER BY captured_at DESC, id DESC
+          LIMIT $2
+        `,
+        [userId, limit + 1],
+      );
+  const mapped = result.rows.map((row) => mapDreamRow(row as Record<string, unknown>));
+  const entries = mapped.slice(0, limit);
+  return {
+    entries,
+    nextCursor: mapped.length > limit && entries.length
+      ? encodeDreamCursor(entries[entries.length - 1])
+      : null,
   };
 }
 

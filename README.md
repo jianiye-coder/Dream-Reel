@@ -53,6 +53,7 @@ AUTH_SECRET=your_auth_secret
 DREAM_TEXT_ENCRYPTION_KEY=your_32_byte_or_long_random_secret
 OPENAI_API_KEY=your_openai_api_key
 OPENAI_MODEL=gpt-5.5
+BLOB_READ_WRITE_TOKEN=your_vercel_blob_token
 NEXT_PUBLIC_APP_URL=http://localhost:3000
 ```
 
@@ -69,6 +70,7 @@ npm run dev
 - `OPENAI_MODEL` controls the dream chat model and defaults to `gpt-5.5`.
 - Dream analysis currently uses `gpt-4o-mini`.
 - Image generation currently uses `gpt-image-2`.
+- Generated images and thumbnails are stored in Vercel Blob; `BLOB_READ_WRITE_TOKEN` is required for image generation.
 
 ---
 
@@ -121,6 +123,7 @@ AUTH_SECRET=your_auth_secret
 DREAM_TEXT_ENCRYPTION_KEY=your_32_byte_or_long_random_secret
 OPENAI_API_KEY=your_openai_api_key
 OPENAI_MODEL=gpt-5.5
+BLOB_READ_WRITE_TOKEN=your_vercel_blob_token
 NEXT_PUBLIC_APP_URL=http://localhost:3000
 ```
 
@@ -137,3 +140,4 @@ npm run dev
 - `OPENAI_MODEL` 控制梦境 Chat 模型，默认是 `gpt-5.5`。
 - 梦境分析当前使用 `gpt-4o-mini`。
 - 图像生成当前使用 `gpt-image-2`。
+- 生成的原图与缩略图存储在 Vercel Blob；图片生成功能需要配置 `BLOB_READ_WRITE_TOKEN`。

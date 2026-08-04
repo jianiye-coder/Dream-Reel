@@ -5,7 +5,7 @@ import {
   deleteDreamEntry,
   dreamEntryInputSchema,
   dreamEntryUpdateSchema,
-  listDreamEntries,
+  listDreamEntriesPage,
   updateDreamEntry,
 } from "@/lib/dreams";
 import { auth } from "@/auth";
@@ -28,9 +28,13 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "请先登录" }, { status: 401 });
     }
     const limit = Number(request.nextUrl.searchParams.get("limit") ?? "50");
-    const entries = await listDreamEntries(userId, limit);
-    return NextResponse.json({ entries });
+    const cursor = request.nextUrl.searchParams.get("cursor");
+    const page = await listDreamEntriesPage(userId, { limit, cursor });
+    return NextResponse.json(page);
   } catch (error) {
+    if (error instanceof RangeError) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
     console.error("GET /api/dreams failed", error);
     return NextResponse.json({ error: "无法加载归档记录" }, { status: 500 });
   }
