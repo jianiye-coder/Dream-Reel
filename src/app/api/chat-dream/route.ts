@@ -5,6 +5,7 @@ import {
   inferAgentStage,
   parseDreamAgentContent,
 } from "@/lib/dreamFollowUpAgent";
+import { API_ERROR_CODES } from "@/lib/apiErrors";
 
 export const runtime = "nodejs";
 
@@ -45,19 +46,19 @@ function buildContextLines(
 export async function POST(req: NextRequest) {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
-    return NextResponse.json({ error: "Missing OPENAI_API_KEY" }, { status: 500 });
+    return NextResponse.json({ error: API_ERROR_CODES.configurationError }, { status: 500 });
   }
 
   let body: unknown;
   try {
     body = await req.json();
   } catch {
-    return NextResponse.json({ error: "Invalid request" }, { status: 400 });
+    return NextResponse.json({ error: API_ERROR_CODES.invalidRequest }, { status: 400 });
   }
 
   const parsed = bodySchema.safeParse(body);
   if (!parsed.success) {
-    return NextResponse.json({ error: "Invalid params", details: parsed.error.flatten() }, { status: 400 });
+    return NextResponse.json({ error: API_ERROR_CODES.invalidRequest, details: parsed.error.flatten() }, { status: 400 });
   }
 
   const { messages, lang, preSleepMeal, preSleepActivity } = parsed.data;
@@ -92,7 +93,8 @@ export async function POST(req: NextRequest) {
 
     if (!upstream.ok) {
       const text = await upstream.text();
-      return NextResponse.json({ error: text || "AI service unavailable" }, { status: 502 });
+      console.error("POST /api/chat-dream upstream failed", text);
+      return NextResponse.json({ error: API_ERROR_CODES.upstreamError }, { status: 502 });
     }
 
     const payload = (await upstream.json()) as ChatResponse;
@@ -101,10 +103,10 @@ export async function POST(req: NextRequest) {
   } catch (err) {
     console.error("POST /api/chat-dream failed", err);
     if (err instanceof Error && err.name === "AbortError") {
-      return NextResponse.json({ error: "Request timed out" }, { status: 504 });
+      return NextResponse.json({ error: API_ERROR_CODES.timeout }, { status: 504 });
     }
     return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Conversation failed" },
+      { error: API_ERROR_CODES.internalError },
       { status: 500 },
     );
   }

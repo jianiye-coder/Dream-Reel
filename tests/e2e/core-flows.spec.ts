@@ -10,7 +10,7 @@ test("anonymous users are redirected from protected pages", async ({ page }) => 
 
 test("register, sign in, switch language, and update account", async ({ page }) => {
   await page.goto("/login");
-  await page.getByRole("button", { name: /register|注册/i }).click();
+  await page.getByRole("button", { name: /register|注册/i }).first().click();
   await page.locator('input[type="text"]').fill("E2E User");
   await page.locator('input[type="email"]').fill(`  ${email.toUpperCase()}  `);
   await page.locator('input[type="password"]').fill(password);

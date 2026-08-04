@@ -4,6 +4,7 @@ import { ensureSchema, getPool } from "@/lib/db";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { normalizeEmail } from "@/lib/email";
+import { API_ERROR_CODES } from "@/lib/apiErrors";
 
 const registerSchema = z.object({
   name: z.string().trim().min(1).max(100),
@@ -18,7 +19,7 @@ export async function POST(request: NextRequest) {
     const parsed = registerSchema.safeParse(json);
 
     if (!parsed.success) {
-      return NextResponse.json({ error: "请填写正确的信息" }, { status: 400 });
+      return NextResponse.json({ error: API_ERROR_CODES.invalidRequest }, { status: 400 });
     }
 
     const { name, email, password } = parsed.data;
@@ -30,7 +31,7 @@ export async function POST(request: NextRequest) {
     );
 
     if (existing.length > 0) {
-      return NextResponse.json({ error: "该邮箱已注册" }, { status: 409 });
+      return NextResponse.json({ error: API_ERROR_CODES.invalidRequest }, { status: 409 });
     }
 
     const passwordHash = await bcrypt.hash(password, 12);
@@ -42,6 +43,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: true }, { status: 201 });
   } catch (error) {
     console.error("POST /api/auth/register failed", error);
-    return NextResponse.json({ error: "注册失败" }, { status: 500 });
+    return NextResponse.json({ error: API_ERROR_CODES.internalError }, { status: 500 });
   }
 }

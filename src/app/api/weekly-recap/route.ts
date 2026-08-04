@@ -2,6 +2,7 @@ export const runtime = "nodejs";
 import { NextResponse } from "next/server";
 import { getWeeklyRecap } from "@/lib/dreams";
 import { auth } from "@/auth";
+import { API_ERROR_CODES } from "@/lib/apiErrors";
 
 export async function GET() {
   try {
@@ -12,6 +13,6 @@ export async function GET() {
     return NextResponse.json({ recap });
   } catch (error) {
     console.error("GET /api/weekly-recap failed", error);
-    return NextResponse.json({ error: "无法生成本周回顾" }, { status: 500 });
+    return NextResponse.json({ error: API_ERROR_CODES.internalError }, { status: 500 });
   }
 }

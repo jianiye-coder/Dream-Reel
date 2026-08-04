@@ -10,6 +10,7 @@ import { getRealityQuestion } from "@/lib/dreamQuestions";
 import { buildDreamImagePrompt } from "@/lib/imagePrompt";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { LangToggle } from "@/components/LangToggle";
+import { getApiErrorMessage } from "@/lib/apiErrors";
 
 type SpeechRecognitionConstructor = new () => SpeechRecognitionLike;
 
@@ -197,7 +198,9 @@ export default function JournalPage() {
         body: JSON.stringify({ lang, currency: lang === "zh" ? "cny" : "usd" }),
       });
       const data = (await res.json()) as { url?: string; error?: string };
-      if (!res.ok || !data.url) throw new Error(data.error || B.checkoutError);
+      if (!res.ok || !data.url) {
+        throw new Error(getApiErrorMessage(data.error, lang, B.checkoutError));
+      }
       window.location.href = data.url;
     } catch (error) {
       setBillingMessage(error instanceof Error ? error.message : B.checkoutError);
@@ -381,7 +384,7 @@ export default function JournalPage() {
       };
 
       if (!res.ok) {
-        throw new Error(data.error ?? J.signalLost);
+        throw new Error(getApiErrorMessage(data.error, lang, J.signalLost));
       }
 
       setMessages((prev) => [
@@ -402,7 +405,7 @@ export default function JournalPage() {
         {
           id: `a-${Date.now()}`,
           role: "assistant",
-          content: err instanceof Error ? `${J.signalLost} ${err.message}` : J.signalLost,
+          content: err instanceof Error ? err.message : J.signalLost,
           questions: [],
         },
       ]);
@@ -533,7 +536,7 @@ export default function JournalPage() {
       sleepInsight?: string; title?: string; visualBrief?: string; error?: string;
     };
     if (res.status === 402) { router.push("/pricing"); return null as never; }
-    if (!res.ok) throw new Error(data.error ?? J.analyzeError);
+    if (!res.ok) throw new Error(getApiErrorMessage(data.error, lang, J.analyzeError));
 
     return {
       title: data.title ?? "",
@@ -585,7 +588,7 @@ export default function JournalPage() {
           {
             id: `aerr-${Date.now()}`,
             role: "assistant",
-            content: `${J.analyzeError}${err instanceof Error ? err.message : lang === "zh" ? "请稍后再试" : "please try again"}`,
+            content: err instanceof Error ? err.message : J.analyzeError,
             questions: [],
           },
         ]);
@@ -631,7 +634,13 @@ export default function JournalPage() {
       });
       const data = (await res.json()) as { imageUrl?: string; error?: string };
       if (res.status === 402) { router.push("/pricing"); return; }
-      if (!res.ok) throw new Error(data.error ?? "图片生成失败，请稍后重试。");
+      if (!res.ok) {
+        throw new Error(getApiErrorMessage(
+          data.error,
+          lang,
+          lang === "zh" ? "图片生成失败，请稍后重试。" : "Image generation failed. Please try again.",
+        ));
+      }
       if (data.imageUrl) {
         setGeneratedImageUrl(data.imageUrl);
         setChatUnlocked(true);
@@ -640,7 +649,13 @@ export default function JournalPage() {
       }
     } catch (err) {
       console.error(err);
-      setImageError(err instanceof Error ? err.message : "图片生成失败，请稍后重试。");
+      setImageError(
+        err instanceof Error
+          ? err.message
+          : lang === "zh"
+            ? "图片生成失败，请稍后重试。"
+            : "Image generation failed. Please try again.",
+      );
     } finally {
       setIsGeneratingImage(false);
     }
