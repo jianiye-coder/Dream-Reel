@@ -1,8 +1,9 @@
 import { createHmac, timingSafeEqual } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
+import type { PoolClient } from "pg";
 import {
   findUserIdForStripeCustomer,
-  recordStripeEvent,
+  processStripeEvent,
   upsertStripeSubscription,
 } from "@/lib/billing";
 
@@ -66,7 +67,7 @@ function unixToDate(value: unknown) {
   return typeof value === "number" ? new Date(value * 1000) : null;
 }
 
-async function handleCheckoutCompleted(object: StripeObject) {
+async function handleCheckoutCompleted(object: StripeObject, client: PoolClient) {
   const userId = parseUserId(object.client_reference_id ?? object.metadata?.user_id);
   const subscriptionId = typeof object.subscription === "string" ? object.subscription : null;
   if (!userId || !subscriptionId) return;
@@ -77,16 +78,17 @@ async function handleCheckoutCompleted(object: StripeObject) {
     subscriptionId,
     status: "active",
     plan: "plus",
-  });
+  }, client);
 }
 
-async function handleSubscriptionChanged(object: StripeObject) {
+async function handleSubscriptionChanged(object: StripeObject, client: PoolClient) {
   const subscriptionId = typeof object.id === "string" ? object.id : null;
   const customerId = typeof object.customer === "string" ? object.customer : null;
   if (!subscriptionId || !customerId) return;
 
   const metadataUserId = parseUserId(object.metadata?.user_id);
-  const userId = metadataUserId ?? (await findUserIdForStripeCustomer(customerId, subscriptionId));
+  const userId = metadataUserId
+    ?? (await findUserIdForStripeCustomer(customerId, subscriptionId, client));
   if (!userId) return;
 
   await upsertStripeSubscription({
@@ -98,7 +100,7 @@ async function handleSubscriptionChanged(object: StripeObject) {
     currentPeriodStart: unixToDate(object.current_period_start),
     currentPeriodEnd: unixToDate(object.current_period_end),
     cancelAtPeriodEnd: Boolean(object.cancel_at_period_end),
-  });
+  }, client);
 }
 
 export async function POST(request: NextRequest) {
@@ -113,24 +115,28 @@ export async function POST(request: NextRequest) {
   }
 
   const event = JSON.parse(rawBody) as StripeEvent;
-  const inserted = await recordStripeEvent({ id: event.id, type: event.type, payload: event });
-  if (!inserted) {
+  const result = await processStripeEvent(
+    { id: event.id, type: event.type, payload: event },
+    async (client) => {
+      const object = event.data?.object;
+      if (!object) return;
+
+      if (event.type === "checkout.session.completed") {
+        await handleCheckoutCompleted(object, client);
+      }
+
+      if (
+        event.type === "customer.subscription.created" ||
+        event.type === "customer.subscription.updated" ||
+        event.type === "customer.subscription.deleted"
+      ) {
+        await handleSubscriptionChanged(object, client);
+      }
+    },
+  );
+
+  if (result === "duplicate") {
     return NextResponse.json({ received: true, duplicate: true });
-  }
-
-  const object = event.data?.object;
-  if (object) {
-    if (event.type === "checkout.session.completed") {
-      await handleCheckoutCompleted(object);
-    }
-
-    if (
-      event.type === "customer.subscription.created" ||
-      event.type === "customer.subscription.updated" ||
-      event.type === "customer.subscription.deleted"
-    ) {
-      await handleSubscriptionChanged(object);
-    }
   }
 
   return NextResponse.json({ received: true });
