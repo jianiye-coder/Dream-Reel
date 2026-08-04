@@ -6,7 +6,7 @@ import { z } from "zod";
 
 const registerSchema = z.object({
   name: z.string().trim().min(1).max(100),
-  email: z.string().email(),
+  email: z.string().trim().toLowerCase().email(),
   password: z.string().min(6).max(100),
 });
 
@@ -40,6 +40,9 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ ok: true }, { status: 201 });
   } catch (error) {
+    if (typeof error === "object" && error && "code" in error && error.code === "23505") {
+      return NextResponse.json({ error: "该邮箱已注册" }, { status: 409 });
+    }
     console.error("POST /api/auth/register failed", error);
     return NextResponse.json({ error: "注册失败" }, { status: 500 });
   }
