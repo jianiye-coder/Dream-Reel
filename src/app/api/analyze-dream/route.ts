@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { auth } from "@/auth";
-import { checkAndConsumeUsage } from "@/lib/billing";
+import { checkAndConsumeUsage, refundConsumedUsage } from "@/lib/billing";
 import { ZH_DREAM_EMOTION_CALIBRATION } from "@/lib/dreamEmotionCalibration";
 import { getRealityQuestion, mentionsRealityContext } from "@/lib/dreamQuestions";
 
@@ -183,6 +183,19 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  let consumedUsagePeriodId: number | undefined;
+
+  async function refundAnalysisUsageOnce() {
+    if (!consumedUsagePeriodId) return;
+    const usagePeriodId = consumedUsagePeriodId;
+    consumedUsagePeriodId = undefined;
+    try {
+      await refundConsumedUsage(usagePeriodId, "analysis");
+    } catch (refundError) {
+      console.error("POST /api/analyze-dream usage refund failed", refundError);
+    }
+  }
+
   try {
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) {
@@ -205,6 +218,7 @@ export async function POST(request: NextRequest) {
         { status: 402 },
       );
     }
+    consumedUsagePeriodId = usage.usagePeriodId;
 
     let userContent = lang === "en" ? `Dream description: ${text}` : `梦境描述：${text}`;
     if (preSleepMeal?.trim()) {
@@ -250,6 +264,7 @@ export async function POST(request: NextRequest) {
 
     if (!upstream.ok) {
       const errorText = await upstream.text();
+      await refundAnalysisUsageOnce();
       return NextResponse.json({ error: errorText || "OpenAI 分析服务暂时不可用。" }, { status: 502 });
     }
 
@@ -260,12 +275,14 @@ export async function POST(request: NextRequest) {
     try {
       raw = JSON.parse(content);
     } catch {
+      await refundAnalysisUsageOnce();
       return NextResponse.json({ error: "模型返回格式异常，请重试。" }, { status: 422 });
     }
 
     const result = analysisSchema.safeParse(unwrapAnalysisPayload(raw));
     if (!result.success) {
       console.error("POST /api/analyze-dream parse failed", result.error.flatten(), raw);
+      await refundAnalysisUsageOnce();
       return NextResponse.json({ error: "分析结果解析失败，请重试。" }, { status: 422 });
     }
 
@@ -284,11 +301,13 @@ export async function POST(request: NextRequest) {
       visualBrief: limitText(result.data.visualBrief, 2500),
     };
 
+    consumedUsagePeriodId = undefined;
     return NextResponse.json({
       ...cleaned,
     });
   } catch (error) {
     console.error("POST /api/analyze-dream failed", error);
+    await refundAnalysisUsageOnce();
     if (error instanceof Error && error.name === "AbortError") {
       return NextResponse.json({ error: "OpenAI 响应超时，请稍后再试。" }, { status: 504 });
     }
