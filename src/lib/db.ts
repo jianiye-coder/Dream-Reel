@@ -28,7 +28,7 @@ export function getPool(): Pool {
 
 // Bump this whenever you add new migrations. ensureSchema will skip all DDL
 // once this version is recorded in the DB, making cold starts near-instant.
-const SCHEMA_VERSION = 2;
+const SCHEMA_VERSION = 3;
 
 let schemaReady = false;
 
@@ -120,6 +120,8 @@ export async function ensureSchema(): Promise<void> {
         provider TEXT NOT NULL,
         type TEXT NOT NULL,
         payload JSONB NOT NULL,
+        status TEXT NOT NULL DEFAULT 'processed',
+        processed_at TIMESTAMPTZ,
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       );
     `),
@@ -223,6 +225,8 @@ export async function ensureSchema(): Promise<void> {
     pool.query("ALTER TABLE dream_entries ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id) ON DELETE SET NULL;"),
     pool.query("ALTER TABLE dream_entries ADD COLUMN IF NOT EXISTS title TEXT;"),
     pool.query("ALTER TABLE dream_entries ADD COLUMN IF NOT EXISTS visual_brief TEXT;"),
+    pool.query("ALTER TABLE payment_events ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'processed';"),
+    pool.query("ALTER TABLE payment_events ADD COLUMN IF NOT EXISTS processed_at TIMESTAMPTZ;"),
     pool.query("CREATE INDEX IF NOT EXISTS idx_dream_entries_captured_at ON dream_entries (captured_at DESC);"),
     pool.query("CREATE INDEX IF NOT EXISTS idx_dream_entries_user_id ON dream_entries (user_id);"),
     pool.query("CREATE INDEX IF NOT EXISTS idx_subscriptions_user_id ON subscriptions (user_id);"),
