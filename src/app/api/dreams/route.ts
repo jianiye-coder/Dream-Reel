@@ -21,6 +21,7 @@ function parseUserId(id: string | undefined): number | undefined {
 }
 
 export async function GET(request: NextRequest) {
+  const startedAt = performance.now();
   try {
     const session = await auth();
     const userId = parseUserId((session as { user?: { id?: string } } | null)?.user?.id);
@@ -30,7 +31,14 @@ export async function GET(request: NextRequest) {
     const limit = Number(request.nextUrl.searchParams.get("limit") ?? "50");
     const cursor = request.nextUrl.searchParams.get("cursor");
     const page = await listDreamEntriesPage(userId, { limit, cursor });
-    return NextResponse.json(page);
+    const body = JSON.stringify(page);
+    return new NextResponse(body, {
+      headers: {
+        "Content-Type": "application/json",
+        "Server-Timing": `archive;dur=${(performance.now() - startedAt).toFixed(1)}`,
+        "X-Archive-Response-Bytes": String(Buffer.byteLength(body)),
+      },
+    });
   } catch (error) {
     if (error instanceof RangeError) {
       return NextResponse.json({ error: error.message }, { status: 400 });
