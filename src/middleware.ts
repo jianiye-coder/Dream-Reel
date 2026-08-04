@@ -12,5 +12,12 @@ export default auth((req) => {
 });
 
 export const config = {
-  matcher: ["/journal", "/journal/(.*)", "/archive", "/archive/(.*)"],
+  matcher: [
+    "/journal",
+    "/journal/(.*)",
+    "/archive",
+    "/archive/(.*)",
+    "/account",
+    "/account/(.*)",
+  ],
 };
