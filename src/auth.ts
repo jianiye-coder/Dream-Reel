@@ -5,9 +5,10 @@ import { getPool } from "@/lib/db";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { authConfig } from "@/auth.config";
+import { normalizeEmail } from "@/lib/email";
 
 const credentialsSchema = z.object({
-  email: z.string().email(),
+  email: z.string().transform(normalizeEmail).pipe(z.string().email()),
   password: z.string().min(6),
 });
 
