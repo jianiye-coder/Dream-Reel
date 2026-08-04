@@ -3,10 +3,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { ensureSchema, getPool } from "@/lib/db";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
+import { normalizeEmail } from "@/lib/email";
 
 const registerSchema = z.object({
   name: z.string().trim().min(1).max(100),
-  email: z.string().trim().toLowerCase().email(),
+  email: z.string().transform(normalizeEmail).pipe(z.string().email()),
   password: z.string().min(6).max(100),
 });
 
