@@ -8,6 +8,8 @@ import {
 } from "@/lib/billing";
 import {
   buildDreamFollowUpAgentPrompt,
+  buildImmediateSafetyResponse,
+  deriveDreamAgentConversationContext,
   inferAgentStage,
   parseDreamAgentContent,
 } from "@/lib/dreamFollowUpAgent";
@@ -19,6 +21,11 @@ export const runtime = "nodejs";
 const msgSchema = z.object({
   role: z.enum(["user", "assistant"]),
   content: z.string().min(1).max(5000),
+  questions: z.array(z.string().trim().min(1).max(200)).max(3).optional(),
+  memory: z.object({
+    missingDetails: z.array(z.string().trim().min(1).max(100)).max(5),
+    observedSignals: z.array(z.string().trim().min(1).max(100)).max(8),
+  }).optional(),
 });
 
 const bodySchema = z.object({
@@ -73,11 +80,6 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) {
-    return NextResponse.json({ error: API_ERROR_CODES.configurationError }, { status: 500 });
-  }
-
   let body: unknown;
   try {
     body = await req.json();
@@ -91,6 +93,15 @@ export async function POST(req: NextRequest) {
   }
 
   const { messages, lang, preSleepMeal, preSleepActivity } = parsed.data;
+  const contextLines = buildContextLines(lang, preSleepMeal, preSleepActivity);
+  const conversationContext = deriveDreamAgentConversationContext(messages, lang, Boolean(contextLines));
+  if (conversationContext.realityContextStatus === "crisis") {
+    return NextResponse.json(buildImmediateSafetyResponse(lang));
+  }
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) {
+    return NextResponse.json({ error: API_ERROR_CODES.configurationError }, { status: 500 });
+  }
   const forwardedFor = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim();
   const ipAddress = forwardedFor || req.headers.get("x-real-ip")?.trim() || "unknown";
   const rateLimit = await checkAiRateLimit(userId, ipAddress);
@@ -118,8 +129,17 @@ export async function POST(req: NextRequest) {
 
   const userTurns = messages.filter((m) => m.role === "user").length;
   const stage = inferAgentStage(userTurns);
-  const contextLines = buildContextLines(lang, preSleepMeal, preSleepActivity);
-  const systemPrompt = buildDreamFollowUpAgentPrompt(lang, userTurns, stage, contextLines);
+  const systemPrompt = buildDreamFollowUpAgentPrompt(lang, userTurns, stage, contextLines, conversationContext);
+  const upstreamMessages = messages.map((message) => {
+    if (message.role === "user") return { role: message.role, content: message.content };
+    const workingMemory = message.memory
+      ? `\nWorking memory: ${JSON.stringify(message.memory)}`
+      : "";
+    const shownQuestions = message.questions?.length
+      ? `\nQuestions shown to the user: ${message.questions.join(" | ")}`
+      : "";
+    return { role: message.role, content: `${message.content}${shownQuestions}${workingMemory}` };
+  });
 
   try {
     const controller = new AbortController();
@@ -136,7 +156,7 @@ export async function POST(req: NextRequest) {
         signal: controller.signal,
         body: JSON.stringify({
           model: OPENAI_MODEL,
-          messages: [{ role: "system", content: systemPrompt }, ...messages],
+          messages: [{ role: "system", content: systemPrompt }, ...upstreamMessages],
           max_completion_tokens: 800,
           response_format: { type: "json_object" },
         }),
@@ -159,7 +179,7 @@ export async function POST(req: NextRequest) {
       await refundChatUsageOnce();
       return NextResponse.json({ error: API_ERROR_CODES.invalidResponse }, { status: 422 });
     }
-    return NextResponse.json(parseDreamAgentContent(content, lang, stage));
+    return NextResponse.json(parseDreamAgentContent(content, lang, stage, conversationContext));
   } catch (err) {
     console.error("POST /api/chat-dream failed", safeErrorMetadata(err));
     await refundChatUsageOnce();

@@ -9,12 +9,37 @@ export interface DreamAgentMemory {
   observedSignals: string[];
 }
 
+export type RealityContextStatus = "unanswered" | "answered" | "declined" | "crisis";
+
+export interface DreamAgentConversationContext {
+  realityContextStatus: RealityContextStatus;
+}
+
 export interface DreamAgentResult {
   message: string;
   questions: string[];
   stage: DreamAgentStage;
   nextAction: DreamAgentNextAction;
   memory: DreamAgentMemory;
+}
+
+export function buildImmediateSafetyResponse(lang: "zh" | "en"): DreamAgentResult {
+  if (lang === "en") {
+    return {
+      message: "I’m really sorry you’re carrying this right now. Your immediate safety matters more than exploring the dream. Please contact local emergency services or a crisis line now, and tell someone you trust who can stay with you. Move away from anything you could use to hurt yourself if you can.",
+      questions: ["Are you in immediate danger right now?"],
+      stage: "deepening",
+      nextAction: "summarize",
+      memory: { missingDetails: ["immediate safety"], observedSignals: ["urgent safety concern"] },
+    };
+  }
+  return {
+    message: "听起来你现在正承受非常沉重的痛苦。此刻你的安全比继续聊梦更重要。请立即联系当地急救或危机支持，也告诉一位能陪在你身边、你信任的人。如果可以，先远离任何可能伤害自己的东西。",
+    questions: ["你现在有立即伤害自己的危险吗？"],
+    stage: "deepening",
+    nextAction: "summarize",
+    memory: { missingDetails: ["当下是否安全"], observedSignals: ["紧急安全风险"] },
+  };
 }
 
 const QUESTION_LIMIT_BY_ACTION: Record<DreamAgentNextAction, number> = {
@@ -69,7 +94,14 @@ function cleanList(values: string[], limit: number, maxLength: number) {
   return cleaned;
 }
 
-function ensureRealityQuestion(questions: string[], lang: "zh" | "en") {
+function ensureRealityQuestion(
+  questions: string[],
+  lang: "zh" | "en",
+  conversationContext?: DreamAgentConversationContext,
+) {
+  if (conversationContext?.realityContextStatus !== undefined && conversationContext.realityContextStatus !== "unanswered") {
+    return questions.filter((question) => !mentionsRealityContext(question, lang)).slice(0, 3);
+  }
   const requiredQuestion = getRealityQuestion(lang);
   const alreadyIncluded = questions.some((question) =>
     mentionsRealityContext(question, lang),
@@ -96,16 +128,43 @@ export function parseDreamAgentContent(
   content: string,
   lang: "zh" | "en",
   fallbackStage: DreamAgentStage,
+  conversationContext?: DreamAgentConversationContext,
 ) {
   const fallback = { message: content.trim() || "……" };
   const match = content.match(/\{[\s\S]*\}/);
-  if (!match) return sanitizeDreamAgentResult(fallback, lang, fallbackStage);
+  if (!match) return sanitizeDreamAgentResult(fallback, lang, fallbackStage, conversationContext);
 
   try {
-    return sanitizeDreamAgentResult(JSON.parse(match[0]) as unknown, lang, fallbackStage);
+    return sanitizeDreamAgentResult(JSON.parse(match[0]) as unknown, lang, fallbackStage, conversationContext);
   } catch {
-    return sanitizeDreamAgentResult(fallback, lang, fallbackStage);
+    return sanitizeDreamAgentResult(fallback, lang, fallbackStage, conversationContext);
   }
+}
+
+export function deriveDreamAgentConversationContext(
+  messages: Array<{ role: "user" | "assistant"; content: string; questions?: string[] }>,
+  lang: "zh" | "en",
+  hasPreSleepContext = false,
+): DreamAgentConversationContext {
+  const userText = messages.filter((message) => message.role === "user").map((message) => message.content).join("\n");
+  const declined = lang === "en"
+    ? /(?:do not|don't|dont|rather not|won't|will not).{0,30}(?:real life|waking life|personal)/i.test(userText)
+    : /(?:不想|不要|别|不愿意).{0,12}(?:现实|生活|私人|个人)/.test(userText);
+  const crisis = lang === "en"
+    ? /(?:don't want to live|do not want to live|hurt myself|harm myself|kill myself|suicid)/i.test(userText)
+    : /(?:不想活|伤害自己|自残|自杀|结束生命)/.test(userText);
+  if (crisis) return { realityContextStatus: "crisis" };
+  if (declined) return { realityContextStatus: "declined" };
+
+  const includesRealityQuestion = (message: (typeof messages)[number]) =>
+    mentionsRealityContext([message.content, ...(message.questions ?? [])].join("\n"), lang);
+  const assistantAsked = messages.some((message) => message.role === "assistant" && includesRealityQuestion(message));
+  const lastRealityQuestionIndex = messages.findLastIndex((message) => message.role === "assistant" && includesRealityQuestion(message));
+  const answeredAfterQuestion = assistantAsked && messages.slice(lastRealityQuestionIndex + 1).some((message) => message.role === "user");
+  const volunteeredContext = lang === "en"
+    ? /(?:recently|in real life|at work|my job|my project|before sleep)/i.test(userText)
+    : /(?:最近|现实|工作|项目|睡前)/.test(userText);
+  return { realityContextStatus: hasPreSleepContext || answeredAfterQuestion || volunteeredContext ? "answered" : "unanswered" };
 }
 
 export function buildDreamFollowUpAgentPrompt(
@@ -113,7 +172,9 @@ export function buildDreamFollowUpAgentPrompt(
   userTurns: number,
   stage: DreamAgentStage,
   contextLines: string,
+  conversationContext?: DreamAgentConversationContext,
 ) {
+  const realityStatus = conversationContext?.realityContextStatus ?? "unanswered";
   if (lang === "en") {
     return `You are Dream Reel's follow-up agent for a dream journal.
 
@@ -137,6 +198,8 @@ Tone:
 - Like a private late-night conversation, not therapy and not a generic AI tool
 - Short sentences with breathing room
 - Do not interpret the dream's meaning unless asked${contextLines ? `\n\nPre-sleep context: ${contextLines}` : ""}
+- Reality-context status is ${realityStatus}. If it is answered, declined, or crisis, do not ask a real-life question again.
+- If the user may imminently harm themselves, pause dream exploration. Respond directly and compassionately, encourage immediate local emergency/crisis help and contact with a trusted person, and ask only about immediate safety.
 
 This is user turn ${userTurns}. Current inferred stage: ${stage}.
 
@@ -174,6 +237,8 @@ Agent 策略：
 - 像深夜里的私人对话，不是心理咨询或通用 AI 工具
 - 句子短一点，留出余白
 - 不要主动解释梦的含义，除非用户明确要求${contextLines ? `\n\n用户的睡前情境：\n${contextLines}` : ""}
+- 当前现实关联状态是 ${realityStatus}。如果状态为 answered、declined 或 crisis，不要再问现实关联。
+- 如果用户可能马上伤害自己，暂停梦境探索。直接、温和地回应，鼓励立即联系当地急救/危机支持和可信任的人，只询问当下是否安全。
 
 当前是用户第 ${userTurns} 轮。当前推断阶段：${stage}。
 
@@ -193,6 +258,7 @@ export function sanitizeDreamAgentResult(
   raw: unknown,
   lang: "zh" | "en",
   fallbackStage: DreamAgentStage,
+  conversationContext?: DreamAgentConversationContext,
 ): DreamAgentResult {
   const parsed = agentResponseSchema.safeParse(raw);
   const data: Partial<AgentResponsePayload> = parsed.success ? parsed.data : {};
@@ -207,7 +273,7 @@ export function sanitizeDreamAgentResult(
 
   return {
     message: limitText(data.message ?? "……", 1000) || "……",
-    questions: maxQuestions === 0 ? [] : ensureRealityQuestion(cleanedQuestions, lang).slice(0, maxQuestions),
+    questions: maxQuestions === 0 ? [] : ensureRealityQuestion(cleanedQuestions, lang, conversationContext).slice(0, maxQuestions),
     stage,
     nextAction,
     memory,

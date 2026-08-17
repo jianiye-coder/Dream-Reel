@@ -379,8 +379,13 @@ export default function JournalPage() {
     try {
       const history = messages
         .filter((m) => m.id !== "welcome")
-        .map((m) => ({ role: m.role, content: m.content }));
-      history.push({ role: "user" as const, content: text });
+        .map((m) => ({
+          role: m.role,
+          content: m.content,
+          questions: m.questions,
+          memory: m.memory,
+        }));
+      history.push({ role: "user" as const, content: text, questions: undefined, memory: undefined });
 
       const res = await fetch("/api/chat-dream", {
         method: "POST",
