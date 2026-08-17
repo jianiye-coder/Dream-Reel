@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   decryptDreamText,
   encryptDreamText,
@@ -11,6 +11,8 @@ const original = {
   key: process.env.DREAM_TEXT_ENCRYPTION_KEY,
   id: process.env.DREAM_TEXT_ENCRYPTION_KEY_ID,
   previous: process.env.DREAM_TEXT_PREVIOUS_ENCRYPTION_KEYS,
+  auth: process.env.AUTH_SECRET,
+  nodeEnv: process.env.NODE_ENV,
 };
 
 afterEach(() => {
@@ -20,6 +22,9 @@ afterEach(() => {
   else process.env.DREAM_TEXT_ENCRYPTION_KEY_ID = original.id;
   if (original.previous === undefined) delete process.env.DREAM_TEXT_PREVIOUS_ENCRYPTION_KEYS;
   else process.env.DREAM_TEXT_PREVIOUS_ENCRYPTION_KEYS = original.previous;
+  if (original.auth === undefined) delete process.env.AUTH_SECRET;
+  else process.env.AUTH_SECRET = original.auth;
+  vi.stubEnv("NODE_ENV", original.nodeEnv ?? "test");
 });
 
 describe("dream text key rotation", () => {
@@ -82,5 +87,16 @@ describe("dream text key rotation", () => {
     expect(String(updates[0][2])).toMatch(/^dre2:new:/);
     expect(decryptDreamText(String(updates[0][1]))).toBe("raw private dream");
     expect(decryptDreamText(String(updates[0][2]))).toBe("clean private dream");
+  });
+
+  it("keeps production authentication available during key provisioning", () => {
+    delete process.env.DREAM_TEXT_ENCRYPTION_KEY;
+    delete process.env.DREAM_TEXT_PREVIOUS_ENCRYPTION_KEYS;
+    process.env.AUTH_SECRET = "production-auth-transition-secret";
+    vi.stubEnv("NODE_ENV", "production");
+
+    const encrypted = encryptDreamText("transition dream");
+    expect(encrypted).toMatch(/^dre2:auth-transition:/);
+    expect(decryptDreamText(encrypted)).toBe("transition dream");
   });
 });

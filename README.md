@@ -71,6 +71,7 @@ npm run dev
 ### Notes
 
 - Production requires `DREAM_TEXT_ENCRYPTION_KEY`; it must be different from `AUTH_SECRET`.
+- Until that variable is present, production uses a domain-separated transition key so authentication remains available; `/api/health` reports this state as degraded. Treat this only as a deployment bridge and configure the dedicated key before rotating `AUTH_SECRET`.
 - To rotate dream encryption, give the new key a new `DREAM_TEXT_ENCRYPTION_KEY_ID` and retain old keys temporarily in `DREAM_TEXT_PREVIOUS_ENCRYPTION_KEYS`. Reads stay compatible while stored rows are re-encrypted in batches.
 - `GET /api/health` returns `503` when PostgreSQL is unavailable, without exposing connection details.
 - Application logs must retain operational metadata only. Never log dream text, AI prompts/responses, generated visual briefs, credentials, or encryption material; configure the hosting provider's retention period to the shortest operationally useful window.
@@ -149,6 +150,7 @@ npm run dev
 ### 说明
 
 - 生产环境必须配置独立于 `AUTH_SECRET` 的 `DREAM_TEXT_ENCRYPTION_KEY`。
+- 在该变量尚未配置时，生产环境会用域隔离的过渡密钥保持登录可用，且 `/api/health` 会报告降级状态；这只用于部署过渡，轮换 `AUTH_SECRET` 前必须补齐独立密钥。
 - 轮换梦境加密密钥时，为新密钥设置新的 `DREAM_TEXT_ENCRYPTION_KEY_ID`，并暂时把旧密钥保留在 `DREAM_TEXT_PREVIOUS_ENCRYPTION_KEYS`；服务会兼容读取并分批重加密旧数据。
 - `GET /api/health` 会在 PostgreSQL 不可用时返回 `503`，且不会暴露连接信息。
 - 应用日志只保留运行元数据；禁止记录梦境正文、AI 提示词/响应、视觉描述、登录凭据或加密材料，并应把托管平台的日志保留期设为满足运维所需的最短时间。

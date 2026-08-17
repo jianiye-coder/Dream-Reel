@@ -21,6 +21,13 @@ function deriveKey(secret: string) {
   return decoded.length === 32 ? decoded : createHash("sha256").update(secret).digest();
 }
 
+function deriveTransitionKey(secret: string) {
+  return createHash("sha256")
+    .update("dream-reel:dream-text:v2\0")
+    .update(secret)
+    .digest();
+}
+
 function validateKeyId(value: string) {
   if (!/^[A-Za-z0-9_-]{1,32}$/.test(value)) {
     throw new Error("DREAM_TEXT_ENCRYPTION_KEY_ID must contain only letters, numbers, _ or -.");
@@ -37,15 +44,13 @@ function getCurrentKey(): EncryptionKey {
     };
   }
 
-  if (process.env.NODE_ENV === "production") {
-    throw new Error("DREAM_TEXT_ENCRYPTION_KEY is required in production.");
-  }
-
   const developmentSecret = process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET;
   if (!developmentSecret) {
     throw new Error("DREAM_TEXT_ENCRYPTION_KEY is missing. Refusing to store dream text in plaintext.");
   }
-  return { id: "development", key: deriveKey(developmentSecret) };
+  return process.env.NODE_ENV === "production"
+    ? { id: "auth-transition", key: deriveTransitionKey(developmentSecret) }
+    : { id: "development", key: deriveKey(developmentSecret) };
 }
 
 function getPreviousKeys(): EncryptionKey[] {
@@ -72,12 +77,17 @@ function getDecryptionKeys() {
   // was required. New ciphertext never uses an Auth.js secret.
   const legacyAuthSecret = process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET;
   if (legacyAuthSecret) {
+    keys.push({ id: "auth-transition", key: deriveTransitionKey(legacyAuthSecret) });
     keys.push({ id: "legacy-auth", key: deriveKey(legacyAuthSecret) });
   }
 
   return keys.filter((candidate, index, all) =>
     all.findIndex((item) => item.key.equals(candidate.key)) === index,
   );
+}
+
+export function hasDedicatedDreamEncryptionKey() {
+  return Boolean(process.env.DREAM_TEXT_ENCRYPTION_KEY);
 }
 
 function decryptPayload(payload: string, key: Buffer) {

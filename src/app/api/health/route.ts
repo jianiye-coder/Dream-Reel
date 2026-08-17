@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getPool } from "@/lib/db";
+import { hasDedicatedDreamEncryptionKey } from "@/lib/dreamTextEncryption";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -8,9 +9,18 @@ export async function GET() {
   const startedAt = Date.now();
   try {
     await getPool().query("SELECT 1");
+    const dedicatedEncryptionKey = hasDedicatedDreamEncryptionKey();
     return NextResponse.json(
-      { status: "ok", database: "reachable", latencyMs: Date.now() - startedAt },
-      { headers: { "Cache-Control": "no-store" } },
+      {
+        status: dedicatedEncryptionKey ? "ok" : "degraded",
+        database: "reachable",
+        encryption: dedicatedEncryptionKey ? "dedicated" : "transition",
+        latencyMs: Date.now() - startedAt,
+      },
+      {
+        status: dedicatedEncryptionKey ? 200 : 503,
+        headers: { "Cache-Control": "no-store" },
+      },
     );
   } catch (error) {
     console.error("GET /api/health database check failed", {
