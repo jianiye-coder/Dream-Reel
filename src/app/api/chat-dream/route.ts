@@ -12,6 +12,7 @@ import {
   parseDreamAgentContent,
 } from "@/lib/dreamFollowUpAgent";
 import { API_ERROR_CODES } from "@/lib/apiErrors";
+import { safeErrorMetadata } from "@/lib/safeServerLog";
 
 export const runtime = "nodejs";
 
@@ -65,7 +66,10 @@ export async function POST(req: NextRequest) {
     try {
       await refundConsumedUsage(usagePeriodId, "analysis");
     } catch (refundError) {
-      console.error("POST /api/chat-dream usage refund failed", refundError);
+      console.error(
+        "POST /api/chat-dream usage refund failed",
+        safeErrorMetadata(refundError),
+      );
     }
   }
 
@@ -142,8 +146,9 @@ export async function POST(req: NextRequest) {
     }
 
     if (!upstream.ok) {
-      const text = await upstream.text();
-      console.error("POST /api/chat-dream upstream failed", text);
+      console.error("POST /api/chat-dream upstream failed", {
+        status: upstream.status,
+      });
       await refundChatUsageOnce();
       return NextResponse.json({ error: API_ERROR_CODES.upstreamError }, { status: 502 });
     }
@@ -156,7 +161,7 @@ export async function POST(req: NextRequest) {
     }
     return NextResponse.json(parseDreamAgentContent(content, lang, stage));
   } catch (err) {
-    console.error("POST /api/chat-dream failed", err);
+    console.error("POST /api/chat-dream failed", safeErrorMetadata(err));
     await refundChatUsageOnce();
     if (err instanceof Error && err.name === "AbortError") {
       return NextResponse.json({ error: API_ERROR_CODES.timeout }, { status: 504 });

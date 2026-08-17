@@ -55,11 +55,14 @@ describe("POST /api/analyze-dream usage accounting", () => {
   });
 
   it("refunds a schema failure", async () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const sensitivePayload = "PRIVATE_DREAM_SENTINEL";
     vi.stubGlobal("fetch", vi.fn(async () => Response.json({
-      choices: [{ message: { content: "[]" } }],
+      choices: [{ message: { content: JSON.stringify([sensitivePayload]) } }],
     })));
     expect((await POST(request())).status).toBe(422);
     expect(billing.refundConsumedUsage).toHaveBeenCalledOnce();
+    expect(JSON.stringify(errorSpy.mock.calls)).not.toContain(sensitivePayload);
   });
 
   it("charges a successful analysis once", async () => {

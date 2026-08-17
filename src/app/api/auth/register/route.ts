@@ -5,6 +5,7 @@ import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { normalizeEmail } from "@/lib/email";
 import { API_ERROR_CODES } from "@/lib/apiErrors";
+import { consumeAuthAttempt, getTrustedClientIp } from "@/lib/authRateLimit";
 
 const registerSchema = z.object({
   name: z.string().trim().min(1).max(100),
@@ -14,7 +15,6 @@ const registerSchema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
-    await ensureSchema();
     const json = await request.json() as unknown;
     const parsed = registerSchema.safeParse(json);
 
@@ -23,6 +23,15 @@ export async function POST(request: NextRequest) {
     }
 
     const { name, email, password } = parsed.data;
+    const rateLimit = await consumeAuthAttempt("register", email, getTrustedClientIp(request.headers));
+    if (!rateLimit.allowed) {
+      return NextResponse.json(
+        { error: API_ERROR_CODES.rateLimited },
+        { status: 429, headers: { "Retry-After": String(rateLimit.retryAfterSeconds) } },
+      );
+    }
+
+    await ensureSchema();
     const pool = getPool();
 
     const { rows: existing } = await pool.query(

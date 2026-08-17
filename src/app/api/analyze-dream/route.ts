@@ -5,6 +5,7 @@ import { checkAndConsumeUsage, refundConsumedUsage } from "@/lib/billing";
 import { ZH_DREAM_EMOTION_CALIBRATION } from "@/lib/dreamEmotionCalibration";
 import { getRealityQuestion, mentionsRealityContext } from "@/lib/dreamQuestions";
 import { API_ERROR_CODES } from "@/lib/apiErrors";
+import { safeErrorMetadata, safeValidationIssues } from "@/lib/safeServerLog";
 
 export const runtime = "nodejs";
 
@@ -193,7 +194,10 @@ export async function POST(request: NextRequest) {
     try {
       await refundConsumedUsage(usagePeriodId, "analysis");
     } catch (refundError) {
-      console.error("POST /api/analyze-dream usage refund failed", refundError);
+      console.error(
+        "POST /api/analyze-dream usage refund failed",
+        safeErrorMetadata(refundError),
+      );
     }
   }
 
@@ -264,9 +268,10 @@ export async function POST(request: NextRequest) {
     }
 
     if (!upstream.ok) {
-      const errorText = await upstream.text();
       await refundAnalysisUsageOnce();
-      console.error("POST /api/analyze-dream upstream failed", errorText);
+      console.error("POST /api/analyze-dream upstream failed", {
+        status: upstream.status,
+      });
       return NextResponse.json({ error: API_ERROR_CODES.upstreamError }, { status: 502 });
     }
 
@@ -283,7 +288,10 @@ export async function POST(request: NextRequest) {
 
     const result = analysisSchema.safeParse(unwrapAnalysisPayload(raw));
     if (!result.success) {
-      console.error("POST /api/analyze-dream parse failed", result.error.flatten(), raw);
+      console.error(
+        "POST /api/analyze-dream parse failed",
+        safeValidationIssues(result.error.issues),
+      );
       await refundAnalysisUsageOnce();
       return NextResponse.json({ error: API_ERROR_CODES.invalidResponse }, { status: 422 });
     }
@@ -308,7 +316,7 @@ export async function POST(request: NextRequest) {
       ...cleaned,
     });
   } catch (error) {
-    console.error("POST /api/analyze-dream failed", error);
+    console.error("POST /api/analyze-dream failed", safeErrorMetadata(error));
     await refundAnalysisUsageOnce();
     if (error instanceof Error && error.name === "AbortError") {
       return NextResponse.json({ error: API_ERROR_CODES.timeout }, { status: 504 });

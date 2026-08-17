@@ -50,7 +50,14 @@ function LoginForm() {
       });
 
       if (result?.error) {
-        setError(L.wrongCredentials);
+        const authResult = result as typeof result & { code?: string };
+        if (authResult.code === "rate_limited") {
+          setError(L.rateLimited);
+        } else if (result.error === "Configuration") {
+          setError(L.serviceUnavailable);
+        } else {
+          setError(L.wrongCredentials);
+        }
       } else if (result?.url) {
         window.location.assign(result.url);
       }
