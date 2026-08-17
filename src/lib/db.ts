@@ -1,5 +1,9 @@
 import { Pool } from "pg";
-import { encryptDreamText, isEncryptedDreamText } from "./dreamTextEncryption";
+import {
+  getCurrentDreamEncryptionKeyId,
+  needsDreamTextReencryption,
+  reencryptDreamText,
+} from "./dreamTextEncryption";
 
 declare global {
   var dreamPool: Pool | undefined;
@@ -28,7 +32,7 @@ export function getPool(): Pool {
 
 // Bump this whenever you add new migrations. ensureSchema will skip all DDL
 // once this version is recorded in the DB, making cold starts near-instant.
-const SCHEMA_VERSION = 5;
+const SCHEMA_VERSION = 6;
 
 let schemaReady = false;
 
@@ -177,38 +181,46 @@ async function normalizeUserEmails(pool: Pool): Promise<void> {
   }
 }
 
-async function encryptLegacyDreamTextRows(pool: Pool): Promise<void> {
+export async function migrateDreamTextEncryption(pool: Pool): Promise<void> {
+  const currentPrefix = `dre2:${getCurrentDreamEncryptionKeyId()}:`;
   while (true) {
-    const result = await pool.query<{ id: string; raw_text: string; clean_text: string }>(
-      `
-        SELECT id, raw_text, clean_text
-        FROM dream_entries
-        WHERE raw_text NOT LIKE 'dre1:%'
-           OR clean_text NOT LIKE 'dre1:%'
-        LIMIT 500;
-      `,
-    );
-
-    if (result.rows.length === 0) {
-      return;
-    }
-
-    for (const row of result.rows) {
-      const encryptedRawText = isEncryptedDreamText(row.raw_text)
-        ? row.raw_text
-        : encryptDreamText(row.raw_text);
-      const encryptedCleanText = isEncryptedDreamText(row.clean_text)
-        ? row.clean_text
-        : encryptDreamText(row.clean_text);
-
-      await pool.query(
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+      const result = await client.query<{ id: string; raw_text: string; clean_text: string }>(
         `
-          UPDATE dream_entries
-          SET raw_text = $2, clean_text = $3
-          WHERE id = $1;
+          SELECT id, raw_text, clean_text
+          FROM dream_entries
+          WHERE LEFT(raw_text, LENGTH($1)) <> $1
+             OR LEFT(clean_text, LENGTH($1)) <> $1
+          ORDER BY id
+          FOR UPDATE SKIP LOCKED
+          LIMIT 500
         `,
-        [row.id, encryptedRawText, encryptedCleanText],
+        [currentPrefix],
       );
+
+      if (result.rows.length === 0) {
+        await client.query("COMMIT");
+        return;
+      }
+
+      for (const row of result.rows) {
+        await client.query(
+          "UPDATE dream_entries SET raw_text = $2, clean_text = $3 WHERE id = $1",
+          [
+            row.id,
+            needsDreamTextReencryption(row.raw_text) ? reencryptDreamText(row.raw_text) : row.raw_text,
+            needsDreamTextReencryption(row.clean_text) ? reencryptDreamText(row.clean_text) : row.clean_text,
+          ],
+        );
+      }
+      await client.query("COMMIT");
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
     }
   }
 }
@@ -232,7 +244,7 @@ export async function ensureSchema(): Promise<void> {
     [SCHEMA_VERSION],
   );
   if (rows.length > 0) {
-    await encryptLegacyDreamTextRows(pool);
+    await migrateDreamTextEncryption(pool);
     schemaReady = true;
     return;
   }
@@ -272,6 +284,13 @@ export async function ensureSchema(): Promise<void> {
     `),
     pool.query(`
       CREATE TABLE IF NOT EXISTS ai_rate_limits (
+        scope_key TEXT PRIMARY KEY,
+        window_start TIMESTAMPTZ NOT NULL,
+        request_count INTEGER NOT NULL DEFAULT 0
+      );
+    `),
+    pool.query(`
+      CREATE TABLE IF NOT EXISTS auth_rate_limits (
         scope_key TEXT PRIMARY KEY,
         window_start TIMESTAMPTZ NOT NULL,
         request_count INTEGER NOT NULL DEFAULT 0
@@ -385,6 +404,7 @@ export async function ensureSchema(): Promise<void> {
     pool.query("CREATE INDEX IF NOT EXISTS idx_subscriptions_customer ON subscriptions (provider, provider_customer_id);"),
     pool.query("CREATE INDEX IF NOT EXISTS idx_usage_periods_user_period ON usage_periods (user_id, period_start, period_end);"),
     pool.query("CREATE INDEX IF NOT EXISTS idx_ai_rate_limits_window_start ON ai_rate_limits (window_start);"),
+    pool.query("CREATE INDEX IF NOT EXISTS idx_auth_rate_limits_window_start ON auth_rate_limits (window_start);"),
   ]);
 
   await normalizeUserEmails(pool);
@@ -395,7 +415,7 @@ export async function ensureSchema(): Promise<void> {
     [SCHEMA_VERSION],
   );
 
-  await encryptLegacyDreamTextRows(pool);
+  await migrateDreamTextEncryption(pool);
 
   schemaReady = true;
 }

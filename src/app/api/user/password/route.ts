@@ -4,6 +4,8 @@ import { z } from "zod";
 import { auth } from "@/auth";
 import { getPool } from "@/lib/db";
 import bcrypt from "bcryptjs";
+import { clearAuthAttempts, consumeAuthAttempt, getTrustedClientIp } from "@/lib/authRateLimit";
+import { API_ERROR_CODES } from "@/lib/apiErrors";
 
 const schema = z.object({
   currentPassword: z.string().min(1),
@@ -17,6 +19,16 @@ export async function PUT(request: NextRequest) {
   const parsed = schema.safeParse(await request.json());
   if (!parsed.success) return NextResponse.json({ error: "新密码至少 6 位" }, { status: 400 });
 
+  const identifier = `user:${session.user.id}`;
+  const ipAddress = getTrustedClientIp(request.headers);
+  const rateLimit = await consumeAuthAttempt("password", identifier, ipAddress);
+  if (!rateLimit.allowed) {
+    return NextResponse.json(
+      { error: API_ERROR_CODES.rateLimited },
+      { status: 429, headers: { "Retry-After": String(rateLimit.retryAfterSeconds) } },
+    );
+  }
+
   const pool = getPool();
   const { rows } = await pool.query("SELECT password_hash FROM users WHERE id = $1", [Number(session.user.id)]);
   if (!rows[0]?.password_hash) {
@@ -28,5 +40,6 @@ export async function PUT(request: NextRequest) {
 
   const newHash = await bcrypt.hash(parsed.data.newPassword, 12);
   await pool.query("UPDATE users SET password_hash = $1 WHERE id = $2", [newHash, Number(session.user.id)]);
+  await clearAuthAttempts("password", identifier, ipAddress);
   return NextResponse.json({ ok: true });
 }

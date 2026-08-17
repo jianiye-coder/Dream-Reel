@@ -6,6 +6,7 @@ import { API_ERROR_CODES } from "@/lib/apiErrors";
 import { put } from "@vercel/blob";
 import { randomUUID } from "crypto";
 import sharp from "sharp";
+import { safeErrorMetadata } from "@/lib/safeServerLog";
 
 export const runtime = "nodejs";
 export const maxDuration = 180;
@@ -163,7 +164,7 @@ export async function POST(request: NextRequest) {
       revisedPrompt: null,
     });
   } catch (error) {
-    console.error("POST /api/generate-image failed", error);
+    console.error("POST /api/generate-image failed", safeErrorMetadata(error));
     await refundImageUsageOnce();
     if (error instanceof Error && error.name === "AbortError") {
       return NextResponse.json({ error: API_ERROR_CODES.timeout }, { status: 504 });

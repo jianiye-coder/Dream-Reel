@@ -1,11 +1,18 @@
-import NextAuth from "next-auth";
+import NextAuth, { CredentialsSignin } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import PostgresAdapter from "@auth/pg-adapter";
-import { getPool } from "@/lib/db";
+import { ensureSchema, getPool } from "@/lib/db";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { authConfig } from "@/auth.config";
 import { normalizeEmail } from "@/lib/email";
+import { clearAuthAttempts, consumeAuthAttempt, getTrustedClientIp } from "@/lib/authRateLimit";
+
+const DUMMY_PASSWORD_HASH = "$2b$12$C6UzMDM.H6dfI/f/IKcEe.ou7q9r7w7N1Gq6V4ZJ6f4WnT5fYQw8K";
+
+class RateLimitedCredentialsError extends CredentialsSignin {
+  code = "rate_limited";
+}
 
 const credentialsSchema = z.object({
   email: z.string().transform(normalizeEmail).pipe(z.string().email()),
@@ -22,9 +29,14 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" },
       },
-      async authorize(credentials) {
+      async authorize(credentials, request) {
         const parsed = credentialsSchema.safeParse(credentials);
         if (!parsed.success) return null;
+
+        await ensureSchema();
+        const ipAddress = getTrustedClientIp(request.headers);
+        const rateLimit = await consumeAuthAttempt("login", parsed.data.email, ipAddress);
+        if (!rateLimit.allowed) throw new RateLimitedCredentialsError();
 
         const pool = getPool();
         const { rows } = await pool.query(
@@ -36,10 +48,13 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           | { id: number; name: string; email: string; image: string | null; password_hash: string | null }
           | undefined;
 
-        if (!user || !user.password_hash) return null;
+        const valid = await bcrypt.compare(
+          parsed.data.password,
+          user?.password_hash || DUMMY_PASSWORD_HASH,
+        );
+        if (!user || !user.password_hash || !valid) return null;
 
-        const valid = await bcrypt.compare(parsed.data.password, user.password_hash);
-        if (!valid) return null;
+        await clearAuthAttempts("login", parsed.data.email, ipAddress);
 
         return { id: String(user.id), name: user.name, email: user.email, image: user.image };
       },

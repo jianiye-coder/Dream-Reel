@@ -11,6 +11,7 @@ import { buildDreamImagePrompt } from "@/lib/imagePrompt";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { LangToggle } from "@/components/LangToggle";
 import { getApiErrorMessage } from "@/lib/apiErrors";
+import { shouldFlushLatestSave } from "@/lib/autosave";
 
 type SpeechRecognitionConstructor = new () => SpeechRecognitionLike;
 
@@ -159,6 +160,12 @@ export default function JournalPage() {
   const [autoSaveStatus, setAutoSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const savedEntryIdRef = useRef<number | null>(null);
   const isSavingRef = useRef(false);
+  const pendingSaveRef = useRef(false);
+  const saveRevisionRef = useRef(0);
+  const autoSaveLatestRef = useRef<((opts?: {
+    pendingAnalysis?: AnalysisResult;
+    pendingImageUrl?: string | null;
+  }) => Promise<void>) | null>(null);
   const pendingOptsRef = useRef<{ pendingAnalysis?: AnalysisResult; pendingImageUrl?: string | null }>({});
   const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isFirstRenderRef = useRef(true);
@@ -259,7 +266,6 @@ export default function JournalPage() {
         tags: [],
       }),
     );
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [messages, quickText, analysis, imagePromptEdited, mode]);
 
   // Latest questions from most recent AI message
@@ -316,10 +322,12 @@ export default function JournalPage() {
       isFirstRenderRef.current = false;
       return;
     }
+    saveRevisionRef.current += 1;
+    if (isSavingRef.current) pendingSaveRef.current = true;
     if (!hasContent) return;
     if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
     autoSaveTimerRef.current = setTimeout(() => {
-      void autoSave();
+      void autoSaveLatestRef.current?.();
       if (!titleEdited && quickText.length >= 80 && !titleGeneratingRef.current) {
         void generateTitle(quickText);
       }
@@ -332,7 +340,18 @@ export default function JournalPage() {
       if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [quickText, messages]);
+  }, [
+    quickText,
+    quickTitle,
+    messages,
+    dreamDate,
+    sleepStart,
+    wakeTime,
+    sleepQuality,
+    stressScore,
+    preSleepMeal,
+    preSleepActivity,
+  ]);
 
   // Follow the chat inside the message pane without moving the whole page.
   useEffect(() => {
@@ -711,10 +730,12 @@ export default function JournalPage() {
     if (!text.trim()) return;
 
     if (isSavingRef.current) {
+      pendingSaveRef.current = true;
       pendingOptsRef.current = { ...pendingOptsRef.current, ...opts };
       return;
     }
 
+    const startedRevision = saveRevisionRef.current;
     isSavingRef.current = true;
     setAutoSaveStatus("saving");
 
@@ -774,22 +795,33 @@ export default function JournalPage() {
           savedEntryIdRef.current = data.entry.id;
         }
         if (isNewEntry) void refreshBillingStatus();
-        setAutoSaveStatus("saved");
-        setTimeout(() => setAutoSaveStatus((s) => (s === "saved" ? "idle" : s)), 3000);
+        if (saveRevisionRef.current === startedRevision) {
+          setAutoSaveStatus("saved");
+          setTimeout(() => setAutoSaveStatus((s) => (s === "saved" ? "idle" : s)), 3000);
+        }
       } else {
-        setAutoSaveStatus("error");
+        if (saveRevisionRef.current === startedRevision) setAutoSaveStatus("error");
       }
     } catch {
-      setAutoSaveStatus("error");
+      if (saveRevisionRef.current === startedRevision) setAutoSaveStatus("error");
     } finally {
       isSavingRef.current = false;
       const pending = pendingOptsRef.current;
-      if (Object.keys(pending).length > 0) {
-        pendingOptsRef.current = {};
-        setTimeout(() => void autoSave(pending), 80);
+      const shouldFlushLatest = shouldFlushLatestSave({
+        pendingSave: pendingSaveRef.current,
+        pendingOptions: Object.keys(pending).length > 0,
+        startedRevision,
+        currentRevision: saveRevisionRef.current,
+      });
+      pendingSaveRef.current = false;
+      pendingOptsRef.current = {};
+      if (shouldFlushLatest) {
+        setTimeout(() => void autoSaveLatestRef.current?.(pending), 80);
       }
     }
   }
+
+  autoSaveLatestRef.current = autoSave;
 
   return (
     <div className="journal-root">
@@ -1174,6 +1206,46 @@ export default function JournalPage() {
             </div>
           )}
 
+          {step === "dream" && (
+            <details className="sleep-context-panel">
+              <summary>
+                <span>{J.sleep.title}</span>
+                <small>{J.toolbar.sleepOptional}</small>
+              </summary>
+              <div className="sleep-context-grid">
+                <label className="sleep-context-field">
+                  <span>{J.sleep.sleepStart}</span>
+                  <input type="time" value={sleepStart} onChange={(e) => setSleepStart(e.target.value)} className="dream-input-sm" />
+                </label>
+                <label className="sleep-context-field">
+                  <span>{J.sleep.wakeTime}</span>
+                  <input type="time" value={wakeTime} onChange={(e) => setWakeTime(e.target.value)} className="dream-input-sm" />
+                </label>
+                <fieldset className="sleep-context-field sleep-context-quality">
+                  <legend>{J.sleep.quality}</legend>
+                  <div className="quality-btns">
+                    {[1, 2, 3, 4, 5].map((n) => (
+                      <button key={n} type="button" onClick={() => setSleepQuality(sleepQuality === n ? null : n)} className={`quality-btn ${sleepQuality === n ? "quality-btn-active" : ""}`} aria-pressed={sleepQuality === n}>{n}</button>
+                    ))}
+                  </div>
+                </fieldset>
+                <label className="sleep-context-field sleep-context-stress">
+                  <span>{J.sleep.stress}: {stressScore}</span>
+                  <input type="range" min="1" max="5" step="1" value={stressScore} onChange={(e) => setStressScore(Number(e.target.value))} />
+                  <small><span>{J.sleep.stressLow}</span><span>{J.sleep.stressHigh}</span></small>
+                </label>
+                <label className="sleep-context-field">
+                  <span>{J.sleep.meal}</span>
+                  <input type="text" value={preSleepMeal} onChange={(e) => setPreSleepMeal(e.target.value)} placeholder={J.sleep.mealPlaceholder} className="dream-input-sm" maxLength={500} />
+                </label>
+                <label className="sleep-context-field">
+                  <span>{J.sleep.activity}</span>
+                  <input type="text" value={preSleepActivity} onChange={(e) => setPreSleepActivity(e.target.value)} placeholder={J.sleep.activityPlaceholder} className="dream-input-sm" maxLength={500} />
+                </label>
+              </div>
+            </details>
+          )}
+
           {/* Image panel — chat mode only (quick mode shows inline next to dream textarea) */}
           {panel === "image" && mode === "chat" && (
             <div className="panel">
@@ -1362,31 +1434,6 @@ export default function JournalPage() {
                 )}
               </div>
 
-              {isGeneratingImage && (
-                <div className="developing-sleep-invite" aria-label="Sleep log">
-                  <p className="developing-sleep-label">
-                    {lang === "zh" ? "趁图片还在生成，记录一下昨晚的睡眠" : "While the image generates, log last night's sleep"}
-                  </p>
-                  <div className="developing-sleep-fields">
-                    <label className="developing-sleep-field">
-                      <span>{J.sleep.sleepStart}</span>
-                      <input type="time" value={sleepStart} onChange={(e) => setSleepStart(e.target.value)} className="dream-input-sm" />
-                    </label>
-                    <label className="developing-sleep-field">
-                      <span>{J.sleep.wakeTime}</span>
-                      <input type="time" value={wakeTime} onChange={(e) => setWakeTime(e.target.value)} className="dream-input-sm" />
-                    </label>
-                    <div className="developing-sleep-field">
-                      <span>{J.sleep.quality}</span>
-                      <div className="quality-btns">
-                        {[1, 2, 3, 4, 5].map((n) => (
-                          <button key={n} type="button" onClick={() => setSleepQuality(sleepQuality === n ? null : n)} className={`quality-btn ${sleepQuality === n ? "quality-btn-active" : ""}`}>{n}</button>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
             </div>
 
             <div className="developing-steps" aria-live="polite">
