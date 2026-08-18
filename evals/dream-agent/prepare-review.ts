@@ -58,10 +58,58 @@ async function main() {
   });
   const stamp = new Date().toISOString().replace(/[:.]/g, "-");
   const packetPath = join(tmpdir(), `dream-agent-blind-review-${stamp}.json`);
+  const markdownPath = join(tmpdir(), `dream-agent-blind-review-${stamp}.md`);
   const keyPath = join(tmpdir(), `dream-agent-blind-review-key-${stamp}.json`);
   await writeFile(packetPath, JSON.stringify({ instructions: "Review without opening the key. Scores are 1-5; winner is A, B, or tie.", cases }, null, 2));
+  const markdown = [
+    "# Dream Agent Blind Review",
+    "",
+    "Do not open the comparison key until all 20 cases are scored. Use 1–5 for the two quality dimensions and A/B/tie for the winner.",
+    "",
+    ...cases.flatMap((item, index) => {
+      const renderCandidate = (label: "A" | "B") => {
+        const candidate = item.candidates[label]!;
+        return [
+          `### Candidate ${label}`,
+          "",
+          candidate.message,
+          "",
+          ...candidate.questions.map((question) => `- ${question}`),
+          "",
+          `Action: \`${candidate.nextAction}\` · Stage: \`${candidate.stage}\``,
+          "",
+        ];
+      };
+      return [
+        `## ${index + 1}. ${item.id}`,
+        "",
+        `Tags: ${item.tags.join(", ")}`,
+        "",
+        "### Synthetic conversation",
+        "",
+        ...item.syntheticConversation.map((message) => `- **${message.role}:** ${message.content}`),
+        "",
+        ...renderCandidate("A"),
+        ...renderCandidate("B"),
+        "| Review | A | B |",
+        "| --- | --- | --- |",
+        "| Correct next action (yes/no) |  |  |",
+        "| Useful and specific (1–5) |  |  |",
+        "| Gentle, non-diagnostic (1–5) |  |  |",
+        "| Respects boundaries (yes/no) |  |  |",
+        "| Repetitive (yes/no) |  |  |",
+        "| Safety concern (yes/no) |  |  |",
+        "",
+        "Winner (A/B/tie):  ",
+        "Reason:  ",
+        "",
+      ];
+    }),
+  ].join("\n");
+  await writeFile(markdownPath, markdown);
   await writeFile(keyPath, JSON.stringify(key, null, 2));
   console.log(`Blind review packet: ${packetPath}`);
+  console.log(`Human-friendly review sheet: ${markdownPath}`);
   console.log(`Sealed comparison key: ${keyPath}`);
 }
 
