@@ -56,6 +56,8 @@ DREAM_TEXT_ENCRYPTION_KEY_ID=primary
 DREAM_TEXT_PREVIOUS_ENCRYPTION_KEYS=
 OPENAI_API_KEY=your_openai_api_key
 OPENAI_MODEL=gpt-5.5
+DREAM_AGENT_FEEDBACK_SECRET=your_separate_feedback_signing_secret
+DREAM_AGENT_JSON_SCHEMA_PERCENT=0
 BLOB_READ_WRITE_TOKEN=your_vercel_blob_token
 NEXT_PUBLIC_APP_URL=http://localhost:3000
 ```
@@ -77,6 +79,8 @@ npm run dev
 - Application logs must retain operational metadata only. Never log dream text, AI prompts/responses, generated visual briefs, credentials, or encryption material; configure the hosting provider's retention period to the shortest operationally useful window.
 
 - `OPENAI_MODEL` controls the dream chat model and defaults to `gpt-5.5`.
+- `DREAM_AGENT_FEEDBACK_SECRET` signs short-lived, user-bound feedback tokens. It falls back to `AUTH_SECRET`, but a separate secret is recommended.
+- `DREAM_AGENT_JSON_SCHEMA_PERCENT` enables the strict-output canary for a stable percentage of users; keep it at `0` unless a monitored experiment is active.
 - Dream analysis currently uses `gpt-4o-mini`.
 - Image generation currently uses `gpt-image-2`.
 - Generated images and thumbnails are stored in Vercel Blob; `BLOB_READ_WRITE_TOKEN` is required for image generation.
@@ -135,6 +139,8 @@ DREAM_TEXT_ENCRYPTION_KEY_ID=primary
 DREAM_TEXT_PREVIOUS_ENCRYPTION_KEYS=
 OPENAI_API_KEY=your_openai_api_key
 OPENAI_MODEL=gpt-5.5
+DREAM_AGENT_FEEDBACK_SECRET=your_separate_feedback_signing_secret
+DREAM_AGENT_JSON_SCHEMA_PERCENT=0
 BLOB_READ_WRITE_TOKEN=your_vercel_blob_token
 NEXT_PUBLIC_APP_URL=http://localhost:3000
 ```
@@ -156,6 +162,8 @@ npm run dev
 - 应用日志只保留运行元数据；禁止记录梦境正文、AI 提示词/响应、视觉描述、登录凭据或加密材料，并应把托管平台的日志保留期设为满足运维所需的最短时间。
 
 - `OPENAI_MODEL` 控制梦境 Chat 模型，默认是 `gpt-5.5`。
+- `DREAM_AGENT_FEEDBACK_SECRET` 用于签发短期、绑定用户的反馈令牌；未配置时会回退到 `AUTH_SECRET`，但推荐使用独立密钥。
+- `DREAM_AGENT_JSON_SCHEMA_PERCENT` 控制严格结构化输出的稳定用户灰度比例；没有监控实验时保持为 `0`。
 - 梦境分析当前使用 `gpt-4o-mini`。
 - 图像生成当前使用 `gpt-image-2`。
 - 生成的原图与缩略图存储在 Vercel Blob；图片生成功能需要配置 `BLOB_READ_WRITE_TOKEN`。

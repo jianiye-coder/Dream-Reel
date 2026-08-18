@@ -32,7 +32,7 @@ export function getPool(): Pool {
 
 // Bump this whenever you add new migrations. ensureSchema will skip all DDL
 // once this version is recorded in the DB, making cold starts near-instant.
-const SCHEMA_VERSION = 6;
+const SCHEMA_VERSION = 7;
 
 let schemaReady = false;
 
@@ -383,6 +383,19 @@ export async function ensureSchema(): Promise<void> {
         UNIQUE(user_id, period_start, period_end)
       );
     `),
+    pool.query(`
+      CREATE TABLE IF NOT EXISTS agent_feedback (
+        id BIGSERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        interaction_id UUID NOT NULL,
+        rating TEXT NOT NULL CHECK (rating IN ('up', 'down')),
+        reason TEXT CHECK (reason IS NULL OR reason IN ('repetitive', 'irrelevant', 'too_many_questions', 'unsafe', 'other')),
+        variant TEXT NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        UNIQUE(user_id, interaction_id)
+      );
+    `),
   ]);
 
   // All ALTER TABLE and CREATE INDEX in parallel (idempotent)
@@ -405,6 +418,8 @@ export async function ensureSchema(): Promise<void> {
     pool.query("CREATE INDEX IF NOT EXISTS idx_usage_periods_user_period ON usage_periods (user_id, period_start, period_end);"),
     pool.query("CREATE INDEX IF NOT EXISTS idx_ai_rate_limits_window_start ON ai_rate_limits (window_start);"),
     pool.query("CREATE INDEX IF NOT EXISTS idx_auth_rate_limits_window_start ON auth_rate_limits (window_start);"),
+    pool.query("CREATE INDEX IF NOT EXISTS idx_agent_feedback_created_at ON agent_feedback (created_at DESC);"),
+    pool.query("CREATE INDEX IF NOT EXISTS idx_agent_feedback_variant ON agent_feedback (variant, rating);"),
   ]);
 
   await normalizeUserEmails(pool);

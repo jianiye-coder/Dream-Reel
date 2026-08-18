@@ -13,6 +13,8 @@ export type RealityContextStatus = "unanswered" | "answered" | "declined" | "cri
 
 export interface DreamAgentConversationContext {
   realityContextStatus: RealityContextStatus;
+  interactionMode: "active" | "stop" | "no_more_recall" | "off_topic";
+  avoidSensitiveDetails: boolean;
 }
 
 export interface DreamAgentResult {
@@ -42,6 +44,47 @@ export function buildImmediateSafetyResponse(lang: "zh" | "en"): DreamAgentResul
   };
 }
 
+export function resolveDeterministicAgentResponse(
+  context: DreamAgentConversationContext,
+  lang: "zh" | "en",
+): DreamAgentResult | null {
+  if (context.realityContextStatus === "crisis") return buildImmediateSafetyResponse(lang);
+  if (context.interactionMode === "stop") {
+    return lang === "en" ? {
+      message: "Of course. We can stop here. What you shared can stay as it is, and you remain in control of whether to return to it later.",
+      questions: [], stage: "ready", nextAction: "ready_to_analyze",
+      memory: { missingDetails: [], observedSignals: ["user chose to stop"] },
+    } : {
+      message: "好，我们就停在这里。你已经说出的内容可以保持原样，之后要不要再回来，也完全由你决定。",
+      questions: [], stage: "ready", nextAction: "ready_to_analyze",
+      memory: { missingDetails: [], observedSignals: ["用户选择停止"] },
+    };
+  }
+  if (context.interactionMode === "no_more_recall") {
+    return lang === "en" ? {
+      message: "That’s okay. What remains—a feeling, color, or fragment—is already enough to record. You do not have to force anything else back, and this can be organized whenever you’re ready.",
+      questions: [], stage: "ready", nextAction: "ready_to_analyze",
+      memory: { missingDetails: [], observedSignals: ["no more recall available"] },
+    } : {
+      message: "没关系。留下来的感觉、颜色或片段，已经足够被记录。你不必勉强自己再想起什么，准备好时就可以整理这些内容。",
+      questions: [], stage: "ready", nextAction: "ready_to_analyze",
+      memory: { missingDetails: [], observedSignals: ["已无更多可回忆内容"] },
+    };
+  }
+  if (context.interactionMode === "off_topic") {
+    return lang === "en" ? {
+      message: "I’m here specifically to help you recall and record dreams, so I can’t provide a live weather report. If weather appeared in a dream, we can start there.",
+      questions: ["Would you like to record a dream?"], stage: "exploring", nextAction: "summarize",
+      memory: { missingDetails: ["dream content"], observedSignals: [] },
+    } : {
+      message: "我主要帮助你回忆和记录梦境，不能提供实时天气。如果天气出现在梦里，我们可以从那里开始。",
+      questions: ["你想记录一个梦吗？"], stage: "exploring", nextAction: "summarize",
+      memory: { missingDetails: ["梦境内容"], observedSignals: [] },
+    };
+  }
+  return null;
+}
+
 const QUESTION_LIMIT_BY_ACTION: Record<DreamAgentNextAction, number> = {
   ask_followup: 3,
   summarize: 1,
@@ -69,6 +112,34 @@ const agentResponseSchema = z.object({
     observedSignals: textListSchema,
   }).optional(),
 });
+
+export const dreamAgentStrictResponseFormat = {
+  type: "json_schema",
+  json_schema: {
+    name: "dream_agent_response",
+    strict: true,
+    schema: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        message: { type: "string" },
+        questions: { type: "array", items: { type: "string" } },
+        stage: { type: "string", enum: ["exploring", "deepening", "ready"] },
+        nextAction: { type: "string", enum: ["ask_followup", "summarize", "ready_to_analyze"] },
+        memory: {
+          type: "object",
+          additionalProperties: false,
+          properties: {
+            missingDetails: { type: "array", items: { type: "string" } },
+            observedSignals: { type: "array", items: { type: "string" } },
+          },
+          required: ["missingDetails", "observedSignals"],
+        },
+      },
+      required: ["message", "questions", "stage", "nextAction", "memory"],
+    },
+  },
+} as const;
 
 type AgentResponsePayload = z.infer<typeof agentResponseSchema>;
 
@@ -147,14 +218,27 @@ export function deriveDreamAgentConversationContext(
   hasPreSleepContext = false,
 ): DreamAgentConversationContext {
   const userText = messages.filter((message) => message.role === "user").map((message) => message.content).join("\n");
-  const declined = lang === "en"
+  const avoidSensitiveDetails = lang === "en"
+    ? /(?:don't|do not|rather not|won't|will not)\s+(?:want to\s+)?(?:share|say|describe|discuss|remember)?\s*(?:the\s+)?(?:details|what happened|event)/i.test(userText)
+    : /(?:不想|不要|别|不愿意)(?:再)?(?:说|讲|描述|透露|回忆)?(?:这件事的?|那些)?(?:细节|具体经过|具体发生了什么|发生了什么)/.test(userText);
+  const declined = avoidSensitiveDetails || (lang === "en"
     ? /(?:do not|don't|dont|rather not|won't|will not).{0,30}(?:real life|waking life|personal)/i.test(userText)
-    : /(?:不想|不要|别|不愿意).{0,12}(?:现实|生活|私人|个人)/.test(userText);
+    : /(?:不想|不要|别|不愿意).{0,12}(?:现实|生活|私人|个人)/.test(userText));
   const crisis = lang === "en"
     ? /(?:don't want to live|do not want to live|hurt myself|harm myself|kill myself|suicid)/i.test(userText)
     : /(?:不想活|伤害自己|自残|自杀|结束生命)/.test(userText);
-  if (crisis) return { realityContextStatus: "crisis" };
-  if (declined) return { realityContextStatus: "declined" };
+  const stop = lang === "en"
+    ? /(?:stop here|don't want to continue|do not want to continue|end (?:this|here)|that's enough)/i.test(userText)
+    : /(?:到这里|不聊了|不想继续|停止吧|就这样吧)/.test(userText);
+  const noMoreRecall = lang === "en"
+    ? /(?:can't|cannot|don't|do not).{0,16}remember (?:anything )?more|nothing else (?:comes|remains)/i.test(userText)
+    : /(?:想不起来|记不得|不记得)(?:更多|其他|别的)|只(?:记得|剩下)这些/.test(userText);
+  const offTopic = lang === "en"
+    ? /(?:what(?:'s| is) the weather|weather today|current weather|forecast today)/i.test(userText)
+    : /(?:今天天气怎么样|现在天气|实时天气|天气预报)/.test(userText);
+  const interactionMode = stop ? "stop" : noMoreRecall ? "no_more_recall" : offTopic ? "off_topic" : "active";
+  if (crisis) return { realityContextStatus: "crisis", interactionMode, avoidSensitiveDetails };
+  if (declined || offTopic || stop) return { realityContextStatus: "declined", interactionMode, avoidSensitiveDetails };
 
   const includesRealityQuestion = (message: (typeof messages)[number]) =>
     mentionsRealityContext([message.content, ...(message.questions ?? [])].join("\n"), lang);
@@ -164,7 +248,11 @@ export function deriveDreamAgentConversationContext(
   const volunteeredContext = lang === "en"
     ? /(?:recently|in real life|at work|my job|my project|before sleep)/i.test(userText)
     : /(?:最近|现实|工作|项目|睡前)/.test(userText);
-  return { realityContextStatus: hasPreSleepContext || answeredAfterQuestion || volunteeredContext ? "answered" : "unanswered" };
+  return {
+    realityContextStatus: hasPreSleepContext || answeredAfterQuestion || volunteeredContext ? "answered" : "unanswered",
+    interactionMode,
+    avoidSensitiveDetails,
+  };
 }
 
 export function buildDreamFollowUpAgentPrompt(
@@ -175,6 +263,8 @@ export function buildDreamFollowUpAgentPrompt(
   conversationContext?: DreamAgentConversationContext,
 ) {
   const realityStatus = conversationContext?.realityContextStatus ?? "unanswered";
+  const interactionMode = conversationContext?.interactionMode ?? "active";
+  const sensitiveBoundary = conversationContext?.avoidSensitiveDetails ?? false;
   if (lang === "en") {
     return `You are Dream Reel's follow-up agent for a dream journal.
 
@@ -199,6 +289,7 @@ Tone:
 - Short sentences with breathing room
 - Do not interpret the dream's meaning unless asked${contextLines ? `\n\nPre-sleep context: ${contextLines}` : ""}
 - Reality-context status is ${realityStatus}. If it is answered, declined, or crisis, do not ask a real-life question again.
+- Interaction mode is ${interactionMode}. Sensitive-detail boundary is ${sensitiveBoundary}. Never ask for event details when that boundary is true.
 - If the user may imminently harm themselves, pause dream exploration. Respond directly and compassionately, encourage immediate local emergency/crisis help and contact with a trusted person, and ask only about immediate safety.
 
 This is user turn ${userTurns}. Current inferred stage: ${stage}.
@@ -238,6 +329,7 @@ Agent 策略：
 - 句子短一点，留出余白
 - 不要主动解释梦的含义，除非用户明确要求${contextLines ? `\n\n用户的睡前情境：\n${contextLines}` : ""}
 - 当前现实关联状态是 ${realityStatus}。如果状态为 answered、declined 或 crisis，不要再问现实关联。
+- 当前互动模式是 ${interactionMode}。敏感细节边界为 ${sensitiveBoundary}；为 true 时绝不追问事件细节。
 - 如果用户可能马上伤害自己，暂停梦境探索。直接、温和地回应，鼓励立即联系当地急救/危机支持和可信任的人，只询问当下是否安全。
 
 当前是用户第 ${userTurns} 轮。当前推断阶段：${stage}。

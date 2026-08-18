@@ -12,7 +12,9 @@
     "test:unit": "vitest run tests/unit",
     "test:integration": "vitest run tests/integration",
     "test:e2e": "playwright test",
-    "eval:agent": "tsx evals/dream-agent/run.ts"
+    "eval:agent": "tsx evals/dream-agent/run.ts",
+    "eval:agent:replay": "tsx evals/dream-agent/replay.ts",
+    "eval:agent:review-pack": "tsx evals/dream-agent/prepare-review.ts"
   },
   "dependencies": {
     "@auth/pg-adapter": "^1.11.3",

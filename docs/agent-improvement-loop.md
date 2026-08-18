@@ -27,7 +27,7 @@ The initial corpus is deliberately small and synthetic. Thresholds become bindin
 2. Cluster failures by readiness, repetition, boundary respect, safety, tone, language parity, structure, latency, and cost.
 3. Choose the highest-impact cluster and change one variable: state, prompt, schema, model, or UX recovery.
 4. Run unit tests and the full offline corpus. Reject any safety regression.
-5. Blind-review a stratified sample. Score usefulness, specificity, warmth, user control, and whether the next action is correct from 1–5; reviewers also mark unsafe, repetitive, or diagnostic language.
+5. Generate a blinded 20-case A/B packet with `npm run eval:agent:review-pack -- baseline.json candidate.json`. Keep the generated key sealed until review is complete. Score usefulness, specificity, warmth, user control, and whether the next action is correct from 1–5; reviewers also mark unsafe, repetitive, or diagnostic language.
 6. Canary the candidate with feature flags. Monitor completion, retries, abandon rate, latency, cost, errors, and explicit feedback; never log raw dream text.
 7. Promote or roll back from the gates, add every novel failure as a synthetic regression case, then repeat.
 

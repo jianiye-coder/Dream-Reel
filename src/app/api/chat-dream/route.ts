@@ -8,11 +8,13 @@ import {
 } from "@/lib/billing";
 import {
   buildDreamFollowUpAgentPrompt,
-  buildImmediateSafetyResponse,
   deriveDreamAgentConversationContext,
+  dreamAgentStrictResponseFormat,
   inferAgentStage,
   parseDreamAgentContent,
+  resolveDeterministicAgentResponse,
 } from "@/lib/dreamFollowUpAgent";
+import { createDreamAgentResponseMeta, logDreamAgentCompletion, selectDreamAgentModelVariant } from "@/lib/dreamAgentTelemetry";
 import { API_ERROR_CODES } from "@/lib/apiErrors";
 import { safeErrorMetadata } from "@/lib/safeServerLog";
 
@@ -37,6 +39,7 @@ const bodySchema = z.object({
 
 type ChatResponse = {
   choices?: Array<{ message?: { content?: string } }>;
+  usage?: { prompt_tokens?: number; completion_tokens?: number };
 };
 
 const OPENAI_MODEL = process.env.OPENAI_MODEL ?? "gpt-5.5";
@@ -58,6 +61,7 @@ function buildContextLines(
 }
 
 export async function POST(req: NextRequest) {
+  const requestStartedAt = Date.now();
   const session = await auth() as { user?: { id?: string } } | null;
   const userId = Number(session?.user?.id);
   if (!Number.isInteger(userId) || userId <= 0) {
@@ -95,8 +99,11 @@ export async function POST(req: NextRequest) {
   const { messages, lang, preSleepMeal, preSleepActivity } = parsed.data;
   const contextLines = buildContextLines(lang, preSleepMeal, preSleepActivity);
   const conversationContext = deriveDreamAgentConversationContext(messages, lang, Boolean(contextLines));
-  if (conversationContext.realityContextStatus === "crisis") {
-    return NextResponse.json(buildImmediateSafetyResponse(lang));
+  const deterministicResponse = resolveDeterministicAgentResponse(conversationContext, lang);
+  if (deterministicResponse) {
+    const meta = createDreamAgentResponseMeta("deterministic-v1", "deterministic", Date.now() - requestStartedAt, userId);
+    logDreamAgentCompletion(deterministicResponse, meta);
+    return NextResponse.json({ ...deterministicResponse, meta });
   }
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
@@ -129,6 +136,7 @@ export async function POST(req: NextRequest) {
 
   const userTurns = messages.filter((m) => m.role === "user").length;
   const stage = inferAgentStage(userTurns);
+  const variant = selectDreamAgentModelVariant(userId, process.env.DREAM_AGENT_JSON_SCHEMA_PERCENT);
   const systemPrompt = buildDreamFollowUpAgentPrompt(lang, userTurns, stage, contextLines, conversationContext);
   const upstreamMessages = messages.map((message) => {
     if (message.role === "user") return { role: message.role, content: message.content };
@@ -158,7 +166,7 @@ export async function POST(req: NextRequest) {
           model: OPENAI_MODEL,
           messages: [{ role: "system", content: systemPrompt }, ...upstreamMessages],
           max_completion_tokens: 800,
-          response_format: { type: "json_object" },
+          response_format: variant === "json-schema-v1" ? dreamAgentStrictResponseFormat : { type: "json_object" },
         }),
       });
     } finally {
@@ -179,7 +187,13 @@ export async function POST(req: NextRequest) {
       await refundChatUsageOnce();
       return NextResponse.json({ error: API_ERROR_CODES.invalidResponse }, { status: 422 });
     }
-    return NextResponse.json(parseDreamAgentContent(content, lang, stage, conversationContext));
+    const result = parseDreamAgentContent(content, lang, stage, conversationContext);
+    const meta = createDreamAgentResponseMeta(variant, "model", Date.now() - requestStartedAt, userId);
+    logDreamAgentCompletion(result, meta, {
+      promptTokens: payload.usage?.prompt_tokens,
+      completionTokens: payload.usage?.completion_tokens,
+    });
+    return NextResponse.json({ ...result, meta });
   } catch (err) {
     console.error("POST /api/chat-dream failed", safeErrorMetadata(err));
     await refundChatUsageOnce();

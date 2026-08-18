@@ -6,6 +6,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import type { DreamAgentMemory, DreamAgentNextAction, DreamAgentStage } from "@/lib/dreamFollowUpAgent";
+import type { DreamAgentResponseMeta } from "@/lib/dreamAgentTelemetry";
 import { getRealityQuestion } from "@/lib/dreamQuestions";
 import { buildDreamImagePrompt } from "@/lib/imagePrompt";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -46,6 +47,12 @@ interface ChatMessage {
   stage?: DreamAgentStage;
   nextAction?: DreamAgentNextAction;
   memory?: DreamAgentMemory;
+  meta?: DreamAgentResponseMeta;
+  feedback?: "up" | "down";
+  feedbackReason?: "repetitive" | "irrelevant" | "too_many_questions" | "unsafe" | "other";
+  isError?: boolean;
+  retryText?: string;
+  retryUserId?: string;
 }
 
 interface AnalysisResult {
@@ -404,6 +411,7 @@ export default function JournalPage() {
         stage?: DreamAgentStage;
         nextAction?: DreamAgentNextAction;
         memory?: DreamAgentMemory;
+        meta?: DreamAgentResponseMeta;
         error?: string;
       };
 
@@ -421,6 +429,7 @@ export default function JournalPage() {
           stage: data.stage,
           nextAction: data.nextAction,
           memory: data.memory,
+          meta: data.meta,
         },
       ]);
     } catch (err) {
@@ -431,10 +440,49 @@ export default function JournalPage() {
           role: "assistant",
           content: err instanceof Error ? err.message : J.signalLost,
           questions: [],
+          isError: true,
+          retryText: text,
+          retryUserId: userMsg.id,
         },
       ]);
     } finally {
       setIsTyping(false);
+    }
+  }
+
+  function editAndRetry(message: ChatMessage) {
+    setMessages((previous) => previous.filter((item) => item.id !== message.id && item.id !== message.retryUserId));
+    setInput(message.retryText ?? "");
+    requestAnimationFrame(() => inputRef.current?.focus());
+  }
+
+  async function submitAgentFeedback(
+    messageId: string,
+    rating: "up" | "down",
+    reason?: ChatMessage["feedbackReason"],
+  ) {
+    const message = messages.find((item) => item.id === messageId);
+    if (!message?.meta?.feedbackToken) return;
+    const previousRating = message.feedback;
+    const previousReason = message.feedbackReason;
+    setMessages((items) => items.map((item) => item.id === messageId
+      ? { ...item, feedback: rating, feedbackReason: reason }
+      : item));
+    try {
+      const response = await fetch("/api/agent-feedback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          feedbackToken: message.meta.feedbackToken,
+          rating,
+          reason: reason ?? null,
+        }),
+      });
+      if (!response.ok) throw new Error("feedback_failed");
+    } catch {
+      setMessages((items) => items.map((item) => item.id === messageId
+        ? { ...item, feedback: previousRating, feedbackReason: previousReason }
+        : item));
     }
   }
 
@@ -896,6 +944,47 @@ export default function JournalPage() {
                 {msg.role === "assistant" && <div className="msg-avatar">☾</div>}
                 <div className={`msg-bubble ${msg.role === "user" ? "bubble-user" : "bubble-ai"}`}>
                   <p className="msg-text">{msg.content}</p>
+                  {msg.role === "assistant" && msg.isError && (
+                    <button type="button" className="agent-retry-btn" onClick={() => editAndRetry(msg)}>
+                      {lang === "zh" ? "编辑后重试" : "Edit and retry"}
+                    </button>
+                  )}
+                  {msg.role === "assistant" && msg.meta?.feedbackToken && !msg.isError && (
+                    <div className="agent-feedback" aria-label={lang === "zh" ? "评价这次回应" : "Rate this response"}>
+                      <button
+                        type="button"
+                        aria-label={lang === "zh" ? "有帮助" : "Helpful"}
+                        aria-pressed={msg.feedback === "up"}
+                        className={msg.feedback === "up" ? "agent-feedback-active" : ""}
+                        onClick={() => void submitAgentFeedback(msg.id, "up")}
+                      >↑</button>
+                      <button
+                        type="button"
+                        aria-label={lang === "zh" ? "没帮助" : "Not helpful"}
+                        aria-pressed={msg.feedback === "down"}
+                        className={msg.feedback === "down" ? "agent-feedback-active" : ""}
+                        onClick={() => void submitAgentFeedback(msg.id, "down")}
+                      >↓</button>
+                      {msg.feedback === "down" && (
+                        <div className="agent-feedback-reasons">
+                          {([
+                            ["repetitive", lang === "zh" ? "重复" : "Repetitive"],
+                            ["irrelevant", lang === "zh" ? "跑题" : "Irrelevant"],
+                            ["too_many_questions", lang === "zh" ? "问题太多" : "Too many questions"],
+                            ["unsafe", lang === "zh" ? "不舒服" : "Unsafe"],
+                            ["other", lang === "zh" ? "其他" : "Other"],
+                          ] as const).map(([reason, label]) => (
+                            <button
+                              type="button"
+                              key={reason}
+                              className={msg.feedbackReason === reason ? "agent-feedback-active" : ""}
+                              onClick={() => void submitAgentFeedback(msg.id, "down", reason)}
+                            >{label}</button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
             ))}

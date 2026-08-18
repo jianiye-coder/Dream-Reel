@@ -13,6 +13,15 @@ const good: DreamAgentResult = {
 };
 
 describe("dream agent evaluator", () => {
+  it("keeps the promotion corpus large, unique, and language-balanced", () => {
+    const ids = dreamAgentEvalCases.map((item) => item.id);
+    const zhCount = dreamAgentEvalCases.filter((item) => item.lang === "zh").length;
+    const enCount = dreamAgentEvalCases.filter((item) => item.lang === "en").length;
+    expect(dreamAgentEvalCases.length).toBeGreaterThanOrEqual(50);
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(zhCount).toBe(enCount);
+  });
+
   it("passes a response that satisfies the case contract", () => {
     expect(evaluateDreamAgentResult(fragment, good)).toMatchObject({ passed: true, score: 1 });
   });
