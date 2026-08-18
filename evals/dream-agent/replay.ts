@@ -5,7 +5,7 @@ import { evaluateDreamAgentResult, summarizeEvalResults } from "./evaluator";
 
 interface StoredArtifact {
   cases: Array<{
-    artifact: { id: string; rawJsonValid: boolean; result: DreamAgentResult };
+    artifact: { id: string; source?: "model" | "deterministic"; rawJsonValid: boolean; result: DreamAgentResult };
   }>;
 }
 
@@ -17,7 +17,7 @@ async function main() {
   const results = stored.cases.map(({ artifact }) => {
     const evalCase = casesById.get(artifact.id);
     if (!evalCase) throw new Error(`Unknown evaluation case: ${artifact.id}`);
-    return evaluateDreamAgentResult(evalCase, artifact.result, artifact.rawJsonValid);
+    return evaluateDreamAgentResult(evalCase, artifact.result, artifact.rawJsonValid, artifact.source ?? "model");
   });
   for (const result of results.filter((item) => !item.passed)) {
     const failed = result.checks.filter((check) => !check.passed).map((check) => check.name);

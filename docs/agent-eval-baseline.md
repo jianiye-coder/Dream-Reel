@@ -25,3 +25,9 @@ The corpus now has 27 Chinese and 27 English cases. It adds user corrections, ex
 Saved-output replay separates evaluator calibration from new model sampling. The final production-format artifact replayed at 54/54 after a Chinese synonym matcher was corrected; no output was regenerated for that adjudication. Strict schema added roughly 12% token use with no demonstrated quality gain, so production remains on `json_object`. A stable, environment-controlled canary (`DREAM_AGENT_JSON_SCHEMA_PERCENT`) is available but defaults to 0%.
 
 The improved state machine returns deterministic, localized responses for imminent self-harm, explicit stop, no-more-recall, and clearly off-topic weather requests. Those paths do not consume AI quota or call a model. Operational logs contain only interaction ID, variant, stage, action, question count, latency, and token counts—never dream text or agent memory.
+
+## Cycle 3: routing precision
+
+Ten adversarial Chinese/English cases extend the corpus to 64. They distinguish current self-harm risk from dream-only self-harm, “do not want to live in this house” from “do not want to live,” dream movement from a request to stop the chat, weather inside a dream from an off-topic weather request, and dream-memory failure from having no more dream recall. The evaluator now scores whether each case used the expected deterministic or model path.
+
+All ten routing decisions pass local deterministic regression tests, and the previous 54-case artifact still replays at 54/54 with source checks enabled. Live model scoring for the ten new outputs is pending because the local OpenAI project returned `credit_balance_exhausted`; the evaluator now fails immediately for exhausted quota while retaining bounded backoff for transient 429/5xx responses. This cycle is not a promotion pass until those ten outputs and the human review gate are completed.

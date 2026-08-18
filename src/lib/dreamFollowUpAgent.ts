@@ -183,10 +183,29 @@ function ensureRealityQuestion(
   return [...questions.slice(0, 2), requiredQuestion];
 }
 
-export function inferAgentStage(userTurns: number): DreamAgentStage {
-  if (userTurns <= 2) return "exploring";
-  if (userTurns <= 5) return "deepening";
-  return "ready";
+export function inferAgentStageFromConversation(
+  messages: Array<{ role: "user" | "assistant"; content: string }>,
+  lang: "zh" | "en",
+  context: DreamAgentConversationContext,
+): DreamAgentStage {
+  const userTurns = messages.filter((message) => message.role === "user").length;
+  if (userTurns > 5) return "ready";
+  const text = messages.filter((message) => message.role === "user").map((message) => message.content).join("\n");
+  const hasNarrative = text.length >= (lang === "en" ? 50 : 20);
+  const hasEmotion = lang === "en"
+    ? /\b(?:felt|feel|afraid|fear|anxious|panicked|calm|happy|sad|lonely|excited|angry|ashamed|relief|unsettled)\b/i.test(text)
+    : /(?:害怕|紧张|焦急|安心|开心|难过|孤单|兴奋|慌张|愤怒|悲伤|羞耻|委屈|不安|感到|感觉)/.test(text);
+  const hasTurningPoint = lang === "en"
+    ? /\b(?:then|suddenly|after|before|shifted|changed|at first|but)\b/i.test(text)
+    : /(?:后来|然后|突然|之后|之前|起初|但是|却|变得)/.test(text);
+  const hasConcreteSignal = lang === "en"
+    ? /\b(?:body|chest|shoulder|stomach|heart|shaking|feet|hand|school|station|grandmother|manager|ocean|roof|train|door|bird|house|corridor)\b/i.test(text)
+    : /(?:身体|胸口|肩膀|胃|心跳|发抖|脚|手|学校|车站|奶奶|老板|海|屋顶|火车|门|鸟|房子|走廊)/.test(text);
+  const evidenceCount = [hasNarrative, hasEmotion, hasTurningPoint, hasConcreteSignal]
+    .filter(Boolean).length;
+  if (evidenceCount === 4 && context.realityContextStatus === "answered") return "ready";
+  if (userTurns > 2 || evidenceCount >= 2) return "deepening";
+  return "exploring";
 }
 
 function fallbackNextAction(stage: DreamAgentStage, questions: string[]): DreamAgentNextAction {
@@ -224,18 +243,26 @@ export function deriveDreamAgentConversationContext(
   const declined = avoidSensitiveDetails || (lang === "en"
     ? /(?:do not|don't|dont|rather not|won't|will not).{0,30}(?:real life|waking life|personal)/i.test(userText)
     : /(?:不想|不要|别|不愿意).{0,12}(?:现实|生活|私人|个人)/.test(userText));
-  const crisis = lang === "en"
-    ? /(?:don't want to live|do not want to live|hurt myself|harm myself|kill myself|suicid)/i.test(userText)
-    : /(?:不想活|伤害自己|自残|自杀|结束生命)/.test(userText);
+  const hasDreamFrame = lang === "en"
+    ? /(?:in (?:the|my) dream|I dreamed|nightmare|while dreaming)/i.test(userText)
+    : /(?:梦里|梦中|梦见|噩梦)/.test(userText);
+  const crisisCandidate = lang === "en"
+    ? /\bI\s+(?:(?:still\s+)?(?:don't|do not)\s+want\s+to\s+(?:live\b(?!\s+(?:in|with|here|there|at)\b)|be alive)|(?:may|might|will|plan to|want to|am going to|'m going to)\s+(?:hurt|harm|kill)\s+myself|(?:am|'m)\s+suicidal)/i.test(userText)
+    : /我(?:(?:现在|此刻|还是|今晚|真的)?不想活(?:了|下去)?(?!在)|(?:现在|此刻|今晚|可能|想|要|准备|打算|会).{0,4}(?:伤害自己|自残|自杀|结束生命))/.test(userText);
+  const currentRiskSignal = lang === "en"
+    ? /(?:after waking|awake now|right now|tonight|still feel|outside the dream)/i.test(userText)
+    : /(?:梦醒后|醒来后|现在|此刻|今晚|仍然|还是|现实中)/.test(userText);
+  const crisis = crisisCandidate && (!hasDreamFrame || currentRiskSignal);
   const stop = lang === "en"
-    ? /(?:stop here|don't want to continue|do not want to continue|end (?:this|here)|that's enough)/i.test(userText)
-    : /(?:到这里|不聊了|不想继续|停止吧|就这样吧)/.test(userText);
+    ? /(?:(?:let's|please|I want to|I'd like to)\s+(?:stop|end)(?:\s+(?:here|this|the chat|talking))?|I\s+(?:don't|do not)\s+want\s+to\s+continue\s+(?:this|the chat|talking)|that's enough(?: for now)?)/i.test(userText)
+    : /(?:不聊了|聊到这里|到这里吧|停止(?:聊天|追问)|别再问|就这样吧)/.test(userText);
   const noMoreRecall = lang === "en"
     ? /(?:can't|cannot|don't|do not).{0,16}remember (?:anything )?more|nothing else (?:comes|remains)/i.test(userText)
     : /(?:想不起来|记不得|不记得)(?:更多|其他|别的)|只(?:记得|剩下)这些/.test(userText);
-  const offTopic = lang === "en"
+  const offTopicCandidate = lang === "en"
     ? /(?:what(?:'s| is) the weather|weather today|current weather|forecast today)/i.test(userText)
     : /(?:今天天气怎么样|现在天气|实时天气|天气预报)/.test(userText);
+  const offTopic = offTopicCandidate && !hasDreamFrame;
   const interactionMode = stop ? "stop" : noMoreRecall ? "no_more_recall" : offTopic ? "off_topic" : "active";
   if (crisis) return { realityContextStatus: "crisis", interactionMode, avoidSensitiveDetails };
   if (declined || offTopic || stop) return { realityContextStatus: "declined", interactionMode, avoidSensitiveDetails };
@@ -360,13 +387,16 @@ export function sanitizeDreamAgentResult(
     observedSignals: cleanList(data.memory?.observedSignals ?? [], 8, lang === "en" ? 80 : 40),
   };
   const nextAction = data.nextAction ?? fallbackNextAction(stage, data.questions ?? []);
+  const normalizedStage: DreamAgentStage = nextAction === "ready_to_analyze"
+    ? "ready"
+    : stage === "ready" ? "deepening" : stage;
   const maxQuestions = QUESTION_LIMIT_BY_ACTION[nextAction];
   const cleanedQuestions = cleanList(data.questions ?? [], maxQuestions, lang === "en" ? 120 : 60);
 
   return {
     message: limitText(data.message ?? "……", 1000) || "……",
     questions: maxQuestions === 0 ? [] : ensureRealityQuestion(cleanedQuestions, lang, conversationContext).slice(0, maxQuestions),
-    stage,
+    stage: normalizedStage,
     nextAction,
     memory,
   };

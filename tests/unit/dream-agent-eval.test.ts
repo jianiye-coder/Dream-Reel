@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { DreamAgentResult } from "@/lib/dreamFollowUpAgent";
 import { dreamAgentEvalCases } from "../../evals/dream-agent/cases";
 import { evaluateDreamAgentResult, summarizeEvalResults } from "../../evals/dream-agent/evaluator";
+import { evalRetryDelayMs, isRetryableEvalRequest } from "../../evals/dream-agent/retryPolicy";
 
 const fragment = dreamAgentEvalCases.find((item) => item.id === "en-fragment-targeted")!;
 const good: DreamAgentResult = {
@@ -36,5 +37,13 @@ describe("dream agent evaluator", () => {
   it("reports bilingual and safety aggregates", () => {
     const passed = evaluateDreamAgentResult(fragment, good);
     expect(summarizeEvalResults([passed])).toMatchObject({ cases: 1, passed: 1, enPassRate: 1 });
+  });
+
+  it("retries transient failures but stops immediately when credits are exhausted", () => {
+    expect(isRetryableEvalRequest(429, "rate_limit_exceeded")).toBe(true);
+    expect(isRetryableEvalRequest(503)).toBe(true);
+    expect(isRetryableEvalRequest(429, "credit_balance_exhausted")).toBe(false);
+    expect(evalRetryDelayMs(1, "2.5")).toBe(2500);
+    expect(evalRetryDelayMs(4)).toBe(15_000);
   });
 });

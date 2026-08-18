@@ -10,7 +10,7 @@ import {
   buildDreamFollowUpAgentPrompt,
   deriveDreamAgentConversationContext,
   dreamAgentStrictResponseFormat,
-  inferAgentStage,
+  inferAgentStageFromConversation,
   parseDreamAgentContent,
   resolveDeterministicAgentResponse,
 } from "@/lib/dreamFollowUpAgent";
@@ -135,7 +135,7 @@ export async function POST(req: NextRequest) {
   consumedUsagePeriodId = usage.usagePeriodId;
 
   const userTurns = messages.filter((m) => m.role === "user").length;
-  const stage = inferAgentStage(userTurns);
+  const stage = inferAgentStageFromConversation(messages, lang, conversationContext);
   const variant = selectDreamAgentModelVariant(userId, process.env.DREAM_AGENT_JSON_SCHEMA_PERCENT);
   const systemPrompt = buildDreamFollowUpAgentPrompt(lang, userTurns, stage, contextLines, conversationContext);
   const upstreamMessages = messages.map((message) => {

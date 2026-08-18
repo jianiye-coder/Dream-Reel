@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { buildImmediateSafetyResponse, deriveDreamAgentConversationContext, resolveDeterministicAgentResponse, sanitizeDreamAgentResult } from "@/lib/dreamFollowUpAgent";
+import { buildImmediateSafetyResponse, deriveDreamAgentConversationContext, inferAgentStageFromConversation, resolveDeterministicAgentResponse, sanitizeDreamAgentResult } from "@/lib/dreamFollowUpAgent";
+import { dreamAgentEvalCases } from "../../evals/dream-agent/cases";
 
 describe("dream follow-up conversation context", () => {
   it("recognizes an answered reality question", () => {
@@ -66,5 +67,61 @@ describe("dream follow-up conversation context", () => {
       expect(deriveDreamAgentConversationContext([{ role: "user", content }], "zh"))
         .toMatchObject({ realityContextStatus: "unanswered", avoidSensitiveDetails: false });
     }
+  });
+
+  it("distinguishes imminent self-harm from dream content and housing language", () => {
+    expect(deriveDreamAgentConversationContext([
+      { role: "user", content: "I may hurt myself tonight." },
+    ], "en")).toMatchObject({ realityContextStatus: "crisis" });
+    for (const content of [
+      "In the dream I didn't want to live in that house anymore.",
+      "I hurt myself in the dream, but I am safe now.",
+    ]) {
+      expect(deriveDreamAgentConversationContext([{ role: "user", content }], "en"))
+        .not.toMatchObject({ realityContextStatus: "crisis" });
+    }
+  });
+
+  it("does not confuse dream actions with chat-control commands", () => {
+    for (const content of [
+      "In the dream I didn't want to continue down the corridor.",
+      "梦里我不想继续往走廊深处走。",
+    ]) {
+      expect(deriveDreamAgentConversationContext([{ role: "user", content }], content.startsWith("In") ? "en" : "zh"))
+        .toMatchObject({ interactionMode: "active" });
+    }
+  });
+
+  it("keeps weather questions inside a dream in the dream flow", () => {
+    expect(deriveDreamAgentConversationContext([
+      { role: "user", content: "In the dream I asked what the weather was today." },
+    ], "en")).toMatchObject({ interactionMode: "active" });
+  });
+
+  it("keeps every false-positive routing case on the model path", () => {
+    for (const evalCase of dreamAgentEvalCases.filter((item) => item.tags.includes("false-positive"))) {
+      const context = deriveDreamAgentConversationContext(evalCase.messages, evalCase.lang);
+      expect(resolveDeterministicAgentResponse(context, evalCase.lang), evalCase.id).toBeNull();
+    }
+  });
+
+  it("infers readiness from evidence instead of turn count alone", () => {
+    const complete = [{
+      role: "user" as const,
+      content: "I was lost in my old school and felt panicked. Then my grandmother waved and my chest relaxed. I recently started a new job.",
+    }];
+    const context = deriveDreamAgentConversationContext(complete, "en");
+    expect(inferAgentStageFromConversation(complete, "en", context)).toBe("ready");
+    const fragment = [{ role: "user" as const, content: "A blue bird." }];
+    expect(inferAgentStageFromConversation(fragment, "en", deriveDreamAgentConversationContext(fragment, "en"))).toBe("exploring");
+  });
+
+  it("normalizes contradictory ready actions and stages", () => {
+    expect(sanitizeDreamAgentResult({
+      message: "Enough to organize.", questions: [], stage: "exploring", nextAction: "ready_to_analyze",
+    }, "en", "exploring")).toMatchObject({ stage: "ready", nextAction: "ready_to_analyze" });
+    expect(sanitizeDreamAgentResult({
+      message: "One more detail.", questions: ["What changed?"], stage: "ready", nextAction: "summarize",
+    }, "en", "ready")).toMatchObject({ stage: "deepening", nextAction: "summarize" });
   });
 });

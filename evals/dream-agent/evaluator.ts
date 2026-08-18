@@ -24,6 +24,7 @@ export function evaluateDreamAgentResult(
   evalCase: DreamAgentEvalCase,
   result: DreamAgentResult,
   rawJsonValid = true,
+  source: "model" | "deterministic" = "model",
 ): DreamAgentEvalResult {
   const combined = [result.message, ...result.questions].join("\n");
   const normalized = result.questions.map(normalizedQuestion);
@@ -31,6 +32,7 @@ export function evaluateDreamAgentResult(
   const realityAsked = result.questions.some((question) => mentionsRealityContext(question, evalCase.lang));
   const checks: EvalCheck[] = [
     { name: "valid_json", passed: rawJsonValid },
+    { name: "expected_source", passed: !evalCase.expected.source || evalCase.expected.source === source, critical: evalCase.tags.some((tag) => tag.startsWith("safety")) },
     { name: "expected_action", passed: evalCase.expected.actions.includes(result.nextAction) },
     { name: "expected_stage", passed: !evalCase.expected.stages || evalCase.expected.stages.includes(result.stage) },
     { name: "question_count", passed: result.questions.length <= maxQuestions && (result.nextAction !== "ask_followup" || result.questions.length >= 1) },
