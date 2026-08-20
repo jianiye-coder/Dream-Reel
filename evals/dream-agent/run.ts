@@ -18,8 +18,13 @@ type ChatResponse = {
   usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number };
 };
 
-const apiKey = process.env.OPENAI_API_KEY;
-const model = process.env.DREAM_AGENT_EVAL_MODEL ?? process.env.OPENAI_MODEL ?? "gpt-5.5";
+const provider = process.env.DREAM_AGENT_EVAL_PROVIDER === "groq" ? "groq" : "openai";
+const apiKey = provider === "groq" ? process.env.GROQ_API_KEY : process.env.OPENAI_API_KEY;
+const endpoint = provider === "groq"
+  ? "https://api.groq.com/openai/v1/chat/completions"
+  : "https://api.openai.com/v1/chat/completions";
+const model = process.env.DREAM_AGENT_EVAL_MODEL
+  ?? (provider === "groq" ? process.env.GROQ_MODEL ?? "openai/gpt-oss-120b" : process.env.OPENAI_MODEL ?? "gpt-5.5");
 const outputDir = process.env.DREAM_AGENT_EVAL_OUTPUT_DIR ?? join(tmpdir(), "dream-reel-agent-evals");
 const responseFormatName = process.env.DREAM_AGENT_EVAL_RESPONSE_FORMAT === "json_schema" ? "json_schema" : "json_object";
 const filter = process.env.DREAM_AGENT_EVAL_FILTER?.trim().toLowerCase();
@@ -33,7 +38,7 @@ function wait(ms: number) {
 
 async function requestCompletion(body: unknown, caseId: string) {
   for (let attempt = 0; attempt < 5; attempt += 1) {
-    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+    const response = await fetch(endpoint, {
       method: "POST",
       headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
       body: JSON.stringify(body),
@@ -69,7 +74,8 @@ async function runCase(evalCase: (typeof dreamAgentEvalCases)[number]) {
   const response = await requestCompletion({
     model,
     messages: [{ role: "system", content: prompt }, ...evalCase.messages],
-    max_completion_tokens: 800,
+    max_completion_tokens: provider === "groq" ? 1600 : 800,
+    reasoning_effort: provider === "groq" && model.startsWith("openai/gpt-oss-") ? "low" : undefined,
     response_format: responseFormatName === "json_schema" ? dreamAgentStrictResponseFormat : { type: "json_object" },
   }, evalCase.id);
   const payload = await response.json() as ChatResponse;
@@ -96,7 +102,7 @@ async function runCase(evalCase: (typeof dreamAgentEvalCases)[number]) {
 }
 
 async function main() {
-  if (!apiKey) throw new Error("OPENAI_API_KEY is required to run the agent evaluation.");
+  if (!apiKey) throw new Error(`${provider === "groq" ? "GROQ_API_KEY" : "OPENAI_API_KEY"} is required to run the agent evaluation.`);
   await mkdir(outputDir, { recursive: true });
   const filteredCases = dreamAgentEvalCases
     .filter((evalCase) => !filter || evalCase.id.toLowerCase().includes(filter) || evalCase.tags.some((tag) => tag.toLowerCase().includes(filter)))
@@ -124,7 +130,7 @@ async function main() {
   };
   const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
   const outputPath = join(outputDir, `${timestamp}-${model.replace(/[^a-zA-Z0-9._-]/g, "_")}-${responseFormatName}.json`);
-  await writeFile(outputPath, JSON.stringify({ model, responseFormat: responseFormatName, createdAt: new Date().toISOString(), summary, operations, cases: completed }, null, 2), "utf8");
+  await writeFile(outputPath, JSON.stringify({ provider, model, responseFormat: responseFormatName, createdAt: new Date().toISOString(), summary, operations, cases: completed }, null, 2), "utf8");
   console.log(JSON.stringify({ ...summary, ...operations }, null, 2));
   console.log(`Detailed synthetic results: ${outputPath}`);
 }

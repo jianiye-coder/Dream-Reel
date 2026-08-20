@@ -42,6 +42,7 @@ describe("dream agent evaluator", () => {
   it("retries transient failures but stops immediately when credits are exhausted", () => {
     expect(isRetryableEvalRequest(429, "rate_limit_exceeded")).toBe(true);
     expect(isRetryableEvalRequest(503)).toBe(true);
+    expect(isRetryableEvalRequest(400, "json_validate_failed")).toBe(true);
     expect(isRetryableEvalRequest(429, "credit_balance_exhausted")).toBe(false);
     expect(evalRetryDelayMs(1, "2.5")).toBe(2500);
     expect(evalRetryDelayMs(4)).toBe(15_000);

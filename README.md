@@ -65,6 +65,8 @@ BLOB_READ_WRITE_TOKEN=your_vercel_blob_token
 NEXT_PUBLIC_APP_URL=http://localhost:3000
 ```
 
+Set `DREAM_AGENT_EVAL_PROVIDER=groq` when running synthetic agent evaluations through the Groq fallback. OpenAI remains the default evaluation provider.
+
 3. Start the dev server:
 
 ```bash
@@ -151,6 +153,8 @@ DREAM_AGENT_JSON_SCHEMA_PERCENT=0
 BLOB_READ_WRITE_TOKEN=your_vercel_blob_token
 NEXT_PUBLIC_APP_URL=http://localhost:3000
 ```
+
+通过 Groq 备选运行合成 Agent 评测时，设置 `DREAM_AGENT_EVAL_PROVIDER=groq`；评测默认仍使用 OpenAI。
 
 3. 启动开发服务器：
 

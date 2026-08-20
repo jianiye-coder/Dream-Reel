@@ -1,5 +1,6 @@
 export function isRetryableEvalRequest(status: number, errorCode?: string) {
   if (errorCode === "credit_balance_exhausted" || errorCode === "insufficient_quota") return false;
+  if (errorCode === "json_validate_failed") return true;
   return status === 429 || status >= 500;
 }
 

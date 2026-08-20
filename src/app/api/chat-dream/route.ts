@@ -192,7 +192,8 @@ export async function POST(req: NextRequest) {
           body: JSON.stringify({
             model: provider.model,
             messages: [{ role: "system", content: systemPrompt }, ...upstreamMessages],
-            max_completion_tokens: 800,
+            max_completion_tokens: provider.name === "groq" ? 1600 : 800,
+            reasoning_effort: provider.name === "groq" && provider.model.startsWith("openai/gpt-oss-") ? "low" : undefined,
             response_format: variant === "json-schema-v1" ? dreamAgentStrictResponseFormat : { type: "json_object" },
           }),
         });

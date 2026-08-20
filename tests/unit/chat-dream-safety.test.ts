@@ -120,6 +120,8 @@ describe("dream chat safety routing", () => {
     expect(fetchSpy.mock.calls[1][0]).toBe("https://api.groq.com/openai/v1/chat/completions");
     expect(JSON.parse(String(fetchSpy.mock.calls[1][1]?.body))).toMatchObject({
       model: "openai/gpt-oss-120b",
+      max_completion_tokens: 1600,
+      reasoning_effort: "low",
     });
     expect(billing.refundConsumedUsage).not.toHaveBeenCalled();
   });
