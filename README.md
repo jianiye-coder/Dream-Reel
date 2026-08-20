@@ -56,6 +56,9 @@ DREAM_TEXT_ENCRYPTION_KEY_ID=primary
 DREAM_TEXT_PREVIOUS_ENCRYPTION_KEYS=
 OPENAI_API_KEY=your_openai_api_key
 OPENAI_MODEL=gpt-5.5
+# Optional fallback for the dream chat agent; OpenAI remains primary.
+GROQ_API_KEY=your_groq_api_key
+GROQ_MODEL=openai/gpt-oss-120b
 DREAM_AGENT_FEEDBACK_SECRET=your_separate_feedback_signing_secret
 DREAM_AGENT_JSON_SCHEMA_PERCENT=0
 BLOB_READ_WRITE_TOKEN=your_vercel_blob_token
@@ -140,6 +143,9 @@ DREAM_TEXT_ENCRYPTION_KEY_ID=primary
 DREAM_TEXT_PREVIOUS_ENCRYPTION_KEYS=
 OPENAI_API_KEY=your_openai_api_key
 OPENAI_MODEL=gpt-5.5
+# 梦境对话 Agent 的可选备选；OpenAI 始终优先。
+GROQ_API_KEY=your_groq_api_key
+GROQ_MODEL=openai/gpt-oss-120b
 DREAM_AGENT_FEEDBACK_SECRET=your_separate_feedback_signing_secret
 DREAM_AGENT_JSON_SCHEMA_PERCENT=0
 BLOB_READ_WRITE_TOKEN=your_vercel_blob_token

@@ -22,6 +22,8 @@ describe("dream chat safety routing", () => {
 
   afterEach(() => {
     delete process.env.OPENAI_API_KEY;
+    delete process.env.GROQ_API_KEY;
+    delete process.env.GROQ_MODEL;
     delete process.env.DREAM_AGENT_FEEDBACK_SECRET;
     delete process.env.DREAM_AGENT_JSON_SCHEMA_PERCENT;
     vi.restoreAllMocks();
@@ -75,11 +77,72 @@ describe("dream chat safety routing", () => {
     expect(body).toMatchObject({
       stage: "ready",
       nextAction: "ready_to_analyze",
-      meta: { variant: "json-schema-v1", source: "model", feedbackToken: expect.any(String) },
+      meta: { variant: "json-schema-v1", source: "model", provider: "openai", feedbackToken: expect.any(String) },
     });
     const upstreamBody = JSON.parse(String(fetchSpy.mock.calls[0][1]?.body));
     expect(upstreamBody.response_format).toMatchObject({ type: "json_schema" });
     expect(billing.checkAndConsumeUsage).toHaveBeenCalledWith(7, "analysis");
     expect(billing.refundConsumedUsage).not.toHaveBeenCalled();
+  });
+
+  it("uses Groq only after the primary OpenAI provider fails", async () => {
+    process.env.GROQ_API_KEY = "groq-unit-test-key";
+    process.env.GROQ_MODEL = "openai/gpt-oss-120b";
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    vi.spyOn(console, "info").mockImplementation(() => undefined);
+    const fetchSpy = vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(new Response("credit exhausted", { status: 429 }))
+      .mockResolvedValueOnce(Response.json({
+        choices: [{ message: { content: JSON.stringify({
+          message: "Let's stay with the feeling in that station.",
+          questions: ["What feeling was strongest while you were running?"],
+          stage: "exploring",
+          nextAction: "ask_followup",
+          memory: { missingDetails: ["turning point"], observedSignals: ["station", "running"] },
+        }) } }],
+        usage: { prompt_tokens: 400, completion_tokens: 70 },
+      }));
+
+    const response = await POST(new NextRequest("http://localhost/api/chat-dream", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        lang: "en",
+        messages: [{ role: "user", content: "I was running through a station, then I woke up." }],
+      }),
+    }));
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.meta).toMatchObject({ source: "model", provider: "groq" });
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+    expect(fetchSpy.mock.calls[0][0]).toBe("https://api.openai.com/v1/chat/completions");
+    expect(fetchSpy.mock.calls[1][0]).toBe("https://api.groq.com/openai/v1/chat/completions");
+    expect(JSON.parse(String(fetchSpy.mock.calls[1][1]?.body))).toMatchObject({
+      model: "openai/gpt-oss-120b",
+    });
+    expect(billing.refundConsumedUsage).not.toHaveBeenCalled();
+  });
+
+  it("refunds usage once when both providers fail", async () => {
+    process.env.GROQ_API_KEY = "groq-unit-test-key";
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const fetchSpy = vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(new Response("OpenAI unavailable", { status: 503 }))
+      .mockResolvedValueOnce(new Response("Groq unavailable", { status: 503 }));
+
+    const response = await POST(new NextRequest("http://localhost/api/chat-dream", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        lang: "en",
+        messages: [{ role: "user", content: "I was walking through an unfamiliar market." }],
+      }),
+    }));
+
+    expect(response.status).toBe(502);
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+    expect(billing.refundConsumedUsage).toHaveBeenCalledTimes(1);
+    expect(billing.refundConsumedUsage).toHaveBeenCalledWith(9, "analysis");
   });
 });

@@ -15,7 +15,7 @@ function hash(value: string) {
   return createHash("sha256").update(value).digest("hex");
 }
 
-function buildReviewHtml(reviewCases: unknown) {
+function buildReviewHtml(reviewCases: unknown, reviewId: string) {
   const data = JSON.stringify(reviewCases).replace(/</g, "\\u003c");
   return `<!doctype html>
 <html lang="en">
@@ -37,7 +37,7 @@ function buildReviewHtml(reviewCases: unknown) {
 <script id="review-data" type="application/json">${data}</script>
 <script>
   const cases = JSON.parse(document.getElementById('review-data').textContent);
-  const storageKey = 'dream-agent-blind-review:' + cases.map(item => item.id).join('|');
+  const storageKey = 'dream-agent-blind-review:${reviewId}';
   let saved = {};
   try { saved = JSON.parse(localStorage.getItem(storageKey) || '{}'); } catch {}
   let current = 0;
@@ -117,6 +117,10 @@ async function main() {
     };
   });
   const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+  const reviewId = hash(JSON.stringify(cases.map((item) => ({
+    id: item.id,
+    candidates: item.candidates,
+  }))));
   const outputDir = process.env.DREAM_AGENT_REVIEW_OUTPUT_DIR
     ?? join(homedir(), ".dream-reel", "agent-reviews");
   await mkdir(outputDir, { recursive: true });
@@ -171,7 +175,7 @@ async function main() {
     }),
   ].join("\n");
   await writeFile(markdownPath, markdown);
-  await writeFile(htmlPath, buildReviewHtml(cases));
+  await writeFile(htmlPath, buildReviewHtml(cases, reviewId));
   await writeFile(keyPath, JSON.stringify(key, null, 2));
   console.log(`Blind review packet: ${packetPath}`);
   console.log(`Human-friendly review sheet: ${markdownPath}`);

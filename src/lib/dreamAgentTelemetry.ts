@@ -2,11 +2,13 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import type { DreamAgentResult } from "./dreamFollowUpAgent";
 
 export type DreamAgentVariant = "deterministic-v1" | "json-object-v1" | "json-schema-v1";
+export type DreamAgentProvider = "deterministic" | "openai" | "groq";
 
 export interface DreamAgentResponseMeta {
   interactionId: string;
   variant: DreamAgentVariant;
   source: "deterministic" | "model";
+  provider: DreamAgentProvider;
   latencyMs: number;
   feedbackToken?: string;
 }
@@ -27,6 +29,7 @@ export function createDreamAgentResponseMeta(
   source: DreamAgentResponseMeta["source"],
   latencyMs: number,
   userId: number,
+  provider: DreamAgentProvider = source === "deterministic" ? "deterministic" : "openai",
 ): DreamAgentResponseMeta {
   const interactionId = crypto.randomUUID();
   const secret = feedbackSecret();
@@ -41,7 +44,7 @@ export function createDreamAgentResponseMeta(
     const signature = createHmac("sha256", secret).update(payload).digest("base64url");
     feedbackToken = `${payload}.${signature}`;
   }
-  return { interactionId, variant, source, latencyMs, feedbackToken };
+  return { interactionId, variant, source, provider, latencyMs, feedbackToken };
 }
 
 export function verifyDreamAgentFeedbackToken(token: string, userId: number): FeedbackTokenPayload | null {
@@ -81,6 +84,7 @@ export function logDreamAgentCompletion(
     interactionId: meta.interactionId,
     variant: meta.variant,
     source: meta.source,
+    provider: meta.provider,
     stage: result.stage,
     nextAction: result.nextAction,
     questionCount: result.questions.length,

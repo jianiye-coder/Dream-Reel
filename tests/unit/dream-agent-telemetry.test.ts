@@ -33,6 +33,7 @@ describe("dream agent telemetry", () => {
       interactionId: "test-id",
       variant: "json-object-v1",
       source: "model",
+      provider: "openai",
       latencyMs: 250,
     });
     const serialized = JSON.stringify(info.mock.calls);

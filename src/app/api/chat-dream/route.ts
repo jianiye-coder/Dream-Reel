@@ -43,7 +43,32 @@ type ChatResponse = {
 };
 
 const OPENAI_MODEL = process.env.OPENAI_MODEL ?? "gpt-5.5";
+const GROQ_MODEL = process.env.GROQ_MODEL ?? "openai/gpt-oss-120b";
 const OPENAI_TIMEOUT_MS = 60_000;
+
+type ModelProvider = {
+  name: "openai" | "groq";
+  apiKey: string;
+  model: string;
+  url: string;
+};
+
+function configuredModelProviders(): ModelProvider[] {
+  return [
+    process.env.OPENAI_API_KEY && {
+      name: "openai" as const,
+      apiKey: process.env.OPENAI_API_KEY,
+      model: OPENAI_MODEL,
+      url: "https://api.openai.com/v1/chat/completions",
+    },
+    process.env.GROQ_API_KEY && {
+      name: "groq" as const,
+      apiKey: process.env.GROQ_API_KEY,
+      model: process.env.GROQ_MODEL ?? GROQ_MODEL,
+      url: "https://api.groq.com/openai/v1/chat/completions",
+    },
+  ].filter((provider): provider is ModelProvider => Boolean(provider));
+}
 
 function buildContextLines(
   lang: "zh" | "en",
@@ -105,8 +130,8 @@ export async function POST(req: NextRequest) {
     logDreamAgentCompletion(deterministicResponse, meta);
     return NextResponse.json({ ...deterministicResponse, meta });
   }
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) {
+  const modelProviders = configuredModelProviders();
+  if (!modelProviders.length) {
     return NextResponse.json({ error: API_ERROR_CODES.configurationError }, { status: 500 });
   }
   const forwardedFor = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim();
@@ -149,60 +174,73 @@ export async function POST(req: NextRequest) {
     return { role: message.role, content: `${message.content}${shownQuestions}${workingMemory}` };
   });
 
-  try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), OPENAI_TIMEOUT_MS);
-
-    let upstream: Response;
+  let lastFailureWasTimeout = false;
+  for (const provider of modelProviders) {
+    lastFailureWasTimeout = false;
     try {
-      upstream = await fetch("https://api.openai.com/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          "Content-Type": "application/json",
-        },
-        signal: controller.signal,
-        body: JSON.stringify({
-          model: OPENAI_MODEL,
-          messages: [{ role: "system", content: systemPrompt }, ...upstreamMessages],
-          max_completion_tokens: 800,
-          response_format: variant === "json-schema-v1" ? dreamAgentStrictResponseFormat : { type: "json_object" },
-        }),
-      });
-    } finally {
-      clearTimeout(timeout);
-    }
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), OPENAI_TIMEOUT_MS);
+      let upstream: Response;
+      try {
+        upstream = await fetch(provider.url, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${provider.apiKey}`,
+            "Content-Type": "application/json",
+          },
+          signal: controller.signal,
+          body: JSON.stringify({
+            model: provider.model,
+            messages: [{ role: "system", content: systemPrompt }, ...upstreamMessages],
+            max_completion_tokens: 800,
+            response_format: variant === "json-schema-v1" ? dreamAgentStrictResponseFormat : { type: "json_object" },
+          }),
+        });
+      } finally {
+        clearTimeout(timeout);
+      }
 
-    if (!upstream.ok) {
-      console.error("POST /api/chat-dream upstream failed", {
-        status: upstream.status,
-      });
-      await refundChatUsageOnce();
-      return NextResponse.json({ error: API_ERROR_CODES.upstreamError }, { status: 502 });
-    }
+      if (!upstream.ok) {
+        console.error("POST /api/chat-dream provider failed", {
+          provider: provider.name,
+          status: upstream.status,
+        });
+        continue;
+      }
 
-    const payload = (await upstream.json()) as ChatResponse;
-    const content = payload.choices?.[0]?.message?.content ?? "";
-    if (!content.trim()) {
-      await refundChatUsageOnce();
-      return NextResponse.json({ error: API_ERROR_CODES.invalidResponse }, { status: 422 });
+      const payload = (await upstream.json()) as ChatResponse;
+      const content = payload.choices?.[0]?.message?.content ?? "";
+      if (!content.trim()) {
+        console.error("POST /api/chat-dream provider returned empty content", {
+          provider: provider.name,
+        });
+        continue;
+      }
+      const result = parseDreamAgentContent(content, lang, stage, conversationContext);
+      const meta = createDreamAgentResponseMeta(
+        variant,
+        "model",
+        Date.now() - requestStartedAt,
+        userId,
+        provider.name,
+      );
+      logDreamAgentCompletion(result, meta, {
+        promptTokens: payload.usage?.prompt_tokens,
+        completionTokens: payload.usage?.completion_tokens,
+      });
+      return NextResponse.json({ ...result, meta });
+    } catch (err) {
+      lastFailureWasTimeout = err instanceof Error && err.name === "AbortError";
+      console.error("POST /api/chat-dream provider request failed", {
+        provider: provider.name,
+        ...safeErrorMetadata(err),
+      });
     }
-    const result = parseDreamAgentContent(content, lang, stage, conversationContext);
-    const meta = createDreamAgentResponseMeta(variant, "model", Date.now() - requestStartedAt, userId);
-    logDreamAgentCompletion(result, meta, {
-      promptTokens: payload.usage?.prompt_tokens,
-      completionTokens: payload.usage?.completion_tokens,
-    });
-    return NextResponse.json({ ...result, meta });
-  } catch (err) {
-    console.error("POST /api/chat-dream failed", safeErrorMetadata(err));
-    await refundChatUsageOnce();
-    if (err instanceof Error && err.name === "AbortError") {
-      return NextResponse.json({ error: API_ERROR_CODES.timeout }, { status: 504 });
-    }
-    return NextResponse.json(
-      { error: API_ERROR_CODES.internalError },
-      { status: 500 },
-    );
   }
+
+  await refundChatUsageOnce();
+  if (lastFailureWasTimeout) {
+    return NextResponse.json({ error: API_ERROR_CODES.timeout }, { status: 504 });
+  }
+  return NextResponse.json({ error: API_ERROR_CODES.upstreamError }, { status: 502 });
 }
