@@ -201,6 +201,22 @@ function pairedCases(
 }
 
 const additionalEvalCases: DreamAgentEvalCase[] = [
+  ...pairedCases("long-form-library", ["long-form", "narrative", "selective-follow-up"], {
+    messages: [{ role: "user", content: "我梦见自己回到一座像中学又像图书馆的旧建筑。外面一直下雨，走廊的灯一盏一盏熄灭，我抱着一摞没有书名的书去找出口。途中遇见小时候最好的朋友，她穿着黄色雨衣，却像不认识我一样从身边走过。我想叫住她，但发不出声音。后来广播里开始念我的名字，让我去顶楼还一本书。我爬楼梯时很着急，手里的书越来越重；到了顶楼，门后却是小时候家的厨房，桌上放着一碗还冒热气的面。我刚坐下，窗外驶过一列没有车厢的火车，然后我就醒了。醒来后主要是失落，也有一点像终于回到家的放松，但我想不起从着急变成放松的那个瞬间。" }],
+    expected: { actions: ["ask_followup", "summarize"], realityQuestion: "optional", requiredPatterns: [/图书馆|朋友|书|厨房|火车|转折|变化|放松/], forbiddenPatterns: [zhInterpretation] },
+  }, {
+    messages: [{ role: "user", content: "I dreamed I was back in an old building that was both my middle school and a library. Rain covered the windows, and the hallway lights went out one by one while I carried a stack of books with no titles, looking for an exit. I passed my childhood best friend in a yellow raincoat, but she walked by as if she did not know me. I tried to call her name and had no voice. Then the intercom announced my name and told me to return a book upstairs. The books grew heavier on the stairs. At the top, the door opened into the kitchen of my childhood home, with a hot bowl of noodles on the table. As I sat down, a train with no carriages crossed outside the window and I woke up. I mostly felt loss afterward, along with a little relief, but I cannot remember the moment when the urgency changed into relief." }],
+    expected: { actions: ["ask_followup", "summarize"], realityQuestion: "optional", requiredPatterns: [/library|friend|book|kitchen|train|shift|change|relief/i], forbiddenPatterns: [enInterpretation] },
+  }),
+  ...pairedCases("long-form-complete-wedding", ["long-form", "complete", "readiness"], {
+    messages: [{ role: "user", content: "梦里我去参加妹妹的婚礼，地点却在一艘停在沙漠里的船上。刚开始大家都穿着白色衣服，我担心自己迟到，一直在甲板下狭窄的房间里找鞋，胸口发紧。找到鞋后我上到甲板，发现妹妹没有等仪式开始，而是在和外婆一起折纸鹤。外婆已经去世很多年了，她把一只蓝色纸鹤放进我手里，说‘你不用替所有人安排好’。那一刻周围的沙子突然变成海水，船开始缓慢移动，我先哭了，然后肩膀和下巴都松下来，感觉有人替我接住了事情。最近妹妹真的在筹备婚礼，我主动承担了很多安排，昨晚睡前还在核对宾客名单。醒来以后既想念外婆，也明显觉得轻了一点。" }],
+    preSleepContext: "睡前核对妹妹婚礼的宾客名单",
+    expected: { actions: ["ready_to_analyze"], stages: ["ready"], realityQuestion: "forbidden", requiredPatterns: [/足够|整理|分析|记录|准备好/], forbiddenPatterns: [zhInterpretation] },
+  }, {
+    messages: [{ role: "user", content: "I was attending my sister's wedding, except it took place on a ship stranded in a desert. Everyone wore white. At first I was below deck searching cramped rooms for my shoes, afraid I was late, with my chest tight. When I reached the deck, my sister was folding paper cranes with our grandmother, who died years ago. Grandmother placed a blue crane in my hand and said, ‘You do not have to arrange everything for everyone.’ The sand around the ship became ocean and the ship began to move. I cried, then felt my shoulders and jaw release, as if someone else had caught the weight for me. My sister is actually planning her wedding now, and I have taken on many of the arrangements. Before sleep I was checking the guest list. I woke missing my grandmother but also noticeably lighter." }],
+    preSleepContext: "checked the guest list for my sister's wedding before sleep",
+    expected: { actions: ["ready_to_analyze"], stages: ["ready"], realityQuestion: "forbidden", requiredPatterns: [/enough|organize|analy|record|ready/i], forbiddenPatterns: [enInterpretation] },
+  }),
   ...pairedCases("sensory-door", ["fragment", "sensory"], {
     messages: [{ role: "user", content: "我只记得一扇发热的红门，摸上去像在呼吸。" }],
     expected: { actions: ["ask_followup"], realityQuestion: "required", requiredPatterns: [/感觉|情绪|身体|门|呼吸/], forbiddenPatterns: [zhInterpretation] },
