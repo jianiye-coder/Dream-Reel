@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
-import { readFile, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { homedir } from "node:os";
 import { join } from "node:path";
 import type { DreamAgentResult } from "../../src/lib/dreamFollowUpAgent";
 import { dreamAgentEvalCases } from "./cases";
@@ -117,10 +117,13 @@ async function main() {
     };
   });
   const stamp = new Date().toISOString().replace(/[:.]/g, "-");
-  const packetPath = join(tmpdir(), `dream-agent-blind-review-${stamp}.json`);
-  const markdownPath = join(tmpdir(), `dream-agent-blind-review-${stamp}.md`);
-  const htmlPath = join(tmpdir(), `dream-agent-blind-review-${stamp}.html`);
-  const keyPath = join(tmpdir(), `dream-agent-blind-review-key-${stamp}.json`);
+  const outputDir = process.env.DREAM_AGENT_REVIEW_OUTPUT_DIR
+    ?? join(homedir(), ".dream-reel", "agent-reviews");
+  await mkdir(outputDir, { recursive: true });
+  const packetPath = join(outputDir, `dream-agent-blind-review-${stamp}.json`);
+  const markdownPath = join(outputDir, `dream-agent-blind-review-${stamp}.md`);
+  const htmlPath = join(outputDir, `dream-agent-blind-review-${stamp}.html`);
+  const keyPath = join(outputDir, `dream-agent-blind-review-key-${stamp}.json`);
   await writeFile(packetPath, JSON.stringify({ instructions: "Review without opening the key. Scores are 1-5; winner is A, B, or tie.", cases }, null, 2));
   const markdown = [
     "# Dream Agent Blind Review",
