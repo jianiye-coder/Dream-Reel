@@ -31,6 +31,26 @@ describe("dream follow-up conversation context", () => {
     expect(result.questions).toEqual(["How did that loneliness feel?"]);
   });
 
+  it("delays real-life linkage and limits early follow-ups to two dream-specific questions", () => {
+    const context = deriveDreamAgentConversationContext([
+      { role: "user", content: "A warm red door seemed to breathe under my hand." },
+    ], "en");
+    const result = sanitizeDreamAgentResult({
+      message: "The warmth and breathing make the door feel unusually alive.",
+      questions: [
+        "What happened when you touched the door?",
+        "Did the breathing match your own rhythm?",
+        "Does this connect to real life recently?",
+      ],
+      stage: "exploring",
+      nextAction: "ask_followup",
+    }, "en", "exploring", context);
+    expect(result.questions).toEqual([
+      "What happened when you touched the door?",
+      "Did the breathing match your own rhythm?",
+    ]);
+  });
+
   it("routes imminent self-harm language to crisis context", () => {
     expect(deriveDreamAgentConversationContext([
       { role: "user", content: "今晚我可能会伤害自己。" },

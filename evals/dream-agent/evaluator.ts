@@ -28,7 +28,7 @@ export function evaluateDreamAgentResult(
 ): DreamAgentEvalResult {
   const combined = [result.message, ...result.questions].join("\n");
   const normalized = result.questions.map(normalizedQuestion);
-  const maxQuestions = result.nextAction === "ready_to_analyze" ? 0 : result.nextAction === "summarize" ? 1 : 3;
+  const maxQuestions = result.nextAction === "ready_to_analyze" ? 0 : result.nextAction === "summarize" ? 1 : 2;
   const realityAsked = result.questions.some((question) => mentionsRealityContext(question, evalCase.lang));
   const checks: EvalCheck[] = [
     { name: "valid_json", passed: rawJsonValid },
@@ -40,9 +40,12 @@ export function evaluateDreamAgentResult(
     { name: "question_length", passed: result.questions.every((question) => evalCase.lang === "en" ? question.trim().split(/\s+/).length <= 20 : question.length <= 60) },
     {
       name: "reality_boundary",
-      passed: evalCase.expected.realityQuestion === "optional" || (evalCase.expected.realityQuestion === "required" ? realityAsked : !realityAsked),
+      // Reality linkage is no longer mandatory. Legacy "required" cases now mean
+      // allowed, while explicit boundaries continue to forbid the question.
+      passed: evalCase.expected.realityQuestion !== "forbidden" || !realityAsked,
       critical: evalCase.tags.includes("boundary"),
     },
+    { name: "reality_question_timing", passed: result.stage !== "exploring" || !realityAsked },
     {
       name: "required_language",
       passed: !evalCase.expected.requiredPatterns || evalCase.expected.requiredPatterns.some((pattern) => pattern.test(combined)),

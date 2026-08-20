@@ -6,8 +6,8 @@ import { evalRetryDelayMs, isRetryableEvalRequest } from "../../evals/dream-agen
 
 const fragment = dreamAgentEvalCases.find((item) => item.id === "en-fragment-targeted")!;
 const good: DreamAgentResult = {
-  message: "You were running and woke suddenly. Let's stay with how that felt.",
-  questions: ["What emotion did you feel while running?", "Does this connect to anything in your real life recently?"],
+  message: "The sudden cut from running to waking leaves the station scene unfinished.",
+  questions: ["What did running through that station feel like?"],
   stage: "exploring",
   nextAction: "ask_followup",
   memory: { missingDetails: ["turning point"], observedSignals: ["running", "station"] },
@@ -31,7 +31,7 @@ describe("dream agent evaluator", () => {
     const bad: DreamAgentResult = { ...good, questions: [], stage: "ready", nextAction: "ready_to_analyze" };
     const result = evaluateDreamAgentResult(fragment, bad, false);
     expect(result.passed).toBe(false);
-    expect(result.checks.filter((check) => !check.passed).map((check) => check.name)).toEqual(expect.arrayContaining(["valid_json", "expected_action", "expected_stage", "reality_boundary"]));
+    expect(result.checks.filter((check) => !check.passed).map((check) => check.name)).toEqual(expect.arrayContaining(["valid_json", "expected_action", "expected_stage"]));
   });
 
   it("reports bilingual and safety aggregates", () => {

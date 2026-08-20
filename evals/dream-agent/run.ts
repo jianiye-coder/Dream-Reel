@@ -28,6 +28,11 @@ const model = process.env.DREAM_AGENT_EVAL_MODEL
 const outputDir = process.env.DREAM_AGENT_EVAL_OUTPUT_DIR ?? join(tmpdir(), "dream-reel-agent-evals");
 const responseFormatName = process.env.DREAM_AGENT_EVAL_RESPONSE_FORMAT === "json_schema" ? "json_schema" : "json_object";
 const filter = process.env.DREAM_AGENT_EVAL_FILTER?.trim().toLowerCase();
+const selectedCaseIds = new Set((process.env.DREAM_AGENT_EVAL_CASE_IDS ?? "")
+  .split(",")
+  .map((value) => value.trim())
+  .filter(Boolean));
+const evaluationLabel = process.env.DREAM_AGENT_EVAL_LABEL?.trim();
 const limit = Number.parseInt(process.env.DREAM_AGENT_EVAL_LIMIT ?? "", 10);
 const concurrency = Math.max(1, Math.min(5, Number.parseInt(process.env.DREAM_AGENT_EVAL_CONCURRENCY ?? "2", 10) || 2));
 const batchDelayMs = Math.max(0, Math.min(10_000, Number.parseInt(process.env.DREAM_AGENT_EVAL_BATCH_DELAY_MS ?? "500", 10) || 0));
@@ -105,6 +110,7 @@ async function main() {
   if (!apiKey) throw new Error(`${provider === "groq" ? "GROQ_API_KEY" : "OPENAI_API_KEY"} is required to run the agent evaluation.`);
   await mkdir(outputDir, { recursive: true });
   const filteredCases = dreamAgentEvalCases
+    .filter((evalCase) => !selectedCaseIds.size || selectedCaseIds.has(evalCase.id))
     .filter((evalCase) => !filter || evalCase.id.toLowerCase().includes(filter) || evalCase.tags.some((tag) => tag.toLowerCase().includes(filter)))
     .slice(0, Number.isFinite(limit) && limit > 0 ? limit : undefined);
   if (!filteredCases.length) throw new Error("No evaluation cases matched DREAM_AGENT_EVAL_FILTER.");
@@ -130,7 +136,7 @@ async function main() {
   };
   const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
   const outputPath = join(outputDir, `${timestamp}-${model.replace(/[^a-zA-Z0-9._-]/g, "_")}-${responseFormatName}.json`);
-  await writeFile(outputPath, JSON.stringify({ provider, model, responseFormat: responseFormatName, createdAt: new Date().toISOString(), summary, operations, cases: completed }, null, 2), "utf8");
+  await writeFile(outputPath, JSON.stringify({ provider, model, label: evaluationLabel, responseFormat: responseFormatName, createdAt: new Date().toISOString(), summary, operations, cases: completed }, null, 2), "utf8");
   console.log(JSON.stringify({ ...summary, ...operations }, null, 2));
   console.log(`Detailed synthetic results: ${outputPath}`);
 }

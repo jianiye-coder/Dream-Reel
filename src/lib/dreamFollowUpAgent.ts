@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { getRealityQuestion, mentionsRealityContext } from "./dreamQuestions";
+import { mentionsRealityContext } from "./dreamQuestions";
 
 export type DreamAgentStage = "exploring" | "deepening" | "ready";
 export type DreamAgentNextAction = "ask_followup" | "summarize" | "ready_to_analyze";
@@ -86,7 +86,7 @@ export function resolveDeterministicAgentResponse(
 }
 
 const QUESTION_LIMIT_BY_ACTION: Record<DreamAgentNextAction, number> = {
-  ask_followup: 3,
+  ask_followup: 2,
   summarize: 1,
   ready_to_analyze: 0,
 };
@@ -165,22 +165,20 @@ function cleanList(values: string[], limit: number, maxLength: number) {
   return cleaned;
 }
 
-function ensureRealityQuestion(
+function applyQuestionTimingPolicy(
   questions: string[],
   lang: "zh" | "en",
+  stage: DreamAgentStage,
   conversationContext?: DreamAgentConversationContext,
 ) {
   if (conversationContext?.realityContextStatus !== undefined && conversationContext.realityContextStatus !== "unanswered") {
-    return questions.filter((question) => !mentionsRealityContext(question, lang)).slice(0, 3);
+    return questions.filter((question) => !mentionsRealityContext(question, lang)).slice(0, 2);
   }
-  const requiredQuestion = getRealityQuestion(lang);
-  const alreadyIncluded = questions.some((question) =>
-    mentionsRealityContext(question, lang),
-  );
-
-  if (alreadyIncluded) return questions.slice(0, 3);
-  if (questions.length <= 1) return [requiredQuestion];
-  return [...questions.slice(0, 2), requiredQuestion];
+  const timedQuestions = stage === "exploring"
+    ? questions.filter((question) => !mentionsRealityContext(question, lang))
+    : questions;
+  if (timedQuestions.length) return timedQuestions.slice(0, 2);
+  return [lang === "en" ? "What changed next in the dream?" : "梦里接下来发生了什么？"];
 }
 
 export function inferAgentStageFromConversation(
@@ -305,7 +303,10 @@ Agent policy:
 - Use the conversation history as working memory
 - Track missingDetails: what is still unclear and worth asking
 - Track observedSignals: concrete dream signals already present, especially emotions, emotional shifts, body sensations, people, places, symbols, sensory details, or real-life context
-- Prioritize emotional exploration over factual inventory: ask what the user felt, when that feeling changed, where it was felt in the body, and what waking-life situation it may echo
+- Before asking, offer one brief reflection grounded in this dream's specific image, contrast, action, or uncertainty. A tentative possibility is welcome only when clearly framed as a possibility, never a conclusion.
+- Choose the most useful question axis for this particular dream: sequence or turning point, sensory detail, agency or choice, a character or relationship, an unusual contrast, differences across a recurring dream, emotion, or body sensation
+- Vary the axis across turns. Never default to the same emotion + body + real-life checklist
+- If emotion or body sensation is already known, do not ask for it again
 - If the user has provided a dream, the dominant emotion, an emotional turning point, at least one concrete signal, and some real-life or sleep context, prefer ready_to_analyze
 - If the user is still giving fragments, prefer ask_followup
 - If the user seems between states, summarize what is known and ask one precise question
@@ -315,7 +316,7 @@ Tone:
 - Like a private late-night conversation, not therapy and not a generic AI tool
 - Short sentences with breathing room
 - Do not interpret the dream's meaning unless asked${contextLines ? `\n\nPre-sleep context: ${contextLines}` : ""}
-- Reality-context status is ${realityStatus}. If it is answered, declined, or crisis, do not ask a real-life question again.
+- Reality-context status is ${realityStatus}. Never ask about real life during the exploring stage. In deepening, ask only when the link would clearly add value. If status is answered, declined, or crisis, do not ask again.
 - Interaction mode is ${interactionMode}. Sensitive-detail boundary is ${sensitiveBoundary}. Never ask for event details when that boundary is true.
 - If the user may imminently harm themselves, pause dream exploration. Respond directly and compassionately, encourage immediate local emergency/crisis help and contact with a trusted person, and ask only about immediate safety.
 
@@ -327,9 +328,10 @@ Return ONLY valid JSON:
 Question rules:
 - 0 questions when nextAction is ready_to_analyze
 - 1 question when nextAction is summarize
-- 1-3 questions when nextAction is ask_followup
-- Most questions should focus on emotion, emotional turning points, physical feeling, or real-life triggers
-- One follow-up MUST ask whether this dream connects to anything that has happened in the user's real life recently, unless that has already been answered
+- 1-2 questions when nextAction is ask_followup; prefer one strong question over a checklist
+- Questions must use details from this dream and should not be interchangeable with another dream
+- Do not combine emotion, body sensation, and real-life connection as a routine trio
+- A real-life question is optional and belongs only in the deepening stage
 - Each question max 20 words`;
   }
 
@@ -345,7 +347,10 @@ Agent 策略：
 - 把对话历史当作工作记忆
 - 维护 missingDetails：仍然模糊、值得继续问的细节
 - 维护 observedSignals：已经出现的具体梦境线索，尤其是情绪、情绪转折、身体感受、人物、地点、意象、感官细节、现实生活关联
-- 追问优先关注情绪，而不是单纯补事实：问用户当时什么感受、情绪何时变化、身体哪里有感觉、它可能呼应了现实中的什么处境
+- 提问前，先根据这场梦独有的意象、反差、动作或不确定处，给一句简短观察。可以提出一种可能性，但必须明确它只是可能，不是结论
+- 每轮只选择最有价值的一个追问方向：事件顺序或转折、感官细节、行动与选择、人物关系、异常反差、重复梦的变化、情绪或身体感受
+- 不同轮次要更换追问方向，绝不默认使用“情绪 + 身体 + 现实关联”的固定清单
+- 用户已经说过情绪或身体感受时，不要再问一遍
 - 如果用户已经提供梦境、主导情绪、情绪转折、至少一个具体线索，以及现实生活或睡眠前情境，优先 ready_to_analyze
 - 如果用户仍在给片段，优先 ask_followup
 - 如果状态介于两者之间，先 summarize，再问一个精确问题
@@ -355,7 +360,7 @@ Agent 策略：
 - 像深夜里的私人对话，不是心理咨询或通用 AI 工具
 - 句子短一点，留出余白
 - 不要主动解释梦的含义，除非用户明确要求${contextLines ? `\n\n用户的睡前情境：\n${contextLines}` : ""}
-- 当前现实关联状态是 ${realityStatus}。如果状态为 answered、declined 或 crisis，不要再问现实关联。
+- 当前现实关联状态是 ${realityStatus}。exploring 阶段绝不问现实关联；deepening 阶段也只有在确实能增加价值时才问。如果状态为 answered、declined 或 crisis，不要再问。
 - 当前互动模式是 ${interactionMode}。敏感细节边界为 ${sensitiveBoundary}；为 true 时绝不追问事件细节。
 - 如果用户可能马上伤害自己，暂停梦境探索。直接、温和地回应，鼓励立即联系当地急救/危机支持和可信任的人，只询问当下是否安全。
 
@@ -367,9 +372,10 @@ Agent 策略：
 问题规则：
 - nextAction 为 ready_to_analyze 时，questions 返回 []
 - nextAction 为 summarize 时，只问 1 个问题
-- nextAction 为 ask_followup 时，问 1 到 3 个问题
-- 大多数追问应聚焦情绪、情绪转折、身体感受或现实触发
-- 除非用户已经回答过现实关联，否则必须包含这一条追问：「这跟你最近现实生活所发生的事情，有没有什么关系？」
+- nextAction 为 ask_followup 时，问 1 到 2 个问题；宁可问一个好问题，也不要列清单
+- 问题必须使用这场梦的具体细节，不能换到任何梦里都成立
+- 不要把情绪、身体感受、现实关联组合成固定三连问
+- 现实关联是可选项，只能在 deepening 阶段出现
 - 每个追问不超过 20 字`;
 }
 
@@ -395,7 +401,7 @@ export function sanitizeDreamAgentResult(
 
   return {
     message: limitText(data.message ?? "……", 1000) || "……",
-    questions: maxQuestions === 0 ? [] : ensureRealityQuestion(cleanedQuestions, lang, conversationContext).slice(0, maxQuestions),
+    questions: maxQuestions === 0 ? [] : applyQuestionTimingPolicy(cleanedQuestions, lang, normalizedStage, conversationContext).slice(0, maxQuestions),
     stage: normalizedStage,
     nextAction,
     memory,
