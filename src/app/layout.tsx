@@ -37,6 +37,13 @@ export default function RootLayout({
       className={`h-full antialiased ${cormorant.variable} ${courierPrime.variable}`}
       suppressHydrationWarning
     >
+      <head>
+        <link rel="preconnect" href="https://api.fontshare.com" />
+        <link
+          rel="stylesheet"
+          href="https://api.fontshare.com/v2/css?f[]=general-sans@400,500,600&display=swap"
+        />
+      </head>
       <body className="min-h-full flex flex-col">
         <SessionProvider>
           <LanguageProvider>{children}</LanguageProvider>

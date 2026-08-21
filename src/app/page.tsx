@@ -4,11 +4,11 @@ import Image from "next/image";
 import Link from "next/link";
 import type { PointerEvent } from "react";
 import { useEffect, useRef } from "react";
-import { useRouter } from "next/navigation";
-import { useLanguage } from "@/contexts/LanguageContext";
 import { LangToggle } from "@/components/LangToggle";
+import { useLanguage } from "@/contexts/LanguageContext";
+import type { Translations } from "@/lib/i18n";
 
-const fragmentClassNames = ["fragment-one", "fragment-two", "fragment-three", "fragment-four", "fragment-five"];
+const SHOW_PRICING_SECTION = false;
 
 const archiveNodeClassNames = ["node-one", "node-two", "node-three", "node-four"];
 
@@ -22,11 +22,63 @@ const sleepNights = [
   { rem: 32, light: 35, deep: 18, awake: 5, logged: true },
 ];
 
+function PricingSection({ landing }: { landing: Translations["landing"] }) {
+  return (
+    <section className="pricing-stream reveal-dream" aria-labelledby="pricing-title">
+      <div className="pricing-copy">
+        <p>{landing.pricingEyebrow}</p>
+        <h2 id="pricing-title">{landing.pricingTitle}</h2>
+        <span>{landing.pricingBody}</span>
+      </div>
+
+      <div className="pricing-reels">
+        {landing.pricingPlans.map((plan) => (
+          <article
+            key={plan.name}
+            className={`pricing-reel ${plan.name.includes("Plus") ? "pricing-reel-plus" : ""}`}
+          >
+            <div className="pricing-reel-head">
+              <span>{plan.badge}</span>
+              <h3>{plan.name}</h3>
+              <p>
+                <strong>{plan.price}</strong>
+                <small>{plan.cadence}</small>
+              </p>
+            </div>
+
+            <ul>
+              {plan.features.map((feature) => (
+                <li key={feature}>{feature}</li>
+              ))}
+            </ul>
+
+            <Link href="/pricing" className="pricing-cta">
+              {plan.cta}
+            </Link>
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 export default function LandingPage() {
-  const { T } = useLanguage();
+  const { lang, T } = useLanguage();
   const L = T.landing;
   const pageRef = useRef<HTMLElement>(null);
-  const router = useRouter();
+  const navItems = SHOW_PRICING_SECTION
+    ? L.navItems
+    : L.navItems.filter((item) => item.href !== "/pricing");
+  const manifesto =
+    lang === "zh"
+      ? [
+          "梦境不总是从清晰开始。它先是一段失焦的街道、一句醒来后还在耳边的话，再慢慢变成可以被回看、显影和理解的线索。",
+          "Dream Reel 是你的梦境影像档案：记录晨间碎片，读出情绪与重复意象，再把那些说不清的感觉变成一帧可以停留的画面。",
+        ]
+      : [
+          "Dreams rarely begin with clarity. First comes a blurred street, a sentence still ringing after waking, then a trace you can revisit, develop, and understand.",
+          "Dream Reel is a cinematic archive for your inner life: capture morning fragments, surface mood and recurring symbols, and turn the hard-to-name feeling into a frame that stays.",
+        ];
 
   useEffect(() => {
     const root = pageRef.current;
@@ -45,12 +97,6 @@ export default function LandingPage() {
     return () => observer.disconnect();
   }, []);
 
-  const openRoute = (href: string) => (event: React.MouseEvent<HTMLAnchorElement>) => {
-    if (!href.startsWith("/")) return;
-    event.preventDefault();
-    router.push(href);
-  };
-
   const handlePointerMove = (event: PointerEvent<HTMLElement>) => {
     const rect = event.currentTarget.getBoundingClientRect();
     const x = (event.clientX - rect.left) / rect.width - 0.5;
@@ -59,130 +105,68 @@ export default function LandingPage() {
     event.currentTarget.style.setProperty("--my", y.toFixed(3));
   };
 
-  const handleNavPointer = (event: PointerEvent<HTMLElement>) => {
-    const links = document.querySelectorAll<HTMLAnchorElement>("[data-top-nav-link]");
-
-    for (const link of links) {
-      const rect = link.getBoundingClientRect();
-      const hitPadding = 10;
-      const isInsideX =
-        event.clientX >= rect.left - hitPadding && event.clientX <= rect.right + hitPadding;
-      const isInsideY =
-        event.clientY >= rect.top - hitPadding && event.clientY <= rect.bottom + hitPadding;
-
-      if (isInsideX && isInsideY) {
-        event.preventDefault();
-        router.push(new URL(link.href).pathname);
-        return;
-      }
-    }
-  };
-
   return (
-    <main
-      ref={pageRef}
-      className="dream-landing"
-      onPointerMove={handlePointerMove}
-      onPointerUpCapture={handleNavPointer}
-    >
-      <div className="dream-sky" aria-hidden>
-        <span className="moon-glow" />
-        <span className="dream-cloud cloud-one" />
-        <span className="dream-cloud cloud-two" />
-        <span className="dream-cloud cloud-three" />
-        <span className="film-ribbon ribbon-one" />
-        <span className="film-ribbon ribbon-two" />
-        <span className="memory-page page-one" />
-        <span className="memory-page page-two" />
-        <span className="bedroom-window" />
-        <span className="landing-particle particle-one" />
-        <span className="landing-particle particle-two" />
-        <span className="landing-particle particle-three" />
-        <span className="landing-particle particle-four" />
-      </div>
+    <main ref={pageRef} className="dream-landing dream-reel-landing" onPointerMove={handlePointerMove}>
+      <div className="reel-page-bg" aria-hidden />
 
-      <nav className="landing-nav" aria-label="Main navigation">
-        <Link
-          href="/"
-          className="landing-logo"
-          aria-label="Dream Reel home"
-          data-top-nav-link
-          onClick={openRoute("/")}
-        >
-          <Image src="/dream-reel-logo.png" alt="" aria-hidden width={36} height={36} className="logo-img" />
-          <span>Dream Reel</span>
-        </Link>
+      <section className="reel-hero" aria-label="Dream Reel landing">
+        <Image
+          src="/dream-reel-landing-v2.png"
+          alt=""
+          aria-hidden
+          fill
+          priority
+          sizes="100vw"
+          className="reel-hero-image"
+        />
 
-        <div className="nav-center">
-          {L.navItems.map((item) => (
-            <a
-              key={item.label}
-              href={item.href}
-              data-top-nav-link
-              onClick={openRoute(item.href)}
-            >
-              {item.label}
-            </a>
-          ))}
+        <div className="reel-atmosphere" aria-hidden>
+          <span className="reel-orbit reel-orbit-one" />
+          <span className="reel-orbit reel-orbit-two" />
+          <span className="reel-star reel-star-one" />
+          <span className="reel-star reel-star-two" />
+          <span className="reel-star reel-star-three" />
+          <span className="reel-figure-glow" />
         </div>
 
-        <div className="landing-nav-actions">
-          <LangToggle className="nav-cta" />
-          <a
-            href="/journal"
-            className="nav-cta"
-            data-top-nav-link
-            onClick={openRoute("/journal")}
-          >
-            {L.navCta}
-          </a>
-        </div>
-      </nav>
-
-      <section className="hero-section immersive-hero">
-        <div className="hero-copy">
-          <p className="hero-kicker">{L.heroKicker}</p>
-          <h1>DREAM REEL</h1>
-          <p className="hero-subtitle">{L.heroSubtitle}</p>
-          <div className="hero-actions">
-            <Link href="/journal" className="hero-button hero-button-primary">
-              {L.heroCta1}
-            </Link>
-            <Link href="/archive" className="hero-button hero-button-secondary">
-              {L.heroCta2}
-            </Link>
+        <nav className="reel-nav" aria-label="Main navigation">
+          <div className="reel-nav-links">
+            {navItems.map((item) => (
+              <Link key={item.label} href={item.href}>
+                {item.label}
+              </Link>
+            ))}
           </div>
-        </div>
 
-        <div className="hero-memory-field" aria-label="Dream recording preview">
-          {/* Scattered polaroid cards behind the frame */}
-          <span className="cam-photo cam-photo-1" aria-hidden>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/dream-photo-1.jpg" alt="" aria-hidden />
-          </span>
-          <span className="cam-photo cam-photo-2" aria-hidden>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/dream-photo-2.jpg" alt="" aria-hidden />
-          </span>
-          <span className="cam-photo cam-photo-3" aria-hidden>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/dream-photo-3.jpg" alt="" aria-hidden />
-          </span>
-
-          {/* Floating dream fragments */}
-          {L.heroFragments.map((text, i) => (
-            <span key={i} className={`hero-fragment ${fragmentClassNames[i]}`} aria-hidden>
-              {text}
-            </span>
-          ))}
-
-          {/* Film still — main focal image */}
-          <div className="hero-film-still" aria-hidden>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/dream-photo-4.jpg" alt="" aria-hidden />
-            <span className="hero-film-caption">2024 · 03 · 14 · 04:18</span>
+          <div className="reel-nav-right">
+            <LangToggle className="reel-lang" />
           </div>
+        </nav>
+
+        <div className="reel-hero-grid">
+          <div className="reel-title-block">
+            <p>{L.heroKicker}</p>
+            <h1>
+              {lang === "zh" ? (
+                <>Dream <em>Reel</em></>
+              ) : (
+                <>Dream <em>Reel</em></>
+              )}
+            </h1>
+            <span>{L.heroSubtitle}</span>
+          </div>
+
+          <div className="reel-primary-action">
+            <Link href="/journal">{L.heroCta1}</Link>
+          </div>
+
+          <aside className="reel-manifesto" aria-label="Dream Reel introduction">
+            {manifesto.map((paragraph) => (
+              <p key={paragraph}>{paragraph}</p>
+            ))}
+          </aside>
         </div>
+
       </section>
 
       <section className="features-section" aria-label="Features">
@@ -306,24 +290,7 @@ export default function LandingPage() {
           </div>
         </section>
 
-        <section className="voices-stream" aria-labelledby="voices-title">
-          {(L.voicesEyebrow || L.voicesTitle) && (
-            <div className="voices-intro reveal-dream">
-              {L.voicesEyebrow ? <p>{L.voicesEyebrow}</p> : null}
-              {L.voicesTitle ? <h2 id="voices-title">{L.voicesTitle}</h2> : null}
-            </div>
-          )}
-
-          <div className="voice-current">
-            {L.voices.map((voice, i) => (
-              <article key={i} className="voice-item reveal-dream">
-                <h3>{voice.name}</h3>
-                <span>{voice.thought}</span>
-                {"source" in voice && voice.source ? <small>{voice.source}</small> : null}
-              </article>
-            ))}
-          </div>
-        </section>
+        {SHOW_PRICING_SECTION ? <PricingSection landing={L} /> : null}
       </section>
     </main>
   );
