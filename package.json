@@ -11,7 +11,10 @@
     "test": "vitest run",
     "test:unit": "vitest run tests/unit",
     "test:integration": "vitest run tests/integration",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "eval:agent": "tsx evals/dream-agent/run.ts",
+    "eval:agent:replay": "tsx evals/dream-agent/replay.ts",
+    "eval:agent:review-pack": "tsx evals/dream-agent/prepare-review.ts"
   },
   "dependencies": {
     "@auth/pg-adapter": "^1.11.3",
@@ -37,6 +40,7 @@
     "eslint": "^9",
     "eslint-config-next": "^16.3.0",
     "tailwindcss": "^3.4.19",
+    "tsx": "^4.23.12",
     "typescript": "^5",
     "vitest": "^4.1.10"
   }
