@@ -64,6 +64,7 @@ export type DreamEntry = {
   locations: string[];
   symbols: string[];
   imageUrl: string | null;
+  thumbnailUrl: string | null;
   assetStatus: string | null;
   // Sleep tracking
   sleepStart: string | null;
@@ -115,6 +116,7 @@ function mapDreamRow(row: Record<string, unknown>): DreamEntry {
     locations: Array.isArray(row.locations) ? (row.locations as string[]) : [],
     symbols: Array.isArray(row.symbols) ? (row.symbols as string[]) : [],
     imageUrl: row.image_url == null ? null : String(row.image_url),
+    thumbnailUrl: getThumbnailUrl(row.image_url == null ? null : String(row.image_url)),
     assetStatus: row.asset_status == null ? null : String(row.asset_status),
     sleepStart: row.sleep_start == null ? null : String(row.sleep_start),
     wakeTime: row.wake_time == null ? null : String(row.wake_time),
@@ -126,7 +128,79 @@ function mapDreamRow(row: Record<string, unknown>): DreamEntry {
   };
 }
 
-export async function createDreamEntry(input: DreamEntryInput, userId?: number): Promise<DreamEntry> {
+function getThumbnailUrl(imageUrl: string | null): string | null {
+  if (!imageUrl || !imageUrl.includes("/dream-images/")) return imageUrl;
+  return imageUrl.endsWith(".png")
+    ? imageUrl.replace(/\.png$/, "-thumb.webp")
+    : imageUrl;
+}
+
+type DreamCursor = { capturedAt: string; id: number };
+
+function decodeDreamCursor(cursor: string): DreamCursor {
+  try {
+    const parsed = JSON.parse(Buffer.from(cursor, "base64url").toString("utf8")) as Partial<DreamCursor>;
+    const capturedAt = new Date(parsed.capturedAt ?? "");
+    if (!Number.isInteger(parsed.id) || Number(parsed.id) <= 0 || Number.isNaN(capturedAt.getTime())) {
+      throw new Error("invalid");
+    }
+    return { capturedAt: capturedAt.toISOString(), id: Number(parsed.id) };
+  } catch {
+    throw new RangeError("Invalid archive cursor");
+  }
+}
+
+function encodeDreamCursor(entry: DreamEntry): string {
+  return Buffer.from(JSON.stringify({
+    capturedAt: entry.capturedAt,
+    id: entry.id,
+  })).toString("base64url");
+}
+
+export type DreamEntryPage = {
+  entries: DreamEntry[];
+  nextCursor: string | null;
+};
+
+export async function listDreamEntriesPage(
+  userId: number,
+  options: { limit?: number; cursor?: string | null } = {},
+): Promise<DreamEntryPage> {
+  await ensureSchema();
+  const pool = getPool();
+  const limit = Math.min(Math.max(options.limit ?? 24, 1), 100);
+  const cursor = options.cursor ? decodeDreamCursor(options.cursor) : null;
+  const result = cursor
+    ? await pool.query(
+        `
+          SELECT * FROM dream_entries
+          WHERE user_id = $1
+            AND (captured_at, id) < ($2::timestamptz, $3::bigint)
+          ORDER BY captured_at DESC, id DESC
+          LIMIT $4
+        `,
+        [userId, cursor.capturedAt, cursor.id, limit + 1],
+      )
+    : await pool.query(
+        `
+          SELECT * FROM dream_entries
+          WHERE user_id = $1
+          ORDER BY captured_at DESC, id DESC
+          LIMIT $2
+        `,
+        [userId, limit + 1],
+      );
+  const mapped = result.rows.map((row) => mapDreamRow(row as Record<string, unknown>));
+  const entries = mapped.slice(0, limit);
+  return {
+    entries,
+    nextCursor: mapped.length > limit && entries.length
+      ? encodeDreamCursor(entries[entries.length - 1])
+      : null,
+  };
+}
+
+export async function createDreamEntry(input: DreamEntryInput, userId: number): Promise<DreamEntry> {
   await ensureSchema();
   const pool = getPool();
   const cleanText = input.cleanText ?? input.rawText;
@@ -184,7 +258,7 @@ export async function createDreamEntry(input: DreamEntryInput, userId?: number):
       input.preSleepActivity ?? null,
       input.sleepInsight ?? null,
       input.title ?? "",
-      userId ?? null,
+      userId,
       input.visualBrief ?? null,
     ],
   );
@@ -192,7 +266,7 @@ export async function createDreamEntry(input: DreamEntryInput, userId?: number):
   return mapDreamRow(result.rows[0] as Record<string, unknown>);
 }
 
-export async function updateDreamEntry(input: DreamEntryUpdateInput, userId?: number): Promise<DreamEntry> {
+export async function updateDreamEntry(input: DreamEntryUpdateInput, userId: number): Promise<DreamEntry> {
   await ensureSchema();
   const pool = getPool();
   const cleanText = input.cleanText ?? input.rawText;
@@ -225,7 +299,7 @@ export async function updateDreamEntry(input: DreamEntryUpdateInput, userId?: nu
         title = $20,
         visual_brief = $21
       WHERE id = $1
-        AND ($22::integer IS NULL OR user_id = $22)
+        AND user_id = $22
       RETURNING *;
     `,
     [
@@ -250,7 +324,7 @@ export async function updateDreamEntry(input: DreamEntryUpdateInput, userId?: nu
       input.sleepInsight ?? null,
       input.title ?? "",
       input.visualBrief ?? null,
-      userId ?? null,
+      userId,
     ],
   );
 
@@ -261,7 +335,7 @@ export async function updateDreamEntry(input: DreamEntryUpdateInput, userId?: nu
   return mapDreamRow(result.rows[0] as Record<string, unknown>);
 }
 
-export async function deleteDreamEntry(id: number, userId?: number): Promise<void> {
+export async function deleteDreamEntry(id: number, userId: number): Promise<void> {
   await ensureSchema();
   const pool = getPool();
 
@@ -269,9 +343,9 @@ export async function deleteDreamEntry(id: number, userId?: number): Promise<voi
     `
       DELETE FROM dream_entries
       WHERE id = $1
-        AND ($2::integer IS NULL OR user_id = $2);
+        AND user_id = $2;
     `,
-    [id, userId ?? null],
+    [id, userId],
   );
 
   if (result.rowCount === 0) {
@@ -292,20 +366,15 @@ export async function countTodayDreamEntries(userId: number): Promise<number> {
   return parseInt(result.rows[0]?.count ?? "0", 10);
 }
 
-export async function listDreamEntries(limit = 50, userId?: number): Promise<DreamEntry[]> {
+export async function listDreamEntries(userId: number, limit = 50): Promise<DreamEntry[]> {
   await ensureSchema();
   const pool = getPool();
   const safeLimit = Math.min(Math.max(limit, 1), 10000);
 
-  const result = userId != null
-    ? await pool.query(
-        `SELECT * FROM dream_entries WHERE user_id = $1 ORDER BY captured_at DESC LIMIT $2;`,
-        [userId, safeLimit],
-      )
-    : await pool.query(
-        `SELECT * FROM dream_entries ORDER BY captured_at DESC LIMIT $1;`,
-        [safeLimit],
-      );
+  const result = await pool.query(
+    `SELECT * FROM dream_entries WHERE user_id = $1 ORDER BY captured_at DESC LIMIT $2;`,
+    [userId, safeLimit],
+  );
 
   return result.rows.map((row) => mapDreamRow(row as Record<string, unknown>));
 }
@@ -313,22 +382,21 @@ export async function listDreamEntries(limit = 50, userId?: number): Promise<Dre
 async function getTopTextField(
   field: "mood" | "people" | "locations" | "symbols",
   weekStart: Date,
-  userId?: number,
+  userId: number,
 ): Promise<CountItem[]> {
   const pool = getPool();
-  const userFilter = userId != null ? `AND user_id = ${userId}` : "";
 
   if (field === "mood") {
     const result = await pool.query(
       `
         SELECT mood AS item, COUNT(*)::int AS count
         FROM dream_entries
-        WHERE captured_at >= $1 AND mood <> '' ${userFilter}
+        WHERE captured_at >= $1 AND mood <> '' AND user_id = $2
         GROUP BY mood
         ORDER BY count DESC, item ASC
         LIMIT 5;
       `,
-      [weekStart],
+      [weekStart, userId],
     );
     return result.rows.map((row) => ({ item: String(row.item), count: Number(row.count) }));
   }
@@ -337,28 +405,27 @@ async function getTopTextField(
     `
       SELECT item, COUNT(*)::int AS count
       FROM dream_entries, unnest(${field}) AS item
-      WHERE captured_at >= $1 AND item <> '' ${userFilter}
+      WHERE captured_at >= $1 AND item <> '' AND user_id = $2
       GROUP BY item
       ORDER BY count DESC, item ASC
       LIMIT 5;
     `,
-    [weekStart],
+    [weekStart, userId],
   );
   return result.rows.map((row) => ({ item: String(row.item), count: Number(row.count) }));
 }
 
-export async function getWeeklyRecap(userId?: number): Promise<WeeklyRecap> {
+export async function getWeeklyRecap(userId: number): Promise<WeeklyRecap> {
   await ensureSchema();
   const pool = getPool();
   const weekStartResult = await pool.query("SELECT date_trunc('week', NOW()) AS week_start;");
   const weekStart = new Date(String(weekStartResult.rows[0].week_start));
-  const userFilter = userId != null ? `AND user_id = ${userId}` : "";
 
   const [countResult, topMoods, topPeople, topLocations, topSymbols, stressByMoodResult] =
     await Promise.all([
       pool.query(
-        `SELECT COUNT(*)::int AS entry_count FROM dream_entries WHERE captured_at >= $1 ${userFilter};`,
-        [weekStart],
+        `SELECT COUNT(*)::int AS entry_count FROM dream_entries WHERE captured_at >= $1 AND user_id = $2;`,
+        [weekStart, userId],
       ),
       getTopTextField("mood", weekStart, userId),
       getTopTextField("people", weekStart, userId),
@@ -371,12 +438,12 @@ export async function getWeeklyRecap(userId?: number): Promise<WeeklyRecap> {
             COUNT(*)::int AS count,
             ROUND(AVG(stress_score)::numeric, 2)::float8 AS avg_stress
           FROM dream_entries
-          WHERE captured_at >= $1 AND mood <> '' AND stress_score IS NOT NULL ${userFilter}
+          WHERE captured_at >= $1 AND mood <> '' AND stress_score IS NOT NULL AND user_id = $2
           GROUP BY mood
           ORDER BY count DESC, item ASC
           LIMIT 5;
         `,
-        [weekStart],
+        [weekStart, userId],
       ),
     ]);
 

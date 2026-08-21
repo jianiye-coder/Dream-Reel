@@ -1,5 +1,9 @@
 import { Pool } from "pg";
-import { encryptDreamText, isEncryptedDreamText } from "./dreamTextEncryption";
+import {
+  getCurrentDreamEncryptionKeyId,
+  needsDreamTextReencryption,
+  reencryptDreamText,
+} from "./dreamTextEncryption";
 
 declare global {
   var dreamPool: Pool | undefined;
@@ -28,42 +32,195 @@ export function getPool(): Pool {
 
 // Bump this whenever you add new migrations. ensureSchema will skip all DDL
 // once this version is recorded in the DB, making cold starts near-instant.
-const SCHEMA_VERSION = 2;
+const SCHEMA_VERSION = 7;
 
 let schemaReady = false;
 
-async function encryptLegacyDreamTextRows(pool: Pool): Promise<void> {
-  while (true) {
-    const result = await pool.query<{ id: string; raw_text: string; clean_text: string }>(
+async function normalizeUserEmails(pool: Pool): Promise<void> {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    await client.query("SELECT pg_advisory_xact_lock(7240318)");
+    const duplicates = await client.query<{
+      normalized_email: string;
+      user_ids: number[];
+    }>(
       `
-        SELECT id, raw_text, clean_text
-        FROM dream_entries
-        WHERE raw_text NOT LIKE 'dre1:%'
-           OR clean_text NOT LIKE 'dre1:%'
-        LIMIT 500;
+        SELECT LOWER(TRIM(email)) AS normalized_email,
+               ARRAY_AGG(id ORDER BY id) AS user_ids
+        FROM users
+        WHERE email IS NOT NULL
+        GROUP BY LOWER(TRIM(email))
+        HAVING COUNT(*) > 1
       `,
     );
 
-    if (result.rows.length === 0) {
-      return;
+    for (const group of duplicates.rows) {
+      const [canonicalId, ...duplicateIds] = group.user_ids.map(Number);
+      if (!canonicalId || duplicateIds.length === 0) continue;
+
+      await client.query(
+        `UPDATE dream_entries SET user_id = $1 WHERE user_id = ANY($2::int[])`,
+        [canonicalId, duplicateIds],
+      );
+      await client.query(
+        `UPDATE accounts SET "userId" = $1 WHERE "userId" = ANY($2::int[])`,
+        [canonicalId, duplicateIds],
+      );
+      await client.query(
+        `UPDATE sessions SET "userId" = $1 WHERE "userId" = ANY($2::int[])`,
+        [canonicalId, duplicateIds],
+      );
+      await client.query(
+        `UPDATE subscriptions SET user_id = $1 WHERE user_id = ANY($2::int[])`,
+        [canonicalId, duplicateIds],
+      );
+
+      const duplicateUsage = await client.query<{
+        plan: string;
+        period_start: Date;
+        period_end: Date;
+        dream_entries_used: number;
+        analysis_used: number;
+        image_generations_used: number;
+      }>(
+        `
+          SELECT plan, period_start, period_end, dream_entries_used,
+                 analysis_used, image_generations_used
+          FROM usage_periods
+          WHERE user_id = ANY($1::int[])
+        `,
+        [duplicateIds],
+      );
+      for (const usage of duplicateUsage.rows) {
+        await client.query(
+          `
+            INSERT INTO usage_periods (
+              user_id, plan, period_start, period_end,
+              dream_entries_used, analysis_used, image_generations_used
+            )
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
+            ON CONFLICT (user_id, period_start, period_end)
+            DO UPDATE SET
+              dream_entries_used = usage_periods.dream_entries_used + EXCLUDED.dream_entries_used,
+              analysis_used = usage_periods.analysis_used + EXCLUDED.analysis_used,
+              image_generations_used = usage_periods.image_generations_used + EXCLUDED.image_generations_used,
+              updated_at = NOW()
+          `,
+          [
+            canonicalId,
+            usage.plan,
+            usage.period_start,
+            usage.period_end,
+            usage.dream_entries_used,
+            usage.analysis_used,
+            usage.image_generations_used,
+          ],
+        );
+      }
+      await client.query(
+        `DELETE FROM usage_periods WHERE user_id = ANY($1::int[])`,
+        [duplicateIds],
+      );
+
+      const credits = await client.query<{
+        bonus: number;
+        used_today: number;
+        reset_date: Date;
+      }>(
+        `
+          SELECT COALESCE(SUM(bonus), 0)::int AS bonus,
+                 COALESCE(SUM(used_today), 0)::int AS used_today,
+                 MAX(reset_date) AS reset_date
+          FROM user_credits
+          WHERE user_id = ANY($1::int[])
+        `,
+        [[canonicalId, ...duplicateIds]],
+      );
+      if (credits.rows[0]?.reset_date) {
+        await client.query(
+          `
+            INSERT INTO user_credits (user_id, bonus, used_today, reset_date)
+            VALUES ($1, $2, $3, $4)
+            ON CONFLICT (user_id)
+            DO UPDATE SET
+              bonus = EXCLUDED.bonus,
+              used_today = EXCLUDED.used_today,
+              reset_date = EXCLUDED.reset_date
+          `,
+          [
+            canonicalId,
+            credits.rows[0].bonus,
+            credits.rows[0].used_today,
+            credits.rows[0].reset_date,
+          ],
+        );
+      }
+      await client.query(
+        `DELETE FROM user_credits WHERE user_id = ANY($1::int[])`,
+        [duplicateIds],
+      );
+      await client.query(
+        `DELETE FROM users WHERE id = ANY($1::int[])`,
+        [duplicateIds],
+      );
+      await client.query(
+        `UPDATE users SET email = $2 WHERE id = $1`,
+        [canonicalId, group.normalized_email],
+      );
     }
 
-    for (const row of result.rows) {
-      const encryptedRawText = isEncryptedDreamText(row.raw_text)
-        ? row.raw_text
-        : encryptDreamText(row.raw_text);
-      const encryptedCleanText = isEncryptedDreamText(row.clean_text)
-        ? row.clean_text
-        : encryptDreamText(row.clean_text);
+    await client.query(`UPDATE users SET email = LOWER(TRIM(email)) WHERE email IS NOT NULL`);
+    await client.query(`CREATE UNIQUE INDEX IF NOT EXISTS users_email_lower_unique ON users (LOWER(email))`);
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+}
 
-      await pool.query(
+export async function migrateDreamTextEncryption(pool: Pool): Promise<void> {
+  const currentPrefix = `dre2:${getCurrentDreamEncryptionKeyId()}:`;
+  while (true) {
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+      const result = await client.query<{ id: string; raw_text: string; clean_text: string }>(
         `
-          UPDATE dream_entries
-          SET raw_text = $2, clean_text = $3
-          WHERE id = $1;
+          SELECT id, raw_text, clean_text
+          FROM dream_entries
+          WHERE LEFT(raw_text, LENGTH($1)) <> $1
+             OR LEFT(clean_text, LENGTH($1)) <> $1
+          ORDER BY id
+          FOR UPDATE SKIP LOCKED
+          LIMIT 500
         `,
-        [row.id, encryptedRawText, encryptedCleanText],
+        [currentPrefix],
       );
+
+      if (result.rows.length === 0) {
+        await client.query("COMMIT");
+        return;
+      }
+
+      for (const row of result.rows) {
+        await client.query(
+          "UPDATE dream_entries SET raw_text = $2, clean_text = $3 WHERE id = $1",
+          [
+            row.id,
+            needsDreamTextReencryption(row.raw_text) ? reencryptDreamText(row.raw_text) : row.raw_text,
+            needsDreamTextReencryption(row.clean_text) ? reencryptDreamText(row.clean_text) : row.clean_text,
+          ],
+        );
+      }
+      await client.query("COMMIT");
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
     }
   }
 }
@@ -87,7 +244,7 @@ export async function ensureSchema(): Promise<void> {
     [SCHEMA_VERSION],
   );
   if (rows.length > 0) {
-    await encryptLegacyDreamTextRows(pool);
+    await migrateDreamTextEncryption(pool);
     schemaReady = true;
     return;
   }
@@ -120,7 +277,23 @@ export async function ensureSchema(): Promise<void> {
         provider TEXT NOT NULL,
         type TEXT NOT NULL,
         payload JSONB NOT NULL,
+        status TEXT NOT NULL DEFAULT 'processed',
+        processed_at TIMESTAMPTZ,
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `),
+    pool.query(`
+      CREATE TABLE IF NOT EXISTS ai_rate_limits (
+        scope_key TEXT PRIMARY KEY,
+        window_start TIMESTAMPTZ NOT NULL,
+        request_count INTEGER NOT NULL DEFAULT 0
+      );
+    `),
+    pool.query(`
+      CREATE TABLE IF NOT EXISTS auth_rate_limits (
+        scope_key TEXT PRIMARY KEY,
+        window_start TIMESTAMPTZ NOT NULL,
+        request_count INTEGER NOT NULL DEFAULT 0
       );
     `),
   ]);
@@ -210,6 +383,19 @@ export async function ensureSchema(): Promise<void> {
         UNIQUE(user_id, period_start, period_end)
       );
     `),
+    pool.query(`
+      CREATE TABLE IF NOT EXISTS agent_feedback (
+        id BIGSERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        interaction_id UUID NOT NULL,
+        rating TEXT NOT NULL CHECK (rating IN ('up', 'down')),
+        reason TEXT CHECK (reason IS NULL OR reason IN ('repetitive', 'irrelevant', 'too_many_questions', 'unsafe', 'other')),
+        variant TEXT NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        UNIQUE(user_id, interaction_id)
+      );
+    `),
   ]);
 
   // All ALTER TABLE and CREATE INDEX in parallel (idempotent)
@@ -223,12 +409,20 @@ export async function ensureSchema(): Promise<void> {
     pool.query("ALTER TABLE dream_entries ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id) ON DELETE SET NULL;"),
     pool.query("ALTER TABLE dream_entries ADD COLUMN IF NOT EXISTS title TEXT;"),
     pool.query("ALTER TABLE dream_entries ADD COLUMN IF NOT EXISTS visual_brief TEXT;"),
+    pool.query("ALTER TABLE payment_events ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'processed';"),
+    pool.query("ALTER TABLE payment_events ADD COLUMN IF NOT EXISTS processed_at TIMESTAMPTZ;"),
     pool.query("CREATE INDEX IF NOT EXISTS idx_dream_entries_captured_at ON dream_entries (captured_at DESC);"),
     pool.query("CREATE INDEX IF NOT EXISTS idx_dream_entries_user_id ON dream_entries (user_id);"),
     pool.query("CREATE INDEX IF NOT EXISTS idx_subscriptions_user_id ON subscriptions (user_id);"),
     pool.query("CREATE INDEX IF NOT EXISTS idx_subscriptions_customer ON subscriptions (provider, provider_customer_id);"),
     pool.query("CREATE INDEX IF NOT EXISTS idx_usage_periods_user_period ON usage_periods (user_id, period_start, period_end);"),
+    pool.query("CREATE INDEX IF NOT EXISTS idx_ai_rate_limits_window_start ON ai_rate_limits (window_start);"),
+    pool.query("CREATE INDEX IF NOT EXISTS idx_auth_rate_limits_window_start ON auth_rate_limits (window_start);"),
+    pool.query("CREATE INDEX IF NOT EXISTS idx_agent_feedback_created_at ON agent_feedback (created_at DESC);"),
+    pool.query("CREATE INDEX IF NOT EXISTS idx_agent_feedback_variant ON agent_feedback (variant, rating);"),
   ]);
+
+  await normalizeUserEmails(pool);
 
   // Record that this schema version is now applied
   await pool.query(
@@ -236,7 +430,7 @@ export async function ensureSchema(): Promise<void> {
     [SCHEMA_VERSION],
   );
 
-  await encryptLegacyDreamTextRows(pool);
+  await migrateDreamTextEncryption(pool);
 
   schemaReady = true;
 }

@@ -1,4 +1,5 @@
 import { ensureSchema, getPool } from "./db";
+import type { PoolClient } from "pg";
 
 export type PlanId = "free" | "plus";
 export type UsageKind = "dream_entries" | "analysis" | "image_generations";
@@ -262,14 +263,69 @@ export async function refundConsumedUsage(usagePeriodId: number, kind: UsageKind
   );
 }
 
+export async function checkAiRateLimit(
+  userId: number,
+  ipAddress: string,
+): Promise<{ allowed: boolean; retryAfterSeconds: number }> {
+  await ensureSchema();
+  const pool = getPool();
+  const client = await pool.connect();
+  const windowSeconds = 60;
+  const scopes = [
+    { key: `user:${userId}`, limit: 12 },
+    { key: `ip:${ipAddress}`, limit: 30 },
+  ];
+
+  try {
+    await client.query("BEGIN");
+    let allowed = true;
+
+    for (const scope of scopes) {
+      const result = await client.query<{ request_count: number }>(
+        `
+          INSERT INTO ai_rate_limits (scope_key, window_start, request_count)
+          VALUES ($1, NOW(), 1)
+          ON CONFLICT (scope_key)
+          DO UPDATE SET
+            window_start = CASE
+              WHEN ai_rate_limits.window_start <= NOW() - ($2 * INTERVAL '1 second') THEN NOW()
+              ELSE ai_rate_limits.window_start
+            END,
+            request_count = CASE
+              WHEN ai_rate_limits.window_start <= NOW() - ($2 * INTERVAL '1 second') THEN 1
+              ELSE ai_rate_limits.request_count + 1
+            END
+          RETURNING request_count
+        `,
+        [scope.key, windowSeconds],
+      );
+      if (Number(result.rows[0]?.request_count ?? 0) > scope.limit) {
+        allowed = false;
+      }
+    }
+
+    await client.query("COMMIT");
+    return { allowed, retryAfterSeconds: windowSeconds };
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
 export async function getStripeCustomerId(userId: number): Promise<string | null> {
   const subscription = await getLatestSubscription(userId);
   return subscription?.provider_customer_id ?? null;
 }
 
-export async function findUserIdForStripeCustomer(customerId: string, subscriptionId?: string | null): Promise<number | null> {
+export async function findUserIdForStripeCustomer(
+  customerId: string,
+  subscriptionId?: string | null,
+  client?: PoolClient,
+): Promise<number | null> {
   await ensureSchema();
-  const result = await getPool().query<{ user_id: number }>(
+  const result = await (client ?? getPool()).query<{ user_id: number }>(
     `
       SELECT user_id
       FROM subscriptions
@@ -295,9 +351,9 @@ export async function upsertStripeSubscription(input: {
   currentPeriodStart?: Date | null;
   currentPeriodEnd?: Date | null;
   cancelAtPeriodEnd?: boolean;
-}) {
+}, client?: PoolClient) {
   await ensureSchema();
-  await getPool().query(
+  await (client ?? getPool()).query(
     `
       INSERT INTO subscriptions (
         user_id, provider, provider_customer_id, provider_subscription_id,
@@ -328,21 +384,44 @@ export async function upsertStripeSubscription(input: {
   );
 }
 
-export async function recordStripeEvent(event: { id: string; type: string; payload: unknown }) {
+export async function processStripeEvent(
+  event: { id: string; type: string; payload: unknown },
+  handler: (client: PoolClient) => Promise<void>,
+): Promise<"processed" | "duplicate"> {
   await ensureSchema();
+  const client = await getPool().connect();
   try {
-    await getPool().query(
+    await client.query("BEGIN");
+    const inserted = await client.query<{ id: string }>(
       `
-        INSERT INTO payment_events (id, provider, type, payload)
-        VALUES ($1, 'stripe', $2, $3)
+        INSERT INTO payment_events (id, provider, type, payload, status)
+        VALUES ($1, 'stripe', $2, $3, 'pending')
+        ON CONFLICT (id) DO NOTHING
+        RETURNING id
       `,
       [event.id, event.type, JSON.stringify(event.payload)],
     );
-    return true;
-  } catch (error) {
-    if (typeof error === "object" && error && "code" in error && error.code === "23505") {
-      return false;
+
+    if (inserted.rows.length === 0) {
+      await client.query("ROLLBACK");
+      return "duplicate";
     }
+
+    await handler(client);
+    await client.query(
+      `
+        UPDATE payment_events
+        SET status = 'processed', processed_at = NOW()
+        WHERE id = $1
+      `,
+      [event.id],
+    );
+    await client.query("COMMIT");
+    return "processed";
+  } catch (error) {
+    await client.query("ROLLBACK");
     throw error;
+  } finally {
+    client.release();
   }
 }

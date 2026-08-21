@@ -6,28 +6,42 @@
     "dev": "next dev --webpack",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:unit": "vitest run tests/unit",
+    "test:integration": "vitest run tests/integration",
+    "test:e2e": "playwright test",
+    "eval:agent": "tsx evals/dream-agent/run.ts",
+    "eval:agent:replay": "tsx evals/dream-agent/replay.ts",
+    "eval:agent:review-pack": "tsx evals/dream-agent/prepare-review.ts"
   },
   "dependencies": {
-    "@auth/pg-adapter": "^1.11.2",
+    "@auth/pg-adapter": "^1.11.3",
+    "@vercel/blob": "^2.6.1",
     "bcryptjs": "^3.0.3",
-    "next": "16.2.3",
-    "next-auth": "^5.0.0-beta.31",
+    "next": "^16.3.0",
+    "next-auth": "^5.0.0-beta.32",
     "pg": "^8.20.0",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
+    "sharp": "^0.35.3",
     "zod": "^4.3.6"
   },
   "devDependencies": {
+    "@playwright/test": "^1.62.1",
     "@types/bcryptjs": "^2.4.6",
     "@types/node": "^20",
     "@types/pg": "^8.20.0",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@vitest/coverage-v8": "^4.1.10",
     "autoprefixer": "^10.5.0",
     "eslint": "^9",
-    "eslint-config-next": "16.2.3",
+    "eslint-config-next": "^16.3.0",
     "tailwindcss": "^3.4.19",
-    "typescript": "^5"
+    "tsx": "^4.23.12",
+    "typescript": "^5",
+    "vitest": "^4.1.10"
   }
 }

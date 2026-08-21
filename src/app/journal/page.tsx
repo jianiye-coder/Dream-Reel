@@ -6,10 +6,13 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import type { DreamAgentMemory, DreamAgentNextAction, DreamAgentStage } from "@/lib/dreamFollowUpAgent";
+import type { DreamAgentResponseMeta } from "@/lib/dreamAgentTelemetry";
 import { getRealityQuestion } from "@/lib/dreamQuestions";
 import { buildDreamImagePrompt } from "@/lib/imagePrompt";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { LangToggle } from "@/components/LangToggle";
+import { getApiErrorMessage } from "@/lib/apiErrors";
+import { shouldFlushLatestSave } from "@/lib/autosave";
 
 type SpeechRecognitionConstructor = new () => SpeechRecognitionLike;
 
@@ -44,6 +47,12 @@ interface ChatMessage {
   stage?: DreamAgentStage;
   nextAction?: DreamAgentNextAction;
   memory?: DreamAgentMemory;
+  meta?: DreamAgentResponseMeta;
+  feedback?: "up" | "down";
+  feedbackReason?: "repetitive" | "irrelevant" | "too_many_questions" | "unsafe" | "other";
+  isError?: boolean;
+  retryText?: string;
+  retryUserId?: string;
 }
 
 interface AnalysisResult {
@@ -158,6 +167,12 @@ export default function JournalPage() {
   const [autoSaveStatus, setAutoSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const savedEntryIdRef = useRef<number | null>(null);
   const isSavingRef = useRef(false);
+  const pendingSaveRef = useRef(false);
+  const saveRevisionRef = useRef(0);
+  const autoSaveLatestRef = useRef<((opts?: {
+    pendingAnalysis?: AnalysisResult;
+    pendingImageUrl?: string | null;
+  }) => Promise<void>) | null>(null);
   const pendingOptsRef = useRef<{ pendingAnalysis?: AnalysisResult; pendingImageUrl?: string | null }>({});
   const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isFirstRenderRef = useRef(true);
@@ -197,7 +212,9 @@ export default function JournalPage() {
         body: JSON.stringify({ lang, currency: lang === "zh" ? "cny" : "usd" }),
       });
       const data = (await res.json()) as { url?: string; error?: string };
-      if (!res.ok || !data.url) throw new Error(data.error || B.checkoutError);
+      if (!res.ok || !data.url) {
+        throw new Error(getApiErrorMessage(data.error, lang, B.checkoutError));
+      }
       window.location.href = data.url;
     } catch (error) {
       setBillingMessage(error instanceof Error ? error.message : B.checkoutError);
@@ -256,7 +273,6 @@ export default function JournalPage() {
         tags: [],
       }),
     );
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [messages, quickText, analysis, imagePromptEdited, mode]);
 
   // Latest questions from most recent AI message
@@ -313,10 +329,12 @@ export default function JournalPage() {
       isFirstRenderRef.current = false;
       return;
     }
+    saveRevisionRef.current += 1;
+    if (isSavingRef.current) pendingSaveRef.current = true;
     if (!hasContent) return;
     if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
     autoSaveTimerRef.current = setTimeout(() => {
-      void autoSave();
+      void autoSaveLatestRef.current?.();
       if (!titleEdited && quickText.length >= 80 && !titleGeneratingRef.current) {
         void generateTitle(quickText);
       }
@@ -329,7 +347,18 @@ export default function JournalPage() {
       if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [quickText, messages]);
+  }, [
+    quickText,
+    quickTitle,
+    messages,
+    dreamDate,
+    sleepStart,
+    wakeTime,
+    sleepQuality,
+    stressScore,
+    preSleepMeal,
+    preSleepActivity,
+  ]);
 
   // Follow the chat inside the message pane without moving the whole page.
   useEffect(() => {
@@ -357,8 +386,13 @@ export default function JournalPage() {
     try {
       const history = messages
         .filter((m) => m.id !== "welcome")
-        .map((m) => ({ role: m.role, content: m.content }));
-      history.push({ role: "user" as const, content: text });
+        .map((m) => ({
+          role: m.role,
+          content: m.content,
+          questions: m.questions,
+          memory: m.memory,
+        }));
+      history.push({ role: "user" as const, content: text, questions: undefined, memory: undefined });
 
       const res = await fetch("/api/chat-dream", {
         method: "POST",
@@ -377,11 +411,12 @@ export default function JournalPage() {
         stage?: DreamAgentStage;
         nextAction?: DreamAgentNextAction;
         memory?: DreamAgentMemory;
+        meta?: DreamAgentResponseMeta;
         error?: string;
       };
 
       if (!res.ok) {
-        throw new Error(data.error ?? J.signalLost);
+        throw new Error(getApiErrorMessage(data.error, lang, J.signalLost));
       }
 
       setMessages((prev) => [
@@ -394,6 +429,7 @@ export default function JournalPage() {
           stage: data.stage,
           nextAction: data.nextAction,
           memory: data.memory,
+          meta: data.meta,
         },
       ]);
     } catch (err) {
@@ -402,12 +438,51 @@ export default function JournalPage() {
         {
           id: `a-${Date.now()}`,
           role: "assistant",
-          content: err instanceof Error ? `${J.signalLost} ${err.message}` : J.signalLost,
+          content: err instanceof Error ? err.message : J.signalLost,
           questions: [],
+          isError: true,
+          retryText: text,
+          retryUserId: userMsg.id,
         },
       ]);
     } finally {
       setIsTyping(false);
+    }
+  }
+
+  function editAndRetry(message: ChatMessage) {
+    setMessages((previous) => previous.filter((item) => item.id !== message.id && item.id !== message.retryUserId));
+    setInput(message.retryText ?? "");
+    requestAnimationFrame(() => inputRef.current?.focus());
+  }
+
+  async function submitAgentFeedback(
+    messageId: string,
+    rating: "up" | "down",
+    reason?: ChatMessage["feedbackReason"],
+  ) {
+    const message = messages.find((item) => item.id === messageId);
+    if (!message?.meta?.feedbackToken) return;
+    const previousRating = message.feedback;
+    const previousReason = message.feedbackReason;
+    setMessages((items) => items.map((item) => item.id === messageId
+      ? { ...item, feedback: rating, feedbackReason: reason }
+      : item));
+    try {
+      const response = await fetch("/api/agent-feedback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          feedbackToken: message.meta.feedbackToken,
+          rating,
+          reason: reason ?? null,
+        }),
+      });
+      if (!response.ok) throw new Error("feedback_failed");
+    } catch {
+      setMessages((items) => items.map((item) => item.id === messageId
+        ? { ...item, feedback: previousRating, feedbackReason: previousReason }
+        : item));
     }
   }
 
@@ -533,7 +608,7 @@ export default function JournalPage() {
       sleepInsight?: string; title?: string; visualBrief?: string; error?: string;
     };
     if (res.status === 402) { router.push("/pricing"); return null as never; }
-    if (!res.ok) throw new Error(data.error ?? J.analyzeError);
+    if (!res.ok) throw new Error(getApiErrorMessage(data.error, lang, J.analyzeError));
 
     return {
       title: data.title ?? "",
@@ -585,7 +660,7 @@ export default function JournalPage() {
           {
             id: `aerr-${Date.now()}`,
             role: "assistant",
-            content: `${J.analyzeError}${err instanceof Error ? err.message : lang === "zh" ? "请稍后再试" : "please try again"}`,
+            content: err instanceof Error ? err.message : J.analyzeError,
             questions: [],
           },
         ]);
@@ -631,7 +706,13 @@ export default function JournalPage() {
       });
       const data = (await res.json()) as { imageUrl?: string; error?: string };
       if (res.status === 402) { router.push("/pricing"); return; }
-      if (!res.ok) throw new Error(data.error ?? "图片生成失败，请稍后重试。");
+      if (!res.ok) {
+        throw new Error(getApiErrorMessage(
+          data.error,
+          lang,
+          lang === "zh" ? "图片生成失败，请稍后重试。" : "Image generation failed. Please try again.",
+        ));
+      }
       if (data.imageUrl) {
         setGeneratedImageUrl(data.imageUrl);
         setChatUnlocked(true);
@@ -640,7 +721,13 @@ export default function JournalPage() {
       }
     } catch (err) {
       console.error(err);
-      setImageError(err instanceof Error ? err.message : "图片生成失败，请稍后重试。");
+      setImageError(
+        err instanceof Error
+          ? err.message
+          : lang === "zh"
+            ? "图片生成失败，请稍后重试。"
+            : "Image generation failed. Please try again.",
+      );
     } finally {
       setIsGeneratingImage(false);
     }
@@ -696,10 +783,12 @@ export default function JournalPage() {
     if (!text.trim()) return;
 
     if (isSavingRef.current) {
+      pendingSaveRef.current = true;
       pendingOptsRef.current = { ...pendingOptsRef.current, ...opts };
       return;
     }
 
+    const startedRevision = saveRevisionRef.current;
     isSavingRef.current = true;
     setAutoSaveStatus("saving");
 
@@ -759,22 +848,33 @@ export default function JournalPage() {
           savedEntryIdRef.current = data.entry.id;
         }
         if (isNewEntry) void refreshBillingStatus();
-        setAutoSaveStatus("saved");
-        setTimeout(() => setAutoSaveStatus((s) => (s === "saved" ? "idle" : s)), 3000);
+        if (saveRevisionRef.current === startedRevision) {
+          setAutoSaveStatus("saved");
+          setTimeout(() => setAutoSaveStatus((s) => (s === "saved" ? "idle" : s)), 3000);
+        }
       } else {
-        setAutoSaveStatus("error");
+        if (saveRevisionRef.current === startedRevision) setAutoSaveStatus("error");
       }
     } catch {
-      setAutoSaveStatus("error");
+      if (saveRevisionRef.current === startedRevision) setAutoSaveStatus("error");
     } finally {
       isSavingRef.current = false;
       const pending = pendingOptsRef.current;
-      if (Object.keys(pending).length > 0) {
-        pendingOptsRef.current = {};
-        setTimeout(() => void autoSave(pending), 80);
+      const shouldFlushLatest = shouldFlushLatestSave({
+        pendingSave: pendingSaveRef.current,
+        pendingOptions: Object.keys(pending).length > 0,
+        startedRevision,
+        currentRevision: saveRevisionRef.current,
+      });
+      pendingSaveRef.current = false;
+      pendingOptsRef.current = {};
+      if (shouldFlushLatest) {
+        setTimeout(() => void autoSaveLatestRef.current?.(pending), 80);
       }
     }
   }
+
+  autoSaveLatestRef.current = autoSave;
 
   return (
     <div className="journal-root">
@@ -844,6 +944,47 @@ export default function JournalPage() {
                 {msg.role === "assistant" && <div className="msg-avatar">☾</div>}
                 <div className={`msg-bubble ${msg.role === "user" ? "bubble-user" : "bubble-ai"}`}>
                   <p className="msg-text">{msg.content}</p>
+                  {msg.role === "assistant" && msg.isError && (
+                    <button type="button" className="agent-retry-btn" onClick={() => editAndRetry(msg)}>
+                      {lang === "zh" ? "编辑后重试" : "Edit and retry"}
+                    </button>
+                  )}
+                  {msg.role === "assistant" && msg.meta?.feedbackToken && !msg.isError && (
+                    <div className="agent-feedback" aria-label={lang === "zh" ? "评价这次回应" : "Rate this response"}>
+                      <button
+                        type="button"
+                        aria-label={lang === "zh" ? "有帮助" : "Helpful"}
+                        aria-pressed={msg.feedback === "up"}
+                        className={msg.feedback === "up" ? "agent-feedback-active" : ""}
+                        onClick={() => void submitAgentFeedback(msg.id, "up")}
+                      >↑</button>
+                      <button
+                        type="button"
+                        aria-label={lang === "zh" ? "没帮助" : "Not helpful"}
+                        aria-pressed={msg.feedback === "down"}
+                        className={msg.feedback === "down" ? "agent-feedback-active" : ""}
+                        onClick={() => void submitAgentFeedback(msg.id, "down")}
+                      >↓</button>
+                      {msg.feedback === "down" && (
+                        <div className="agent-feedback-reasons">
+                          {([
+                            ["repetitive", lang === "zh" ? "重复" : "Repetitive"],
+                            ["irrelevant", lang === "zh" ? "跑题" : "Irrelevant"],
+                            ["too_many_questions", lang === "zh" ? "问题太多" : "Too many questions"],
+                            ["unsafe", lang === "zh" ? "不舒服" : "Unsafe"],
+                            ["other", lang === "zh" ? "其他" : "Other"],
+                          ] as const).map(([reason, label]) => (
+                            <button
+                              type="button"
+                              key={reason}
+                              className={msg.feedbackReason === reason ? "agent-feedback-active" : ""}
+                              onClick={() => void submitAgentFeedback(msg.id, "down", reason)}
+                            >{label}</button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
             ))}
@@ -1159,6 +1300,46 @@ export default function JournalPage() {
             </div>
           )}
 
+          {step === "dream" && (
+            <details className="sleep-context-panel">
+              <summary>
+                <span>{J.sleep.title}</span>
+                <small>{J.toolbar.sleepOptional}</small>
+              </summary>
+              <div className="sleep-context-grid">
+                <label className="sleep-context-field">
+                  <span>{J.sleep.sleepStart}</span>
+                  <input type="time" value={sleepStart} onChange={(e) => setSleepStart(e.target.value)} className="dream-input-sm" />
+                </label>
+                <label className="sleep-context-field">
+                  <span>{J.sleep.wakeTime}</span>
+                  <input type="time" value={wakeTime} onChange={(e) => setWakeTime(e.target.value)} className="dream-input-sm" />
+                </label>
+                <fieldset className="sleep-context-field sleep-context-quality">
+                  <legend>{J.sleep.quality}</legend>
+                  <div className="quality-btns">
+                    {[1, 2, 3, 4, 5].map((n) => (
+                      <button key={n} type="button" onClick={() => setSleepQuality(sleepQuality === n ? null : n)} className={`quality-btn ${sleepQuality === n ? "quality-btn-active" : ""}`} aria-pressed={sleepQuality === n}>{n}</button>
+                    ))}
+                  </div>
+                </fieldset>
+                <label className="sleep-context-field sleep-context-stress">
+                  <span>{J.sleep.stress}: {stressScore}</span>
+                  <input type="range" min="1" max="5" step="1" value={stressScore} onChange={(e) => setStressScore(Number(e.target.value))} />
+                  <small><span>{J.sleep.stressLow}</span><span>{J.sleep.stressHigh}</span></small>
+                </label>
+                <label className="sleep-context-field">
+                  <span>{J.sleep.meal}</span>
+                  <input type="text" value={preSleepMeal} onChange={(e) => setPreSleepMeal(e.target.value)} placeholder={J.sleep.mealPlaceholder} className="dream-input-sm" maxLength={500} />
+                </label>
+                <label className="sleep-context-field">
+                  <span>{J.sleep.activity}</span>
+                  <input type="text" value={preSleepActivity} onChange={(e) => setPreSleepActivity(e.target.value)} placeholder={J.sleep.activityPlaceholder} className="dream-input-sm" maxLength={500} />
+                </label>
+              </div>
+            </details>
+          )}
+
           {/* Image panel — chat mode only (quick mode shows inline next to dream textarea) */}
           {panel === "image" && mode === "chat" && (
             <div className="panel">
@@ -1347,31 +1528,6 @@ export default function JournalPage() {
                 )}
               </div>
 
-              {isGeneratingImage && (
-                <div className="developing-sleep-invite" aria-label="Sleep log">
-                  <p className="developing-sleep-label">
-                    {lang === "zh" ? "趁图片还在生成，记录一下昨晚的睡眠" : "While the image generates, log last night's sleep"}
-                  </p>
-                  <div className="developing-sleep-fields">
-                    <label className="developing-sleep-field">
-                      <span>{J.sleep.sleepStart}</span>
-                      <input type="time" value={sleepStart} onChange={(e) => setSleepStart(e.target.value)} className="dream-input-sm" />
-                    </label>
-                    <label className="developing-sleep-field">
-                      <span>{J.sleep.wakeTime}</span>
-                      <input type="time" value={wakeTime} onChange={(e) => setWakeTime(e.target.value)} className="dream-input-sm" />
-                    </label>
-                    <div className="developing-sleep-field">
-                      <span>{J.sleep.quality}</span>
-                      <div className="quality-btns">
-                        {[1, 2, 3, 4, 5].map((n) => (
-                          <button key={n} type="button" onClick={() => setSleepQuality(sleepQuality === n ? null : n)} className={`quality-btn ${sleepQuality === n ? "quality-btn-active" : ""}`}>{n}</button>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
             </div>
 
             <div className="developing-steps" aria-live="polite">

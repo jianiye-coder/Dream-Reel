@@ -7,6 +7,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { LangToggle } from "@/components/LangToggle";
 import DreamGrid from "./DreamGrid";
 import type { DreamEntry } from "@/lib/dreams";
+import { getApiErrorMessage } from "@/lib/apiErrors";
 
 type CountItem = { item: string; count: number };
 type BillingStatus = { plan: "free" | "plus" };
@@ -28,11 +29,13 @@ function formatCountItems(items: CountItem[], noData: string): string {
 
 export default function ArchiveShell({
   entries,
+  nextCursor,
   recap,
   dataError,
   user,
 }: {
   entries: DreamEntry[];
+  nextCursor: string | null;
   recap: WeeklyRecapShape;
   dataError: string;
   user: { name?: string | null; email?: string | null; image?: string | null } | null;
@@ -64,7 +67,9 @@ export default function ArchiveShell({
         body: JSON.stringify({ lang, currency: lang === "zh" ? "cny" : "usd" }),
       });
       const data = (await res.json()) as { url?: string; error?: string };
-      if (!res.ok || !data.url) throw new Error(data.error || fallbackError);
+      if (!res.ok || !data.url) {
+        throw new Error(getApiErrorMessage(data.error, lang, fallbackError));
+      }
       window.location.href = data.url;
     } catch (error) {
       setBillingError(error instanceof Error ? error.message : fallbackError);
@@ -149,7 +154,7 @@ export default function ArchiveShell({
           </div>
         </div>
 
-        <DreamGrid entries={entries} />
+        <DreamGrid entries={entries} nextCursor={nextCursor} />
       </main>
     </div>
   );

@@ -2,6 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { auth } from "@/auth";
 import { checkAndConsumeUsage, refundConsumedUsage } from "@/lib/billing";
+import { API_ERROR_CODES } from "@/lib/apiErrors";
+import { put } from "@vercel/blob";
+import { randomUUID } from "crypto";
+import sharp from "sharp";
+import { safeErrorMetadata } from "@/lib/safeServerLog";
 
 export const runtime = "nodejs";
 export const maxDuration = 180;
@@ -49,7 +54,7 @@ function buildFinalImagePrompt(
 export async function POST(request: NextRequest) {
   const session = await auth() as { user?: { id?: string } } | null;
   if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return NextResponse.json({ error: API_ERROR_CODES.unauthorized }, { status: 401 });
   }
 
   const userId = Number(session.user.id);
@@ -65,21 +70,27 @@ export async function POST(request: NextRequest) {
   try {
     const parsed = payloadSchema.safeParse(await request.json());
     if (!parsed.success) {
-      return NextResponse.json({ error: "请求参数不合法。" }, { status: 400 });
+      return NextResponse.json({ error: API_ERROR_CODES.invalidRequest }, { status: 400 });
     }
 
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) {
       return NextResponse.json(
-        { error: "缺少 OPENAI_API_KEY，当前无法使用 OpenAI 生成图片。" },
+        { error: API_ERROR_CODES.configurationError },
         { status: 500 },
+      );
+    }
+    if (!process.env.BLOB_READ_WRITE_TOKEN) {
+      return NextResponse.json(
+        { error: API_ERROR_CODES.configurationError },
+        { status: 503 },
       );
     }
 
     const usage = await checkAndConsumeUsage(userId, "image_generations");
     if (!usage.allowed) {
       return NextResponse.json(
-        { error: "本月图片生成额度已用完，请升级 Plus 或下月继续。", billingStatus: usage.status },
+        { error: API_ERROR_CODES.quotaExceeded, billingStatus: usage.status },
         { status: 402 },
       );
     }
@@ -118,7 +129,7 @@ export async function POST(request: NextRequest) {
     if (!upstreamResponse.ok) {
       await refundImageUsageOnce();
       return NextResponse.json(
-        { error: payload.error?.message || "图片生成失败，请稍后重试。" },
+        { error: API_ERROR_CODES.upstreamError },
         { status: 502 },
       );
     }
@@ -126,20 +137,39 @@ export async function POST(request: NextRequest) {
     const b64 = payload.data?.[0]?.b64_json;
     if (!b64) {
       await refundImageUsageOnce();
-      return NextResponse.json({ error: "图片生成结果为空。" }, { status: 422 });
+      return NextResponse.json({ error: API_ERROR_CODES.invalidResponse }, { status: 422 });
     }
 
+    const imageId = randomUUID();
+    const imageBuffer = Buffer.from(b64, "base64");
+    const thumbnailBuffer = await sharp(imageBuffer)
+      .resize({ width: 480, height: 480, fit: "cover", withoutEnlargement: true })
+      .webp({ quality: 76 })
+      .toBuffer();
+    const [imageBlob] = await Promise.all([
+      put(`dream-images/${imageId}.png`, imageBuffer, {
+        access: "public",
+        addRandomSuffix: false,
+        contentType: "image/png",
+      }),
+      put(`dream-images/${imageId}-thumb.webp`, thumbnailBuffer, {
+        access: "public",
+        addRandomSuffix: false,
+        contentType: "image/webp",
+      }),
+    ]);
+
     return NextResponse.json({
-      imageUrl: `data:image/png;base64,${b64}`,
+      imageUrl: imageBlob.url,
       revisedPrompt: null,
     });
   } catch (error) {
-    console.error("POST /api/generate-image failed", error);
+    console.error("POST /api/generate-image failed", safeErrorMetadata(error));
     await refundImageUsageOnce();
     if (error instanceof Error && error.name === "AbortError") {
-      return NextResponse.json({ error: "OpenAI 图片生成时间过长，请稍后再试。已退回本次生成额度。" }, { status: 504 });
+      return NextResponse.json({ error: API_ERROR_CODES.timeout }, { status: 504 });
     }
 
-    return NextResponse.json({ error: "生成图片时出现错误。" }, { status: 500 });
+    return NextResponse.json({ error: API_ERROR_CODES.internalError }, { status: 500 });
   }
 }

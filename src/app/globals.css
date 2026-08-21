@@ -3483,6 +3483,47 @@ body:has(.dream-landing)::after {
 }
 .msg-text { font-size: 0.875rem; line-height: 1.78; white-space: pre-wrap; }
 
+.agent-feedback {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin-top: 0.55rem;
+  opacity: 0.72;
+}
+
+.agent-feedback > button,
+.agent-feedback-reasons button,
+.agent-retry-btn {
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.045);
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.7rem;
+  line-height: 1;
+  padding: 0.35rem 0.5rem;
+}
+
+.agent-feedback > button:hover,
+.agent-feedback-reasons button:hover,
+.agent-retry-btn:hover,
+.agent-feedback .agent-feedback-active {
+  border-color: rgba(216, 199, 255, 0.48);
+  background: rgba(190, 164, 255, 0.14);
+}
+
+.agent-feedback-reasons {
+  display: flex;
+  flex-basis: 100%;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  padding-top: 0.2rem;
+}
+
+.agent-retry-btn { margin-top: 0.55rem; }
+
 @keyframes dot-pulse {
   0%, 80%, 100% { opacity: 0.18; transform: scale(0.78); }
   40% { opacity: 0.85; transform: scale(1.12); }
@@ -6465,4 +6506,106 @@ body:has(.dream-reel-landing)::before {
   font-weight: 400;
   letter-spacing: -0.005em;
   color: rgba(222, 227, 238, 0.66);
+}
+
+/* Keyboard navigation must remain visible across both light and dark surfaces. */
+:where(a, button, input, textarea, select, summary, [tabindex]):focus-visible {
+  outline: 3px solid #f7c873 !important;
+  outline-offset: 3px;
+  box-shadow: 0 0 0 5px rgba(72, 45, 126, 0.72) !important;
+}
+
+.sleep-context-panel {
+  margin: 0 0 0.7rem;
+  border: 1px solid rgba(135, 115, 198, 0.24);
+  border-radius: 0.9rem;
+  background: rgba(22, 14, 45, 0.72);
+  color: rgba(218, 208, 244, 0.9);
+}
+
+.sleep-context-panel summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.7rem 0.85rem;
+  cursor: pointer;
+  font-size: 0.8rem;
+  font-weight: 650;
+}
+
+.sleep-context-panel summary small {
+  color: rgba(192, 176, 230, 0.68);
+  font-size: 0.7rem;
+  font-weight: 450;
+}
+
+.sleep-context-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.7rem;
+  padding: 0 0.85rem 0.85rem;
+}
+
+.sleep-context-field {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  color: rgba(190, 174, 229, 0.78);
+  font-size: 0.72rem;
+}
+
+.sleep-context-field legend {
+  margin-bottom: 0.35rem;
+}
+
+.sleep-context-stress small {
+  display: flex;
+  justify-content: space-between;
+  color: rgba(190, 174, 229, 0.65);
+}
+
+@media (max-width: 560px) {
+  .sleep-context-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .sleep-context-panel summary {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 0.2rem;
+  }
+
+  .hero-film-caption,
+  .archive-node p,
+  .archive-node strong,
+  .sleep-strip-header,
+  .sleep-legend,
+  .sleep-live,
+  .film-slide-date,
+  .film-slide-mood {
+    font-size: 0.75rem;
+    line-height: 1.5;
+  }
+
+  .hero-film-caption,
+  .sleep-strip-header,
+  .sleep-legend,
+  .sleep-live,
+  .film-slide-date,
+  .film-slide-mood {
+    color: rgba(250, 232, 202, 0.78);
+  }
+
+  .archive-node p {
+    color: rgba(250, 218, 156, 0.9);
+  }
+
+  .archive-node strong {
+    color: rgba(255, 207, 220, 0.92);
+  }
 }

@@ -1,11 +1,15 @@
 import { auth } from "@/auth";
-import { getWeeklyRecap, listDreamEntries } from "@/lib/dreams";
+import { getWeeklyRecap, listDreamEntriesPage } from "@/lib/dreams";
+import { redirect } from "next/navigation";
 import ArchiveShell from "./ArchiveShell";
 
 export default async function ArchivePage() {
   const session = await auth();
   const rawId = session?.user?.id ? parseInt(session.user.id, 10) : NaN;
-  const userId = isNaN(rawId) ? undefined : rawId;
+  const userId = Number.isInteger(rawId) && rawId > 0 ? rawId : undefined;
+  if (!userId) {
+    redirect("/login?callbackUrl=/archive");
+  }
 
   let dataError = "";
   let recap = {
@@ -17,13 +21,17 @@ export default async function ArchivePage() {
     topSymbols: [] as { item: string; count: number }[],
     stressByMood: [] as unknown[],
   };
-  let entries: Awaited<ReturnType<typeof listDreamEntries>> = [];
+  let entries: Awaited<ReturnType<typeof listDreamEntriesPage>>["entries"] = [];
+  let nextCursor: string | null = null;
 
   try {
-    [recap, entries] = await Promise.all([
+    const [weeklyRecap, page] = await Promise.all([
       getWeeklyRecap(userId),
-      listDreamEntries(10000, userId),
+      listDreamEntriesPage(userId, { limit: 24 }),
     ]);
+    recap = weeklyRecap;
+    entries = page.entries;
+    nextCursor = page.nextCursor;
   } catch (error) {
     dataError =
       error instanceof Error
@@ -34,6 +42,7 @@ export default async function ArchivePage() {
   return (
     <ArchiveShell
       entries={entries}
+      nextCursor={nextCursor}
       recap={recap}
       dataError={dataError}
       user={session?.user ?? null}
