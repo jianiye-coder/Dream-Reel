@@ -632,7 +632,9 @@ function DreamEditorModal({
   return (
     <div
       className="fixed inset-0 z-50 flex items-end justify-center bg-[rgba(232,225,242,0.58)] backdrop-blur-xl sm:items-center"
-      onClick={onClose}
+      onClick={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
     >
       <div
         className="mist-card relative max-h-[94vh] w-full max-w-4xl overflow-y-auto rounded-t-[2rem] p-5 sm:rounded-[2rem] sm:p-6"
@@ -1864,7 +1866,9 @@ export default function DreamGrid({
       {selectedDay && (
         <div
           className="fixed inset-0 z-50 flex items-end justify-center bg-[rgba(232,225,242,0.58)] backdrop-blur-xl sm:items-center"
-          onClick={() => setSelectedDay(null)}
+          onClick={(event) => {
+            if (event.target === event.currentTarget) setSelectedDay(null);
+          }}
         >
           <div
             className="mist-card relative max-h-[85vh] w-full max-w-xl overflow-y-auto rounded-t-[2rem] p-5 sm:rounded-[2rem] sm:p-6"
