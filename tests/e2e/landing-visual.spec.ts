@@ -11,7 +11,7 @@ for (const width of [320, 390, 430]) {
       await page.addStyleTag({
         content: "*, *::before, *::after { animation: none !important; transition: none !important; caret-color: transparent !important; }",
       });
-      await expect(page.locator(".hero-section")).toHaveScreenshot(
+      await expect(page.locator(".reel-hero")).toHaveScreenshot(
         `landing-hero-${width}-${lang}.png`,
         { animations: "disabled" },
       );
