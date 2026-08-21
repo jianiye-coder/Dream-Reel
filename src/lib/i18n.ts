@@ -37,12 +37,13 @@ const zh = {
     navItems: [
       { label: "记录", href: "/journal" },
       { label: "档案", href: "/archive" },
+      { label: "关于梦", href: "/blog/dreams-and-consciousness" },
       { label: "订阅", href: "/pricing" },
     ] as { label: string; href: string }[],
     navCta: "记录梦境",
     heroKicker: "AI 梦境日记 · 记忆图谱 · 睡眠反思",
     heroSubtitle: "把梦境变成记忆、画面与隐藏的规律。",
-    heroCta1: "记录一个梦",
+    heroCta1: "记录梦境",
     heroCta2: "浏览梦境档案",
     galleryHeading: "Dream Gallery",
     gallerySubtitle: "值得再回看一眼的片段",
@@ -194,30 +195,6 @@ const zh = {
         ],
       },
     ] as { name: string; price: string; cadence: string; badge: string; cta: string; features: string[] }[],
-    voicesEyebrow: "梦与意识",
-    voicesTitle: "有人比你更早看见这些",
-    voices: [
-      {
-        name: "西格蒙德·弗洛伊德",
-        thought: "释梦，是通往认识心灵无意识活动的康庄大道。",
-        source: "《梦的解析》第 7 章 · 1900",
-      },
-      {
-        name: "卡尔·荣格",
-        thought: "我们每个人内心都住着一个我们不认识的人。他在梦中向我们诉说，告诉我们他所看到的自己与我们所看到的自己有多么不同。",
-        source: "《回忆、梦、思考》· 1962",
-      },
-      {
-        name: "马塞尔·普鲁斯特",
-        thought: "如果一点点的梦是危险的，治愈它的方法不是少做梦，而是多做，彻底地做梦。",
-        source: "《追忆似水年华》· 1913–1927",
-      },
-      {
-        name: "阿尔弗雷德·阿德勒",
-        thought: "梦是对未来问题的预演。",
-        source: "《自卑与超越》· 1931",
-      },
-    ] as { name: string; thought: string; source?: string }[],
   },
 
   billing: {
@@ -458,6 +435,7 @@ const en: typeof zh = {
     navItems: [
       { label: "Record", href: "/journal" },
       { label: "Archive", href: "/archive" },
+      { label: "On Dreams", href: "/blog/dreams-and-consciousness" },
       { label: "Pricing", href: "/pricing" },
     ],
     navCta: "Record Dream",
@@ -613,30 +591,6 @@ const en: typeof zh = {
           "20 AI dream analyses / month",
           "20 AI image developments / month",
         ],
-      },
-    ],
-    voicesEyebrow: "Dreams & consciousness",
-    voicesTitle: "Others saw this before you did",
-    voices: [
-      {
-        name: "Sigmund Freud",
-        thought: "The interpretation of dreams is the royal road to a knowledge of the unconscious activities of the mind.",
-        source: "The Interpretation of Dreams (1900), Chapter 7",
-      },
-      {
-        name: "Carl Jung",
-        thought: "We each have a person inside us that we do not know. He speaks to us in dreams and tells us how differently he sees us from the way we see ourselves.",
-        source: "Memories, Dreams, Reflections (1962)",
-      },
-      {
-        name: "Marcel Proust",
-        thought: "If a little dreaming is dangerous, the cure for it is not to dream less but to dream more, to dream all the time.",
-        source: "In Search of Lost Time (1913–1927)",
-      },
-      {
-        name: "Alfred Adler",
-        thought: "The dream is a rehearsal for future problems.",
-        source: "What Life Could Mean to You (1931)",
       },
     ],
   },

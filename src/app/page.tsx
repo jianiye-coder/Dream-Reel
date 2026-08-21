@@ -6,6 +6,9 @@ import type { PointerEvent } from "react";
 import { useEffect, useRef } from "react";
 import { LangToggle } from "@/components/LangToggle";
 import { useLanguage } from "@/contexts/LanguageContext";
+import type { Translations } from "@/lib/i18n";
+
+const SHOW_PRICING_SECTION = false;
 
 const archiveNodeClassNames = ["node-one", "node-two", "node-three", "node-four"];
 
@@ -19,10 +22,53 @@ const sleepNights = [
   { rem: 32, light: 35, deep: 18, awake: 5, logged: true },
 ];
 
+function PricingSection({ landing }: { landing: Translations["landing"] }) {
+  return (
+    <section className="pricing-stream reveal-dream" aria-labelledby="pricing-title">
+      <div className="pricing-copy">
+        <p>{landing.pricingEyebrow}</p>
+        <h2 id="pricing-title">{landing.pricingTitle}</h2>
+        <span>{landing.pricingBody}</span>
+      </div>
+
+      <div className="pricing-reels">
+        {landing.pricingPlans.map((plan) => (
+          <article
+            key={plan.name}
+            className={`pricing-reel ${plan.name.includes("Plus") ? "pricing-reel-plus" : ""}`}
+          >
+            <div className="pricing-reel-head">
+              <span>{plan.badge}</span>
+              <h3>{plan.name}</h3>
+              <p>
+                <strong>{plan.price}</strong>
+                <small>{plan.cadence}</small>
+              </p>
+            </div>
+
+            <ul>
+              {plan.features.map((feature) => (
+                <li key={feature}>{feature}</li>
+              ))}
+            </ul>
+
+            <Link href="/pricing" className="pricing-cta">
+              {plan.cta}
+            </Link>
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 export default function LandingPage() {
   const { lang, T } = useLanguage();
   const L = T.landing;
   const pageRef = useRef<HTMLElement>(null);
+  const navItems = SHOW_PRICING_SECTION
+    ? L.navItems
+    : L.navItems.filter((item) => item.href !== "/pricing");
   const manifesto =
     lang === "zh"
       ? [
@@ -61,9 +107,11 @@ export default function LandingPage() {
 
   return (
     <main ref={pageRef} className="dream-landing dream-reel-landing" onPointerMove={handlePointerMove}>
+      <div className="reel-page-bg" aria-hidden />
+
       <section className="reel-hero" aria-label="Dream Reel landing">
         <Image
-          src="/dream-photo-3.jpg"
+          src="/dream-reel-landing-v2.png"
           alt=""
           aria-hidden
           fill
@@ -82,25 +130,29 @@ export default function LandingPage() {
         </div>
 
         <nav className="reel-nav" aria-label="Main navigation">
-          <Link href="/" className="reel-brand" aria-label="Dream Reel home">
-            <Image src="/dream-reel-logo.png" alt="" aria-hidden width={34} height={34} />
-          </Link>
-
           <div className="reel-nav-links">
-            {L.navItems.map((item) => (
+            {navItems.map((item) => (
               <Link key={item.label} href={item.href}>
                 {item.label}
               </Link>
             ))}
           </div>
 
-          <LangToggle className="reel-lang" />
+          <div className="reel-nav-right">
+            <LangToggle className="reel-lang" />
+          </div>
         </nav>
 
         <div className="reel-hero-grid">
           <div className="reel-title-block">
             <p>{L.heroKicker}</p>
-            <h1>Dream Reel</h1>
+            <h1>
+              {lang === "zh" ? (
+                <>Dream <em>Reel</em></>
+              ) : (
+                <>Dream <em>Reel</em></>
+              )}
+            </h1>
             <span>{L.heroSubtitle}</span>
           </div>
 
@@ -115,10 +167,6 @@ export default function LandingPage() {
           </aside>
         </div>
 
-        <div className="reel-footer-line" aria-hidden>
-          <span>Dreams begin before language.</span>
-          <span>Dream Reel ©2026</span>
-        </div>
       </section>
 
       <section className="features-section" aria-label="Features">
@@ -242,24 +290,7 @@ export default function LandingPage() {
           </div>
         </section>
 
-        <section className="voices-stream" aria-labelledby="voices-title">
-          {(L.voicesEyebrow || L.voicesTitle) && (
-            <div className="voices-intro reveal-dream">
-              {L.voicesEyebrow ? <p>{L.voicesEyebrow}</p> : null}
-              {L.voicesTitle ? <h2 id="voices-title">{L.voicesTitle}</h2> : null}
-            </div>
-          )}
-
-          <div className="voice-current">
-            {L.voices.map((voice, i) => (
-              <article key={i} className="voice-item reveal-dream">
-                <h3>{voice.name}</h3>
-                <span>{voice.thought}</span>
-                {"source" in voice && voice.source ? <small>{voice.source}</small> : null}
-              </article>
-            ))}
-          </div>
-        </section>
+        {SHOW_PRICING_SECTION ? <PricingSection landing={L} /> : null}
       </section>
     </main>
   );
