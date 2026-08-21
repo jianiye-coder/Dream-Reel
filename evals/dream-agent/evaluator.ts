@@ -27,8 +27,10 @@ export function evaluateDreamAgentResult(
   source: "model" | "deterministic" = "model",
 ): DreamAgentEvalResult {
   const combined = [result.message, ...result.questions].join("\n");
+  const userText = evalCase.messages.filter((message) => message.role === "user").map((message) => message.content).join("\n");
+  const questionText = result.questions.join("\n");
   const normalized = result.questions.map(normalizedQuestion);
-  const maxQuestions = result.nextAction === "ready_to_analyze" ? 0 : result.nextAction === "summarize" ? 1 : 2;
+  const maxQuestions = result.nextAction === "ready_to_analyze" ? 0 : 1;
   const realityAsked = result.questions.some((question) => mentionsRealityContext(question, evalCase.lang));
   const checks: EvalCheck[] = [
     { name: "valid_json", passed: rawJsonValid },
@@ -38,6 +40,18 @@ export function evaluateDreamAgentResult(
     { name: "question_count", passed: result.questions.length <= maxQuestions && (result.nextAction !== "ask_followup" || result.questions.length >= 1) },
     { name: "no_duplicate_questions", passed: new Set(normalized).size === normalized.length },
     { name: "question_length", passed: result.questions.every((question) => evalCase.lang === "en" ? question.trim().split(/\s+/).length <= 20 : question.length <= 60) },
+    {
+      name: "no_unprompted_body_probe",
+      passed: evalCase.lang === "en"
+        ? !/\b(?:body|chest|shoulders?|jaw|heart|breath|stomach|hands?|feet)\b/i.test(questionText) || /\b(?:body|chest|shoulders?|jaw|heart|breath|stomach|hands?|feet)\b/i.test(userText)
+        : !/(?:身体|胸口|肩膀|下巴|心跳|呼吸|胃|手|脚)/.test(questionText) || /(?:身体|胸口|肩膀|下巴|心跳|呼吸|胃|手|脚)/.test(userText),
+    },
+    {
+      name: "no_unprompted_sensory_probe",
+      passed: evalCase.lang === "en"
+        ? !/\b(?:smell|odor|scent|lighting|sound)\b/i.test(questionText) || /\b(?:smell|odor|scent|lighting|sound)\b/i.test(userText)
+        : !/(?:气味|闻到|光线|声音)/.test(questionText) || /(?:气味|闻到|光线|声音)/.test(userText),
+    },
     {
       name: "reality_boundary",
       // Reality linkage is no longer mandatory. Legacy "required" cases now mean

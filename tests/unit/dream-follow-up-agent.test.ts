@@ -1,13 +1,74 @@
 import { describe, expect, it } from "vitest";
-import { buildImmediateSafetyResponse, deriveDreamAgentConversationContext, inferAgentStageFromConversation, resolveDeterministicAgentResponse, sanitizeDreamAgentResult } from "@/lib/dreamFollowUpAgent";
+import { buildDreamFollowUpAgentPrompt, buildImmediateSafetyResponse, deriveDreamAgentConversationContext, inferAgentStageFromConversation, resolveDeterministicAgentResponse, sanitizeDreamAgentResult } from "@/lib/dreamFollowUpAgent";
 import { dreamAgentEvalCases } from "../../evals/dream-agent/cases";
 
 describe("dream follow-up conversation context", () => {
+  it("prioritizes accompaniment over extracting more dream details", () => {
+    const prompt = buildDreamFollowUpAgentPrompt("zh", 1, "exploring", "");
+    expect(prompt).toContain("让用户感到被听见、被在意、被温柔地接住");
+    expect(prompt).toContain("可以不问任何问题");
+    expect(prompt).toContain("不要追问精确身体部位、气味、光线、声音");
+  });
   it("recognizes an answered reality question", () => {
     expect(deriveDreamAgentConversationContext([
       { role: "assistant", content: "Does this connect to real life recently?" },
       { role: "user", content: "Yes, my project is late." },
     ], "en")).toMatchObject({ realityContextStatus: "answered" });
+  });
+
+  it("detects recurring dreams, short running fragments, and interpretation requests", () => {
+    expect(deriveDreamAgentConversationContext([
+      { role: "user", content: "这是第三次梦见同一条走廊。" },
+    ], "zh")).toMatchObject({ recurringDream: true });
+    expect(deriveDreamAgentConversationContext([
+      { role: "user", content: "我一直在跑。" },
+    ], "zh")).toMatchObject({ runningFragment: true });
+    expect(deriveDreamAgentConversationContext([
+      { role: "user", content: "梦里牙齿掉了，这代表什么？" },
+    ], "zh")).toMatchObject({ interpretationRequested: true });
+  });
+
+  it("overrides recurring-dream follow-ups with a comparison to earlier dreams", () => {
+    const context = deriveDreamAgentConversationContext([
+      { role: "user", content: "这是第三次梦见这条走廊。" },
+    ], "zh");
+    const result = sanitizeDreamAgentResult({
+      message: "这条走廊又回来了。",
+      questions: ["你现在是什么感受？"],
+      stage: "exploring",
+      nextAction: "ask_followup",
+    }, "zh", "exploring", context);
+    expect(result.questions).toEqual(["前几次的梦和这次相比，有什么相同或不同？"]);
+  });
+
+  it("gives a short running fragment an easy either-or question", () => {
+    const context = deriveDreamAgentConversationContext([
+      { role: "user", content: "我一直在跑。" },
+    ], "zh");
+    const result = sanitizeDreamAgentResult({
+      message: "那段奔跑好像还没有停下来。",
+      questions: ["你在哪里跑？"],
+      stage: "exploring",
+      nextAction: "ask_followup",
+    }, "zh", "exploring", context);
+    expect(result.questions).toEqual(["这段奔跑更像是在逃离什么，还是赶往哪里？"]);
+  });
+
+  it("answers interpretation requests without another follow-up question", () => {
+    const context = deriveDreamAgentConversationContext([
+      { role: "user", content: "梦里牙齿掉了，这代表什么？" },
+    ], "zh");
+    const result = sanitizeDreamAgentResult({
+      message: "掉牙有时可能和失去掌控感有关，但只保留与你有共鸣的部分。",
+      questions: ["你当时害怕吗？"],
+      stage: "exploring",
+      nextAction: "ask_followup",
+    }, "zh", "exploring", context);
+    expect(result).toMatchObject({
+      message: "掉牙有时可能和失去掌控感有关，但只保留与你有共鸣的部分。",
+      questions: [],
+      nextAction: "summarize",
+    });
   });
 
   it("recognizes a previously displayed structured question", () => {
@@ -31,7 +92,7 @@ describe("dream follow-up conversation context", () => {
     expect(result.questions).toEqual(["How did that loneliness feel?"]);
   });
 
-  it("delays real-life linkage and limits early follow-ups to two dream-specific questions", () => {
+  it("delays real-life linkage and limits early follow-ups to one dream-specific question", () => {
     const context = deriveDreamAgentConversationContext([
       { role: "user", content: "A warm red door seemed to breathe under my hand." },
     ], "en");
@@ -45,10 +106,7 @@ describe("dream follow-up conversation context", () => {
       stage: "exploring",
       nextAction: "ask_followup",
     }, "en", "exploring", context);
-    expect(result.questions).toEqual([
-      "What happened when you touched the door?",
-      "Did the breathing match your own rhythm?",
-    ]);
+    expect(result.questions).toEqual(["What happened when you touched the door?"]);
   });
 
   it("routes imminent self-harm language to crisis context", () => {
@@ -85,7 +143,7 @@ describe("dream follow-up conversation context", () => {
       "别帮我解梦，只帮我把细节想起来。",
     ]) {
       expect(deriveDreamAgentConversationContext([{ role: "user", content }], "zh"))
-        .toMatchObject({ realityContextStatus: "unanswered", avoidSensitiveDetails: false });
+        .toMatchObject({ realityContextStatus: "unanswered", avoidSensitiveDetails: false, interpretationRequested: false });
     }
   });
 

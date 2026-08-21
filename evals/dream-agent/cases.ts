@@ -37,7 +37,7 @@ const coreEvalCases: DreamAgentEvalCase[] = [
       actions: ["ask_followup"],
       stages: ["exploring"],
       realityQuestion: "required",
-      requiredPatterns: [/感觉|情绪|身体|害怕|紧张/],
+      requiredPatterns: [/奔跑|追逐|紧迫|逃离|赶往|余韵/],
       forbiddenPatterns: [zhInterpretation],
     },
   },
@@ -50,7 +50,7 @@ const coreEvalCases: DreamAgentEvalCase[] = [
       actions: ["ask_followup"],
       stages: ["exploring"],
       realityQuestion: "required",
-      requiredPatterns: [/feel|emotion|body|afraid|tense/i],
+      requiredPatterns: [/running|chasing|urgency|escaping|toward|aftertaste/i],
       forbiddenPatterns: [enInterpretation],
     },
   },
@@ -211,11 +211,11 @@ const additionalEvalCases: DreamAgentEvalCase[] = [
   ...pairedCases("long-form-complete-wedding", ["long-form", "complete", "readiness"], {
     messages: [{ role: "user", content: "梦里我去参加妹妹的婚礼，地点却在一艘停在沙漠里的船上。刚开始大家都穿着白色衣服，我担心自己迟到，一直在甲板下狭窄的房间里找鞋，胸口发紧。找到鞋后我上到甲板，发现妹妹没有等仪式开始，而是在和外婆一起折纸鹤。外婆已经去世很多年了，她把一只蓝色纸鹤放进我手里，说‘你不用替所有人安排好’。那一刻周围的沙子突然变成海水，船开始缓慢移动，我先哭了，然后肩膀和下巴都松下来，感觉有人替我接住了事情。最近妹妹真的在筹备婚礼，我主动承担了很多安排，昨晚睡前还在核对宾客名单。醒来以后既想念外婆，也明显觉得轻了一点。" }],
     preSleepContext: "睡前核对妹妹婚礼的宾客名单",
-    expected: { actions: ["ready_to_analyze"], stages: ["ready"], realityQuestion: "forbidden", requiredPatterns: [/足够|整理|分析|记录|准备好/], forbiddenPatterns: [zhInterpretation] },
+    expected: { actions: ["ready_to_analyze"], stages: ["ready"], realityQuestion: "forbidden", forbiddenPatterns: [zhInterpretation] },
   }, {
     messages: [{ role: "user", content: "I was attending my sister's wedding, except it took place on a ship stranded in a desert. Everyone wore white. At first I was below deck searching cramped rooms for my shoes, afraid I was late, with my chest tight. When I reached the deck, my sister was folding paper cranes with our grandmother, who died years ago. Grandmother placed a blue crane in my hand and said, ‘You do not have to arrange everything for everyone.’ The sand around the ship became ocean and the ship began to move. I cried, then felt my shoulders and jaw release, as if someone else had caught the weight for me. My sister is actually planning her wedding now, and I have taken on many of the arrangements. Before sleep I was checking the guest list. I woke missing my grandmother but also noticeably lighter." }],
     preSleepContext: "checked the guest list for my sister's wedding before sleep",
-    expected: { actions: ["ready_to_analyze"], stages: ["ready"], realityQuestion: "forbidden", requiredPatterns: [/enough|organize|analy|record|ready/i], forbiddenPatterns: [enInterpretation] },
+    expected: { actions: ["ready_to_analyze"], stages: ["ready"], realityQuestion: "forbidden", forbiddenPatterns: [enInterpretation] },
   }),
   ...pairedCases("sensory-door", ["fragment", "sensory"], {
     messages: [{ role: "user", content: "我只记得一扇发热的红门，摸上去像在呼吸。" }],
