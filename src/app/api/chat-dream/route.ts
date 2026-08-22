@@ -55,17 +55,17 @@ type ModelProvider = {
 
 function configuredModelProviders(): ModelProvider[] {
   return [
-    process.env.OPENAI_API_KEY && {
-      name: "openai" as const,
-      apiKey: process.env.OPENAI_API_KEY,
-      model: OPENAI_MODEL,
-      url: "https://api.openai.com/v1/chat/completions",
-    },
     process.env.GROQ_API_KEY && {
       name: "groq" as const,
       apiKey: process.env.GROQ_API_KEY,
       model: process.env.GROQ_MODEL ?? GROQ_MODEL,
       url: "https://api.groq.com/openai/v1/chat/completions",
+    },
+    process.env.OPENAI_API_KEY && {
+      name: "openai" as const,
+      apiKey: process.env.OPENAI_API_KEY,
+      model: OPENAI_MODEL,
+      url: "https://api.openai.com/v1/chat/completions",
     },
   ].filter((provider): provider is ModelProvider => Boolean(provider));
 }

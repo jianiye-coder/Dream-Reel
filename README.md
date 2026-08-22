@@ -56,7 +56,7 @@ DREAM_TEXT_ENCRYPTION_KEY_ID=primary
 DREAM_TEXT_PREVIOUS_ENCRYPTION_KEYS=
 OPENAI_API_KEY=your_openai_api_key
 OPENAI_MODEL=gpt-5.5
-# Optional fallback for the dream chat agent; OpenAI remains primary.
+# Primary provider for dream analysis and chat; OpenAI is used as fallback.
 GROQ_API_KEY=your_groq_api_key
 GROQ_MODEL=openai/gpt-oss-120b
 DREAM_AGENT_FEEDBACK_SECRET=your_separate_feedback_signing_secret
@@ -145,7 +145,7 @@ DREAM_TEXT_ENCRYPTION_KEY_ID=primary
 DREAM_TEXT_PREVIOUS_ENCRYPTION_KEYS=
 OPENAI_API_KEY=your_openai_api_key
 OPENAI_MODEL=gpt-5.5
-# 梦境对话 Agent 的可选备选；OpenAI 始终优先。
+# 梦境分析与对话优先使用 Groq；失败时回退 OpenAI。
 GROQ_API_KEY=your_groq_api_key
 GROQ_MODEL=openai/gpt-oss-120b
 DREAM_AGENT_FEEDBACK_SECRET=your_separate_feedback_signing_secret

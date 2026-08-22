@@ -85,23 +85,20 @@ describe("dream chat safety routing", () => {
     expect(billing.refundConsumedUsage).not.toHaveBeenCalled();
   });
 
-  it("uses Groq only after the primary OpenAI provider fails", async () => {
+  it("uses Groq before OpenAI when both providers are configured", async () => {
     process.env.GROQ_API_KEY = "groq-unit-test-key";
     process.env.GROQ_MODEL = "openai/gpt-oss-120b";
-    vi.spyOn(console, "error").mockImplementation(() => undefined);
     vi.spyOn(console, "info").mockImplementation(() => undefined);
-    const fetchSpy = vi.spyOn(globalThis, "fetch")
-      .mockResolvedValueOnce(new Response("credit exhausted", { status: 429 }))
-      .mockResolvedValueOnce(Response.json({
-        choices: [{ message: { content: JSON.stringify({
-          message: "Let's stay with the feeling in that station.",
-          questions: ["What feeling was strongest while you were running?"],
-          stage: "exploring",
-          nextAction: "ask_followup",
-          memory: { missingDetails: ["turning point"], observedSignals: ["station", "running"] },
-        }) } }],
-        usage: { prompt_tokens: 400, completion_tokens: 70 },
-      }));
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(Response.json({
+      choices: [{ message: { content: JSON.stringify({
+        message: "Let's stay with the feeling in that station.",
+        questions: ["What feeling was strongest while you were running?"],
+        stage: "exploring",
+        nextAction: "ask_followup",
+        memory: { missingDetails: ["turning point"], observedSignals: ["station", "running"] },
+      }) } }],
+      usage: { prompt_tokens: 400, completion_tokens: 70 },
+    }));
 
     const response = await POST(new NextRequest("http://localhost/api/chat-dream", {
       method: "POST",
@@ -115,10 +112,9 @@ describe("dream chat safety routing", () => {
 
     expect(response.status).toBe(200);
     expect(body.meta).toMatchObject({ source: "model", provider: "groq" });
-    expect(fetchSpy).toHaveBeenCalledTimes(2);
-    expect(fetchSpy.mock.calls[0][0]).toBe("https://api.openai.com/v1/chat/completions");
-    expect(fetchSpy.mock.calls[1][0]).toBe("https://api.groq.com/openai/v1/chat/completions");
-    expect(JSON.parse(String(fetchSpy.mock.calls[1][1]?.body))).toMatchObject({
+    expect(fetchSpy).toHaveBeenCalledOnce();
+    expect(fetchSpy.mock.calls[0][0]).toBe("https://api.groq.com/openai/v1/chat/completions");
+    expect(JSON.parse(String(fetchSpy.mock.calls[0][1]?.body))).toMatchObject({
       model: "openai/gpt-oss-120b",
       max_completion_tokens: 1600,
       reasoning_effort: "low",
@@ -144,6 +140,8 @@ describe("dream chat safety routing", () => {
 
     expect(response.status).toBe(502);
     expect(fetchSpy).toHaveBeenCalledTimes(2);
+    expect(fetchSpy.mock.calls[0][0]).toBe("https://api.groq.com/openai/v1/chat/completions");
+    expect(fetchSpy.mock.calls[1][0]).toBe("https://api.openai.com/v1/chat/completions");
     expect(billing.refundConsumedUsage).toHaveBeenCalledTimes(1);
     expect(billing.refundConsumedUsage).toHaveBeenCalledWith(9, "analysis");
   });
