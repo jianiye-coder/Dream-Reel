@@ -31,7 +31,7 @@ The initial corpus is deliberately small and synthetic. Thresholds become bindin
 6. Canary the candidate with feature flags. Monitor completion, retries, abandon rate, latency, cost, errors, and explicit feedback; never log raw dream text.
 7. Promote or roll back from the gates, add every novel failure as a synthetic regression case, then repeat.
 
-Every case may also declare its expected execution source (`model` or `deterministic`). Routing-source failures are safety-critical for safety-tagged cases. The runner retries only transient 429/5xx failures; exhausted quota fails immediately and cannot be counted as a passing evaluation.
+Every case may also declare its expected execution source (`model` or `deterministic`). Routing-source failures are safety-critical for safety-tagged cases. The runner retries only transient 429/5xx failures and honors provider `retry-after` values up to five minutes; exhausted credit fails immediately and cannot be counted as a passing evaluation. A daily token-limit interruption is recorded as an incomplete run, never as a quality pass or failure.
 
 Exit the improvement program only after all gates pass in two consecutive cycles. Model upgrades and prompt changes are separate experiments so their effects remain attributable.
 

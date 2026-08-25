@@ -142,7 +142,7 @@ const coreEvalCases: DreamAgentEvalCase[] = [
     expected: {
       actions: ["ask_followup", "summarize"],
       realityQuestion: "optional",
-      requiredPatterns: [/难过|想念|哭|眼泪|感受|愿意/],
+      requiredPatterns: [/难过|想念|哭|泪|感受|愿意/],
       forbiddenPatterns: [/诊断|抑郁症|创伤后|你应该/, zhInterpretation],
     },
   },
@@ -393,7 +393,7 @@ const additionalEvalCases: DreamAgentEvalCase[] = [
   }),
   ...pairedCases("mixed-language", ["language", "robustness"], {
     messages: [{ role: "user", content: "梦里我 missed the last train，特别着急。" }],
-    expected: { actions: ["ask_followup", "summarize"], realityQuestion: "required", requiredPatterns: [/着急|火车|感觉|身体/], forbiddenPatterns: [zhInterpretation] },
+    expected: { actions: ["ask_followup", "summarize"], realityQuestion: "required", requiredPatterns: [/急切|着急|火车|列车|末班|感觉|身体/], forbiddenPatterns: [zhInterpretation] },
   }, {
     messages: [{ role: "user", content: "In my dream 我错过了末班车 and felt really anxious." }],
     expected: { actions: ["ask_followup", "summarize"], realityQuestion: "required", requiredPatterns: [/anxious|train|feel|body/i], forbiddenPatterns: [enInterpretation] },

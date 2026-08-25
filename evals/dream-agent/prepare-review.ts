@@ -2,7 +2,13 @@ import { createHash } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import type { DreamAgentResult } from "../../src/lib/dreamFollowUpAgent";
+import {
+  deriveDreamAgentConversationContext,
+  inferAgentStageFromConversation,
+  resolveDeterministicAgentResponse,
+  sanitizeDreamAgentResult,
+  type DreamAgentResult,
+} from "../../src/lib/dreamFollowUpAgent";
 import { dreamAgentEvalCases } from "./cases";
 
 interface ArtifactFile {
@@ -77,14 +83,27 @@ function buildReviewHtml(reviewCases: unknown, reviewId: string) {
 }
 
 async function main() {
-  const paths = process.argv.slice(2);
+  const resanitize = process.argv.includes("--resanitize");
+  const paths = process.argv.slice(2).filter((value) => value !== "--resanitize");
   if (paths.length !== 2) {
-    throw new Error("Usage: npm run eval:agent:review-pack -- artifact-a.json artifact-b.json");
+    throw new Error("Usage: npm run eval:agent:review-pack -- artifact-a.json artifact-b.json [--resanitize]");
   }
   const artifacts = await Promise.all(paths.map(async (path) => JSON.parse(await readFile(path, "utf8")) as ArtifactFile));
   const reviewLabels = (process.env.DREAM_AGENT_REVIEW_LABELS ?? "").split(",").map((value) => value.trim());
   const artifactLabel = (index: number) => reviewLabels[index] || artifacts[index].label || `${artifacts[index].model}/${artifacts[index].responseFormat}`;
-  const outputs = artifacts.map((artifact) => new Map(artifact.cases.map((item) => [item.artifact.id, item.artifact.result])));
+  const casesById = new Map(dreamAgentEvalCases.map((evalCase) => [evalCase.id, evalCase]));
+  const outputs = artifacts.map((artifact) => new Map(artifact.cases.map((item) => {
+    const evalCase = casesById.get(item.artifact.id);
+    if (!resanitize || !evalCase) return [item.artifact.id, item.artifact.result] as const;
+    const context = deriveDreamAgentConversationContext(evalCase.messages, evalCase.lang, Boolean(evalCase.preSleepContext));
+    const result = resolveDeterministicAgentResponse(context, evalCase.lang) ?? sanitizeDreamAgentResult(
+      item.artifact.result,
+      evalCase.lang,
+      inferAgentStageFromConversation(evalCase.messages, evalCase.lang, context),
+      context,
+    );
+    return [item.artifact.id, result] as const;
+  })));
   const requestedIds = new Set((process.env.DREAM_AGENT_REVIEW_CASE_IDS ?? "").split(",").map((value) => value.trim()).filter(Boolean));
   const shared = dreamAgentEvalCases.filter((evalCase) =>
     (!requestedIds.size || requestedIds.has(evalCase.id)) && outputs.every((output) => output.has(evalCase.id)));

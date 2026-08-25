@@ -49,11 +49,12 @@ async function requestCompletion(body: unknown, caseId: string) {
       body: JSON.stringify(body),
     });
     if (response.ok) return response;
-    const payload = await response.clone().json().catch(() => null) as { error?: { code?: string; type?: string } } | null;
+    const payload = await response.clone().json().catch(() => null) as { error?: { code?: string; type?: string; message?: string } } | null;
     const reason = payload?.error?.code ?? payload?.error?.type;
     const retryable = isRetryableEvalRequest(response.status, reason);
     if (!retryable || attempt === 4) {
-      throw new Error(`${caseId}: upstream returned ${response.status} (${reason ?? "unknown"})`);
+      const retryAfter = response.headers.get("retry-after");
+      throw new Error(`${caseId}: upstream returned ${response.status} (${reason ?? "unknown"})${retryAfter ? `; retry-after=${retryAfter}` : ""}${payload?.error?.message ? `; ${payload.error.message}` : ""}`);
     }
     await wait(evalRetryDelayMs(attempt, response.headers.get("retry-after")));
   }
@@ -101,6 +102,7 @@ async function runCase(evalCase: (typeof dreamAgentEvalCases)[number]) {
         total: payload.usage?.total_tokens ?? null,
       },
       rawJsonValid,
+      rawOutput: raw,
       result,
     },
   };

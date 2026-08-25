@@ -54,6 +54,7 @@ describe("dream agent evaluator", () => {
     expect(isRetryableEvalRequest(400, "json_validate_failed")).toBe(true);
     expect(isRetryableEvalRequest(429, "credit_balance_exhausted")).toBe(false);
     expect(evalRetryDelayMs(1, "2.5")).toBe(2500);
+    expect(evalRetryDelayMs(1, "110")).toBe(110_000);
     expect(evalRetryDelayMs(4)).toBe(15_000);
   });
 });
