@@ -83,31 +83,42 @@ export function scheduleDreamAgentJournalSaved(userId: number, interactionId: st
 
 export async function getDreamAgentFunnelMetrics(days: number) {
   await ensureSchema();
-  const result = await getPool().query<{
+  type FunnelRow = {
     policy_variant: string;
-    variant: string;
-    provider: string;
+    variant?: string;
+    provider?: string;
     interactions: number;
+    eligible_interactions: number;
     journal_saves: number;
     journal_save_rate: number | null;
     ready_rate: number | null;
     average_latency_ms: number | null;
     p95_latency_ms: number | null;
-  }>(
+  };
+  const pool = getPool();
+  const [variants, policies] = await Promise.all([
+    pool.query<FunnelRow>(
     `
       SELECT policy_variant,
              variant,
              provider,
              COUNT(*)::int AS interactions,
              COUNT(*) FILTER (
-               WHERE journal_saved_at IS NOT NULL
+               WHERE created_at <= NOW() - INTERVAL '24 hours'
+             )::int AS eligible_interactions,
+             COUNT(*) FILTER (
+               WHERE created_at <= NOW() - INTERVAL '24 hours'
+                 AND journal_saved_at IS NOT NULL
                  AND journal_saved_at <= created_at + INTERVAL '24 hours'
              )::int AS journal_saves,
              ROUND(
                COUNT(*) FILTER (
-                 WHERE journal_saved_at IS NOT NULL
+                 WHERE created_at <= NOW() - INTERVAL '24 hours'
+                   AND journal_saved_at IS NOT NULL
                    AND journal_saved_at <= created_at + INTERVAL '24 hours'
-               )::numeric / NULLIF(COUNT(*), 0),
+               )::numeric / NULLIF(COUNT(*) FILTER (
+                 WHERE created_at <= NOW() - INTERVAL '24 hours'
+               ), 0),
                4
              )::float AS journal_save_rate,
              ROUND(
@@ -122,6 +133,42 @@ export async function getDreamAgentFunnelMetrics(days: number) {
       ORDER BY policy_variant, variant, provider
     `,
     [days],
-  );
-  return { days, variants: result.rows };
+    ),
+    pool.query<FunnelRow>(
+      `
+        SELECT policy_variant,
+               COUNT(*)::int AS interactions,
+               COUNT(*) FILTER (
+                 WHERE created_at <= NOW() - INTERVAL '24 hours'
+               )::int AS eligible_interactions,
+               COUNT(*) FILTER (
+                 WHERE created_at <= NOW() - INTERVAL '24 hours'
+                   AND journal_saved_at IS NOT NULL
+                   AND journal_saved_at <= created_at + INTERVAL '24 hours'
+               )::int AS journal_saves,
+               ROUND(
+                 COUNT(*) FILTER (
+                   WHERE created_at <= NOW() - INTERVAL '24 hours'
+                     AND journal_saved_at IS NOT NULL
+                     AND journal_saved_at <= created_at + INTERVAL '24 hours'
+                 )::numeric / NULLIF(COUNT(*) FILTER (
+                   WHERE created_at <= NOW() - INTERVAL '24 hours'
+                 ), 0),
+                 4
+               )::float AS journal_save_rate,
+               ROUND(
+                 COUNT(*) FILTER (WHERE next_action = 'ready_to_analyze')::numeric / NULLIF(COUNT(*), 0),
+                 4
+               )::float AS ready_rate,
+               ROUND(AVG(latency_ms))::int AS average_latency_ms,
+               ROUND(PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY latency_ms))::int AS p95_latency_ms
+        FROM dream_agent_interactions
+        WHERE created_at >= NOW() - ($1 * INTERVAL '1 day')
+        GROUP BY policy_variant
+        ORDER BY policy_variant
+      `,
+      [days],
+    ),
+  ]);
+  return { days, variants: variants.rows, policies: policies.rows };
 }

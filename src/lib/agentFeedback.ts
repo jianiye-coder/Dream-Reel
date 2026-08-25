@@ -36,7 +36,7 @@ export async function saveAgentFeedback(userId: number, input: VerifiedAgentFeed
 export async function getAgentFeedbackMetrics(days: number) {
   await ensureSchema();
   const pool = getPool();
-  const [variants, reasons] = await Promise.all([
+  const [variants, reasons, policies, policyReasons] = await Promise.all([
     pool.query<{
       policy_variant: string;
       variant: string;
@@ -74,6 +74,47 @@ export async function getAgentFeedbackMetrics(days: number) {
       `,
       [days],
     ),
+    pool.query<{
+      policy_variant: string;
+      total: number;
+      positive: number;
+      negative: number;
+      positive_rate: number | null;
+    }>(
+      `
+        SELECT policy_variant,
+               COUNT(*)::int AS total,
+               COUNT(*) FILTER (WHERE rating = 'up')::int AS positive,
+               COUNT(*) FILTER (WHERE rating = 'down')::int AS negative,
+               ROUND(
+                 COUNT(*) FILTER (WHERE rating = 'up')::numeric / NULLIF(COUNT(*), 0),
+                 4
+               )::float AS positive_rate
+        FROM agent_feedback
+        WHERE created_at >= NOW() - ($1 * INTERVAL '1 day')
+        GROUP BY policy_variant
+        ORDER BY policy_variant
+      `,
+      [days],
+    ),
+    pool.query<{ policy_variant: string; reason: string; count: number }>(
+      `
+        SELECT policy_variant, reason, COUNT(*)::int AS count
+        FROM agent_feedback
+        WHERE created_at >= NOW() - ($1 * INTERVAL '1 day')
+          AND rating = 'down'
+          AND reason IS NOT NULL
+        GROUP BY policy_variant, reason
+        ORDER BY policy_variant, count DESC, reason
+      `,
+      [days],
+    ),
   ]);
-  return { days, variants: variants.rows, negativeReasons: reasons.rows };
+  return {
+    days,
+    variants: variants.rows,
+    negativeReasons: reasons.rows,
+    policies: policies.rows,
+    policyNegativeReasons: policyReasons.rows,
+  };
 }

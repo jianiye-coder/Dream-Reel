@@ -98,13 +98,17 @@ describe("privacy-safe dream agent metrics", () => {
       variant: "json-object-v1",
       provider: "groq",
       interactions: 10,
+      eligible_interactions: 8,
       journal_saves: 7,
       journal_save_rate: 0.7,
     }] });
     await expect(getDreamAgentFunnelMetrics(14)).resolves.toMatchObject({
       days: 14,
       variants: [{ journal_save_rate: 0.7 }],
+      policies: [{ eligible_interactions: 8 }],
     });
     expect(db.query).toHaveBeenCalledWith(expect.stringContaining("GROUP BY policy_variant, variant, provider"), [14]);
+    expect(db.query).toHaveBeenCalledWith(expect.stringContaining("created_at <= NOW() - INTERVAL '24 hours'"), [14]);
+    expect(db.query).toHaveBeenCalledTimes(2);
   });
 });

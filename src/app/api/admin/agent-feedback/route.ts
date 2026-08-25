@@ -20,7 +20,19 @@ export async function GET(request: NextRequest) {
       getAgentFeedbackMetrics(rawDays),
       getDreamAgentFunnelMetrics(rawDays),
     ]);
-    return NextResponse.json({ ...feedback, funnel });
+    const generatedAt = new Date().toISOString();
+    const download = new URL(request.url).searchParams.get("download") === "1";
+    return NextResponse.json(
+      { generatedAt, ...feedback, funnel },
+      {
+        headers: {
+          "Cache-Control": "private, no-store",
+          ...(download ? {
+            "Content-Disposition": `attachment; filename="dream-agent-canary-${generatedAt.slice(0, 10)}.json"`,
+          } : {}),
+        },
+      },
+    );
   } catch (error) {
     console.error("GET /api/admin/agent-feedback failed", safeErrorMetadata(error));
     return NextResponse.json({ error: "Internal error" }, { status: 500 });

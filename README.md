@@ -89,6 +89,7 @@ npm run dev
 - `DREAM_AGENT_FEEDBACK_SECRET` signs short-lived, user-bound feedback tokens. It falls back to `AUTH_SECRET`, but a separate secret is recommended.
 - `DREAM_AGENT_JSON_SCHEMA_PERCENT` enables the strict-output canary for a stable percentage of users; keep it at `0` unless a monitored experiment is active.
 - `DREAM_AGENT_GUARDED_PERCENT` enables the guarded recall-policy canary for a stable percentage of users. It defaults to `0`; advance it only through the documented quality gates.
+- Download `/api/admin/agent-feedback?days=14&download=1` while signed in as the administrator and validate it with `npm run eval:agent:canary -- snapshot.json` before each rollout increase.
 - Dream analysis currently uses `gpt-4o-mini`.
 - Image generation currently uses `gpt-image-2`.
 - Generated images and thumbnails are stored in Vercel Blob; `BLOB_READ_WRITE_TOKEN` is required for image generation.
@@ -180,6 +181,7 @@ npm run dev
 - `DREAM_AGENT_FEEDBACK_SECRET` 用于签发短期、绑定用户的反馈令牌；未配置时会回退到 `AUTH_SECRET`，但推荐使用独立密钥。
 - `DREAM_AGENT_JSON_SCHEMA_PERCENT` 控制严格结构化输出的稳定用户灰度比例；没有监控实验时保持为 `0`。
 - `DREAM_AGENT_GUARDED_PERCENT` 控制新梦境回忆策略的稳定用户灰度比例；默认保持 `0`，只按质量门禁逐级提高。
+- 管理员登录后可下载 `/api/admin/agent-feedback?days=14&download=1`，并在每次提高灰度前运行 `npm run eval:agent:canary -- snapshot.json`。
 - 梦境分析当前使用 `gpt-4o-mini`。
 - 图像生成当前使用 `gpt-image-2`。
 - 生成的原图与缩略图存储在 Vercel Blob；图片生成功能需要配置 `BLOB_READ_WRITE_TOKEN`。
