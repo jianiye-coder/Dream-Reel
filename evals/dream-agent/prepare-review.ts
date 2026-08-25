@@ -83,18 +83,20 @@ function buildReviewHtml(reviewCases: unknown, reviewId: string) {
 }
 
 async function main() {
-  const resanitize = process.argv.includes("--resanitize");
-  const paths = process.argv.slice(2).filter((value) => value !== "--resanitize");
+  const resanitizeAll = process.argv.includes("--resanitize");
+  const resanitizeCandidate = process.argv.includes("--resanitize-candidate");
+  const paths = process.argv.slice(2).filter((value) => !value.startsWith("--resanitize"));
   if (paths.length !== 2) {
-    throw new Error("Usage: npm run eval:agent:review-pack -- artifact-a.json artifact-b.json [--resanitize]");
+    throw new Error("Usage: npm run eval:agent:review-pack -- artifact-a.json artifact-b.json [--resanitize-candidate|--resanitize]");
   }
   const artifacts = await Promise.all(paths.map(async (path) => JSON.parse(await readFile(path, "utf8")) as ArtifactFile));
   const reviewLabels = (process.env.DREAM_AGENT_REVIEW_LABELS ?? "").split(",").map((value) => value.trim());
   const artifactLabel = (index: number) => reviewLabels[index] || artifacts[index].label || `${artifacts[index].model}/${artifacts[index].responseFormat}`;
   const casesById = new Map(dreamAgentEvalCases.map((evalCase) => [evalCase.id, evalCase]));
-  const outputs = artifacts.map((artifact) => new Map(artifact.cases.map((item) => {
+  const outputs = artifacts.map((artifact, artifactIndex) => new Map(artifact.cases.map((item) => {
     const evalCase = casesById.get(item.artifact.id);
-    if (!resanitize || !evalCase) return [item.artifact.id, item.artifact.result] as const;
+    const shouldResanitize = resanitizeAll || (resanitizeCandidate && artifactIndex === 1);
+    if (!shouldResanitize || !evalCase) return [item.artifact.id, item.artifact.result] as const;
     const context = deriveDreamAgentConversationContext(evalCase.messages, evalCase.lang, Boolean(evalCase.preSleepContext));
     const result = resolveDeterministicAgentResponse(context, evalCase.lang) ?? sanitizeDreamAgentResult(
       item.artifact.result,
