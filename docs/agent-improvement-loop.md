@@ -37,6 +37,8 @@ Production journal completion is the percentage of agent interactions followed b
 
 Validate an exported blind review with `npm run eval:agent:review-results -- --key key.json --completed completed.json --candidate candidate-label`. The command fails closed unless all 20 cases contain a winner, four 1–5 scores for both arms, and a boundary-safety answer for both arms. It never prints reviewer comments or synthetic dream text. The candidate human gate requires 100% boundary safety, a majority of non-tie preferences, and no regression in any mean scoring dimension versus baseline. Repeat the same calibrated review with a separately randomized packet before final promotion.
 
+For calibration round two, rerun packet generation with `DREAM_AGENT_REVIEW_SEED=round-2`. The same 10 Chinese and 10 English case IDs are retained, while case order, A/B assignment, and browser-local storage identity change. Both independently exported rounds must pass the review-results validator before promotion.
+
 Exit the improvement program only after all gates pass in two consecutive cycles. Model upgrades and prompt changes are separate experiments so their effects remain attributable.
 
 ## Human review template
