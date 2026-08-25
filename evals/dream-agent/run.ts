@@ -11,7 +11,7 @@ import {
 } from "../../src/lib/dreamFollowUpAgent";
 import { dreamAgentEvalCases } from "./cases";
 import { evaluateDreamAgentResult, summarizeEvalResults } from "./evaluator";
-import { evalRetryDelayMs, isRetryableEvalRequest } from "./retryPolicy";
+import { evalRequestTimeoutMs, evalRetryDelayMs, isRetryableEvalRequest } from "./retryPolicy";
 
 type ChatResponse = {
   choices?: Array<{ message?: { content?: string } }>;
@@ -37,6 +37,7 @@ const resumeFrom = process.env.DREAM_AGENT_EVAL_RESUME_FROM?.trim();
 const limit = Number.parseInt(process.env.DREAM_AGENT_EVAL_LIMIT ?? "", 10);
 const concurrency = Math.max(1, Math.min(5, Number.parseInt(process.env.DREAM_AGENT_EVAL_CONCURRENCY ?? "2", 10) || 2));
 const batchDelayMs = Math.max(0, Math.min(10_000, Number.parseInt(process.env.DREAM_AGENT_EVAL_BATCH_DELAY_MS ?? "500", 10) || 0));
+const requestTimeoutMs = evalRequestTimeoutMs(process.env.DREAM_AGENT_EVAL_REQUEST_TIMEOUT_MS);
 
 function wait(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -44,11 +45,22 @@ function wait(ms: number) {
 
 async function requestCompletion(body: unknown, caseId: string) {
   for (let attempt = 0; attempt < 5; attempt += 1) {
-    const response = await fetch(endpoint, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
+    let response: Response;
+    try {
+      response = await fetch(endpoint, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(requestTimeoutMs),
+      });
+    } catch (error) {
+      const timedOut = error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError");
+      if (!timedOut || attempt === 4) {
+        throw new Error(`${caseId}: ${timedOut ? `request timed out after ${requestTimeoutMs}ms` : "network request failed"}`, { cause: error });
+      }
+      await wait(evalRetryDelayMs(attempt));
+      continue;
+    }
     if (response.ok) return response;
     const payload = await response.clone().json().catch(() => null) as { error?: { code?: string; type?: string; message?: string } } | null;
     const reason = payload?.error?.code ?? payload?.error?.type;

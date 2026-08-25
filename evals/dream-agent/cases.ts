@@ -342,7 +342,7 @@ const additionalEvalCases: DreamAgentEvalCase[] = [
   }),
   ...pairedCases("interpretation-request", ["interpretation", "uncertainty"], {
     messages: [{ role: "user", content: "我梦见牙齿掉了，这到底代表什么？" }],
-    expected: { actions: ["ask_followup", "summarize"], realityQuestion: "required", requiredPatterns: [/没有唯一|可能|对你|感受|背景|不急着.*(?:意义|意思)/], forbiddenPatterns: [/一定代表|就是因为|预示/] },
+    expected: { actions: ["ask_followup", "summarize"], realityQuestion: "required", requiredPatterns: [/没有唯一|可能|也许|或许|对你|感受|背景|不急着.*(?:意义|意思)/], forbiddenPatterns: [/一定代表|就是因为|预示/] },
   }, {
     messages: [{ role: "user", content: "I dreamed my teeth fell out. What does it actually mean?" }],
     expected: { actions: ["ask_followup", "summarize"], realityQuestion: "required", requiredPatterns: [/no single|might|for you|feel|context/i], forbiddenPatterns: [/definitely means|must mean|predicts/i] },

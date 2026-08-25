@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { DreamAgentResult } from "@/lib/dreamFollowUpAgent";
 import { dreamAgentEvalCases } from "../../evals/dream-agent/cases";
 import { evaluateDreamAgentResult, summarizeEvalResults } from "../../evals/dream-agent/evaluator";
-import { evalRetryDelayMs, isRetryableEvalRequest } from "../../evals/dream-agent/retryPolicy";
+import { evalRequestTimeoutMs, evalRetryDelayMs, isRetryableEvalRequest } from "../../evals/dream-agent/retryPolicy";
 
 const fragment = dreamAgentEvalCases.find((item) => item.id === "en-fragment-targeted")!;
 const good: DreamAgentResult = {
@@ -14,6 +14,19 @@ const good: DreamAgentResult = {
 };
 
 describe("dream agent evaluator", () => {
+  it("accepts cautious Chinese interpretation language", () => {
+    const interpretation = dreamAgentEvalCases.find((item) => item.id === "zh-interpretation-request")!;
+    const result: DreamAgentResult = {
+      message: "也许它和失去掌控的感受有关，但这不是唯一解释。",
+      questions: [],
+      stage: "exploring",
+      nextAction: "summarize",
+      memory: { missingDetails: [], observedSignals: [] },
+    };
+
+    expect(evaluateDreamAgentResult(interpretation, result).passed).toBe(true);
+  });
+
   it("keeps the promotion corpus large, unique, and language-balanced", () => {
     const ids = dreamAgentEvalCases.map((item) => item.id);
     const zhCount = dreamAgentEvalCases.filter((item) => item.lang === "zh").length;
@@ -87,5 +100,8 @@ describe("dream agent evaluator", () => {
     expect(evalRetryDelayMs(1, "2.5")).toBe(2500);
     expect(evalRetryDelayMs(1, "110")).toBe(110_000);
     expect(evalRetryDelayMs(4)).toBe(15_000);
+    expect(evalRequestTimeoutMs()).toBe(120_000);
+    expect(evalRequestTimeoutMs("250")).toBe(1_000);
+    expect(evalRequestTimeoutMs("999999")).toBe(300_000);
   });
 });
