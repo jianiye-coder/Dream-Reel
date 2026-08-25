@@ -16,6 +16,8 @@ async function main() {
     minimumEligibleInteractions: positiveNumber(process.env.DREAM_AGENT_CANARY_MIN_ELIGIBLE, 50),
     maximumLatencyRegression: positiveNumber(process.env.DREAM_AGENT_CANARY_MAX_LATENCY_REGRESSION, 0.2),
     maximumSnapshotAgeHours: positiveNumber(process.env.DREAM_AGENT_CANARY_MAX_SNAPSHOT_AGE_HOURS, 2),
+    maximumErrorRateIncrease: positiveNumber(process.env.DREAM_AGENT_CANARY_MAX_ERROR_RATE_INCREASE, 0.01),
+    maximumFallbackRateIncrease: positiveNumber(process.env.DREAM_AGENT_CANARY_MAX_FALLBACK_RATE_INCREASE, 0.05),
   });
   console.log(JSON.stringify(report, null, 2));
   if (!report.passed) process.exitCode = 1;

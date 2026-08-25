@@ -14,8 +14,10 @@ vi.mock("next/server", () => ({ after: next.after }));
 
 import {
   getDreamAgentFunnelMetrics,
+  getDreamAgentReliabilityMetrics,
   markDreamAgentJournalSaved,
   recordDreamAgentInteraction,
+  recordDreamAgentRequestOutcome,
   scheduleDreamAgentInteraction,
 } from "@/lib/dreamAgentMetrics";
 
@@ -90,6 +92,48 @@ describe("privacy-safe dream agent metrics", () => {
       expect.stringMatching(/interaction_id = \$1[\s\S]*user_id = \$2/),
       ["d679a3e1-470c-4936-8969-26c73713fe44", 7, 42],
     );
+  });
+
+  it("records content-free request outcomes for reliability comparison", async () => {
+    db.query.mockResolvedValue({ rows: [] });
+    await recordDreamAgentRequestOutcome(7, {
+      requestId: "a679a3e1-470c-4936-8969-26c73713fe44",
+      policyVariant: "guarded-v2",
+      outcome: "provider_rate_limited",
+      source: "model",
+      provider: "groq",
+      providerAttempts: 2,
+      fallbackUsed: true,
+      latencyMs: 850,
+    });
+    expect(db.query).toHaveBeenCalledWith(expect.stringContaining("dream_agent_request_outcomes"), [
+      "a679a3e1-470c-4936-8969-26c73713fe44",
+      7,
+      "guarded-v2",
+      "provider_rate_limited",
+      "model",
+      "groq",
+      2,
+      true,
+      850,
+    ]);
+  });
+
+  it("aggregates request errors and fallback use by policy only", async () => {
+    db.query.mockResolvedValue({ rows: [{
+      policy_variant: "guarded-v2",
+      total_requests: 100,
+      successful_requests: 98,
+      failed_requests: 2,
+      error_rate: 0.02,
+      fallback_requests: 4,
+      fallback_rate: 0.04,
+    }] });
+    await expect(getDreamAgentReliabilityMetrics(14)).resolves.toMatchObject({
+      days: 14,
+      policies: [{ error_rate: 0.02, fallback_rate: 0.04 }],
+    });
+    expect(db.query).toHaveBeenCalledWith(expect.stringContaining("GROUP BY policy_variant"), [14]);
   });
 
   it("returns aggregate funnel metrics without per-user rows", async () => {

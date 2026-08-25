@@ -36,6 +36,18 @@ const funnelVariantSchema = funnelBaseSchema.extend({
   provider: z.enum(["deterministic", "openai", "groq"]),
 }).strict();
 
+const reliabilityPolicySchema = z.object({
+  policy_variant: policyVariantSchema,
+  total_requests: z.number().int().nonnegative(),
+  successful_requests: z.number().int().nonnegative(),
+  failed_requests: z.number().int().nonnegative(),
+  error_rate: rateSchema,
+  fallback_requests: z.number().int().nonnegative(),
+  fallback_rate: rateSchema,
+  timeout_requests: z.number().int().nonnegative(),
+  provider_rate_limited_requests: z.number().int().nonnegative(),
+}).strict();
+
 export const dreamAgentCanarySnapshotSchema = z.object({
   generatedAt: z.string().datetime({ offset: true }),
   days: z.number().int().min(1).max(90),
@@ -48,6 +60,10 @@ export const dreamAgentCanarySnapshotSchema = z.object({
     variants: z.array(funnelVariantSchema),
     policies: z.array(funnelBaseSchema),
   }).strict(),
+  reliability: z.object({
+    days: z.number().int().min(1).max(90),
+    policies: z.array(reliabilityPolicySchema),
+  }).strict(),
 }).strict();
 
 export type DreamAgentCanarySnapshot = z.infer<typeof dreamAgentCanarySnapshotSchema>;
@@ -56,6 +72,8 @@ export interface CanaryGateOptions {
   minimumEligibleInteractions?: number;
   maximumLatencyRegression?: number;
   maximumSnapshotAgeHours?: number;
+  maximumErrorRateIncrease?: number;
+  maximumFallbackRateIncrease?: number;
 }
 
 export interface CanaryGateCheck {
@@ -81,8 +99,14 @@ export function analyzeDreamAgentCanary(
   const minimumEligibleInteractions = Math.max(1, options.minimumEligibleInteractions ?? 50);
   const maximumLatencyRegression = Math.max(0, options.maximumLatencyRegression ?? 0.2);
   const maximumSnapshotAgeHours = Math.max(0.1, options.maximumSnapshotAgeHours ?? 2);
+  const maximumErrorRateIncrease = Math.max(0, options.maximumErrorRateIncrease ?? 0.01);
+  const maximumFallbackRateIncrease = Math.max(0, options.maximumFallbackRateIncrease ?? 0.05);
   const legacy = exactlyOnePolicyRow(snapshot.funnel.policies, "legacy-v1");
   const candidate = exactlyOnePolicyRow(snapshot.funnel.policies, "guarded-v2");
+  const legacyReliabilityRows = snapshot.reliability.policies.filter((row) => row.policy_variant === "legacy-v1");
+  const candidateReliabilityRows = snapshot.reliability.policies.filter((row) => row.policy_variant === "guarded-v2");
+  const legacyReliability = legacyReliabilityRows.length === 1 ? legacyReliabilityRows[0] : null;
+  const candidateReliability = candidateReliabilityRows.length === 1 ? candidateReliabilityRows[0] : null;
   const snapshotAgeMs = now.getTime() - new Date(snapshot.generatedAt).getTime();
   const unsafeCandidateFeedback = snapshot.policyNegativeReasons
     .filter((row) => row.policy_variant === "guarded-v2" && row.reason === "unsafe")
@@ -102,6 +126,11 @@ export function analyzeDreamAgentCanary(
       name: "legacy_sample_mature",
       passed: (legacy?.eligible_interactions ?? 0) >= minimumEligibleInteractions,
       detail: `eligible=${legacy?.eligible_interactions ?? 0} required=${minimumEligibleInteractions}`,
+    },
+    {
+      name: "exact_reliability_policy_rows",
+      passed: Boolean(legacyReliability && candidateReliability),
+      detail: `legacy_rows=${legacyReliabilityRows.length} guarded_rows=${candidateReliabilityRows.length}`,
     },
     {
       name: "guarded_sample_mature",
@@ -127,6 +156,20 @@ export function analyzeDreamAgentCanary(
       passed: unsafeCandidateFeedback === 0,
       detail: `unsafe_feedback=${unsafeCandidateFeedback}`,
     },
+    {
+      name: "request_error_rate_within_budget",
+      passed: legacyReliability?.error_rate != null
+        && candidateReliability?.error_rate != null
+        && candidateReliability.error_rate <= legacyReliability.error_rate + maximumErrorRateIncrease,
+      detail: `legacy=${legacyReliability?.error_rate ?? "missing"} guarded=${candidateReliability?.error_rate ?? "missing"} max_increase=${maximumErrorRateIncrease}`,
+    },
+    {
+      name: "fallback_rate_within_budget",
+      passed: legacyReliability?.fallback_rate != null
+        && candidateReliability?.fallback_rate != null
+        && candidateReliability.fallback_rate <= legacyReliability.fallback_rate + maximumFallbackRateIncrease,
+      detail: `legacy=${legacyReliability?.fallback_rate ?? "missing"} guarded=${candidateReliability?.fallback_rate ?? "missing"} max_increase=${maximumFallbackRateIncrease}`,
+    },
   ];
   return {
     passed: checks.every((check) => check.passed),
@@ -141,6 +184,10 @@ export function analyzeDreamAgentCanary(
       legacyP95LatencyMs: legacy?.p95_latency_ms ?? null,
       guardedP95LatencyMs: candidate?.p95_latency_ms ?? null,
       guardedUnsafeFeedback: unsafeCandidateFeedback,
+      legacyErrorRate: legacyReliability?.error_rate ?? null,
+      guardedErrorRate: candidateReliability?.error_rate ?? null,
+      legacyFallbackRate: legacyReliability?.fallback_rate ?? null,
+      guardedFallbackRate: candidateReliability?.fallback_rate ?? null,
     },
   };
 }

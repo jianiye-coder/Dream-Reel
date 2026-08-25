@@ -2,7 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { getAgentFeedbackMetrics } from "@/lib/agentFeedback";
 import { safeErrorMetadata } from "@/lib/safeServerLog";
-import { getDreamAgentFunnelMetrics } from "@/lib/dreamAgentMetrics";
+import {
+  getDreamAgentFunnelMetrics,
+  getDreamAgentReliabilityMetrics,
+} from "@/lib/dreamAgentMetrics";
 
 export const runtime = "nodejs";
 
@@ -16,14 +19,15 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Invalid input" }, { status: 400 });
   }
   try {
-    const [feedback, funnel] = await Promise.all([
+    const [feedback, funnel, reliability] = await Promise.all([
       getAgentFeedbackMetrics(rawDays),
       getDreamAgentFunnelMetrics(rawDays),
+      getDreamAgentReliabilityMetrics(rawDays),
     ]);
     const generatedAt = new Date().toISOString();
     const download = new URL(request.url).searchParams.get("download") === "1";
     return NextResponse.json(
-      { generatedAt, ...feedback, funnel },
+      { generatedAt, ...feedback, funnel, reliability },
       {
         headers: {
           "Cache-Control": "private, no-store",

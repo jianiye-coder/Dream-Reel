@@ -20,7 +20,11 @@ import {
   selectDreamAgentModelVariant,
   selectDreamAgentPolicyVariant,
 } from "@/lib/dreamAgentTelemetry";
-import { scheduleDreamAgentInteraction } from "@/lib/dreamAgentMetrics";
+import {
+  scheduleDreamAgentInteraction,
+  scheduleDreamAgentRequestOutcome,
+  type DreamAgentRequestOutcomeInput,
+} from "@/lib/dreamAgentMetrics";
 import { API_ERROR_CODES } from "@/lib/apiErrors";
 import { safeErrorMetadata } from "@/lib/safeServerLog";
 
@@ -130,6 +134,20 @@ export async function POST(req: NextRequest) {
   const { messages, lang, preSleepMeal, preSleepActivity } = parsed.data;
   const policyVariant = selectDreamAgentPolicyVariant(userId, process.env.DREAM_AGENT_GUARDED_PERCENT);
   const guardedRecall = policyVariant === "guarded-v2";
+  const requestId = crypto.randomUUID();
+  let requestOutcomeRecorded = false;
+  function recordRequestOutcome(
+    input: Omit<DreamAgentRequestOutcomeInput, "requestId" | "policyVariant" | "latencyMs">,
+  ) {
+    if (requestOutcomeRecorded) return;
+    requestOutcomeRecorded = true;
+    scheduleDreamAgentRequestOutcome(userId, {
+      requestId,
+      policyVariant,
+      latencyMs: Math.max(0, Date.now() - requestStartedAt),
+      ...input,
+    });
+  }
   const contextLines = buildContextLines(lang, preSleepMeal, preSleepActivity);
   const conversationContext = deriveDreamAgentConversationContext(messages, lang, Boolean(contextLines));
   const deterministicResponse = resolveDeterministicAgentResponse(conversationContext, lang, guardedRecall);
@@ -144,16 +162,37 @@ export async function POST(req: NextRequest) {
     );
     logDreamAgentCompletion(deterministicResponse, meta);
     scheduleDreamAgentInteraction(userId, deterministicResponse, meta);
+    recordRequestOutcome({
+      outcome: "success",
+      source: "deterministic",
+      provider: "deterministic",
+      providerAttempts: 0,
+      fallbackUsed: false,
+    });
     return NextResponse.json({ ...deterministicResponse, meta });
   }
   const modelProviders = configuredModelProviders();
   if (!modelProviders.length) {
+    recordRequestOutcome({
+      outcome: "configuration_error",
+      source: "none",
+      provider: "none",
+      providerAttempts: 0,
+      fallbackUsed: false,
+    });
     return NextResponse.json({ error: API_ERROR_CODES.configurationError }, { status: 500 });
   }
   const forwardedFor = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim();
   const ipAddress = forwardedFor || req.headers.get("x-real-ip")?.trim() || "unknown";
   const rateLimit = await checkAiRateLimit(userId, ipAddress);
   if (!rateLimit.allowed) {
+    recordRequestOutcome({
+      outcome: "app_rate_limited",
+      source: "none",
+      provider: "none",
+      providerAttempts: 0,
+      fallbackUsed: false,
+    });
     return NextResponse.json(
       { error: API_ERROR_CODES.rateLimited },
       {
@@ -165,6 +204,13 @@ export async function POST(req: NextRequest) {
 
   const usage = await checkAndConsumeUsage(userId, "analysis");
   if (!usage.allowed) {
+    recordRequestOutcome({
+      outcome: "quota_exceeded",
+      source: "none",
+      provider: "none",
+      providerAttempts: 0,
+      fallbackUsed: false,
+    });
     return NextResponse.json(
       {
         error: API_ERROR_CODES.quotaExceeded,
@@ -191,8 +237,13 @@ export async function POST(req: NextRequest) {
   });
 
   let lastFailureWasTimeout = false;
+  let providerAttempts = 0;
+  let lastProvider: ModelProvider["name"] | "none" = "none";
+  let sawProviderRateLimit = false;
   for (const provider of modelProviders) {
     lastFailureWasTimeout = false;
+    providerAttempts += 1;
+    lastProvider = provider.name;
     try {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), OPENAI_TIMEOUT_MS);
@@ -218,6 +269,7 @@ export async function POST(req: NextRequest) {
       }
 
       if (!upstream.ok) {
+        if (upstream.status === 429) sawProviderRateLimit = true;
         console.error("POST /api/chat-dream provider failed", {
           provider: provider.name,
           status: upstream.status,
@@ -248,6 +300,13 @@ export async function POST(req: NextRequest) {
       };
       logDreamAgentCompletion(result, meta, tokenUsage);
       scheduleDreamAgentInteraction(userId, result, meta, tokenUsage);
+      recordRequestOutcome({
+        outcome: "success",
+        source: "model",
+        provider: provider.name,
+        providerAttempts,
+        fallbackUsed: providerAttempts > 1,
+      });
       return NextResponse.json({ ...result, meta });
     } catch (err) {
       lastFailureWasTimeout = err instanceof Error && err.name === "AbortError";
@@ -259,6 +318,15 @@ export async function POST(req: NextRequest) {
   }
 
   await refundChatUsageOnce();
+  recordRequestOutcome({
+    outcome: lastFailureWasTimeout
+      ? "timeout"
+      : sawProviderRateLimit ? "provider_rate_limited" : "upstream_error",
+    source: "model",
+    provider: lastProvider,
+    providerAttempts,
+    fallbackUsed: providerAttempts > 1,
+  });
   if (lastFailureWasTimeout) {
     return NextResponse.json({ error: API_ERROR_CODES.timeout }, { status: 504 });
   }

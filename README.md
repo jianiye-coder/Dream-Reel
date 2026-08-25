@@ -83,7 +83,7 @@ npm run dev
 - To rotate dream encryption, give the new key a new `DREAM_TEXT_ENCRYPTION_KEY_ID` and retain old keys temporarily in `DREAM_TEXT_PREVIOUS_ENCRYPTION_KEYS`. Reads stay compatible while stored rows are re-encrypted in batches.
 - `GET /api/health` returns `503` when PostgreSQL is unavailable, without exposing connection details.
 - Application logs must retain operational metadata only. Never log dream text, AI prompts/responses, generated visual briefs, credentials, or encryption material; configure the hosting provider's retention period to the shortest operationally useful window.
-- Administrators can read content-free feedback aggregates at `GET /api/admin/agent-feedback?days=7` (1–90 days). The endpoint returns policy/format variant totals, positive rate, completion rate, latency, and negative reason counts only.
+- Administrators can read content-free aggregates at `GET /api/admin/agent-feedback?days=7` (1–90 days). The endpoint returns policy/format totals, feedback, mature completion, latency, request-error categories, and fallback rates only.
 
 - `OPENAI_MODEL` controls the dream chat model and defaults to `gpt-5.5`.
 - `DREAM_AGENT_FEEDBACK_SECRET` signs short-lived, user-bound feedback tokens. It falls back to `AUTH_SECRET`, but a separate secret is recommended.
@@ -175,7 +175,7 @@ npm run dev
 - 轮换梦境加密密钥时，为新密钥设置新的 `DREAM_TEXT_ENCRYPTION_KEY_ID`，并暂时把旧密钥保留在 `DREAM_TEXT_PREVIOUS_ENCRYPTION_KEYS`；服务会兼容读取并分批重加密旧数据。
 - `GET /api/health` 会在 PostgreSQL 不可用时返回 `503`，且不会暴露连接信息。
 - 应用日志只保留运行元数据；禁止记录梦境正文、AI 提示词/响应、视觉描述、登录凭据或加密材料，并应把托管平台的日志保留期设为满足运维所需的最短时间。
-- 管理员可通过 `GET /api/admin/agent-feedback?days=7`（1–90 天）查看不含内容的反馈汇总；接口只返回策略/格式 variant 的数量、好评率、完成率、延迟和负反馈原因计数。
+- 管理员可通过 `GET /api/admin/agent-feedback?days=7`（1–90 天）查看不含内容的汇总；接口只返回策略/格式数量、反馈、成熟完成率、延迟、请求错误类别和 fallback 比率。
 
 - `OPENAI_MODEL` 控制梦境 Chat 模型，默认是 `gpt-5.5`。
 - `DREAM_AGENT_FEEDBACK_SECRET` 用于签发短期、绑定用户的反馈令牌；未配置时会回退到 `AUTH_SECRET`，但推荐使用独立密钥。

@@ -420,6 +420,25 @@ export async function ensureSchema(): Promise<void> {
     );
   `);
 
+  // Request outcomes contain operational categories only, never dream or model text.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS dream_agent_request_outcomes (
+      request_id UUID PRIMARY KEY,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      policy_variant TEXT NOT NULL,
+      outcome TEXT NOT NULL CHECK (outcome IN (
+        'success', 'configuration_error', 'app_rate_limited', 'quota_exceeded',
+        'timeout', 'provider_rate_limited', 'upstream_error'
+      )),
+      source TEXT NOT NULL CHECK (source IN ('deterministic', 'model', 'none')),
+      provider TEXT NOT NULL CHECK (provider IN ('deterministic', 'openai', 'groq', 'none')),
+      provider_attempts INTEGER NOT NULL CHECK (provider_attempts >= 0),
+      fallback_used BOOLEAN NOT NULL DEFAULT FALSE,
+      latency_ms INTEGER NOT NULL CHECK (latency_ms >= 0),
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+
   // All ALTER TABLE and CREATE INDEX in parallel (idempotent)
   await Promise.all([
     pool.query("ALTER TABLE dream_entries ADD COLUMN IF NOT EXISTS sleep_start TEXT;"),
@@ -448,6 +467,7 @@ export async function ensureSchema(): Promise<void> {
     pool.query("CREATE INDEX IF NOT EXISTS idx_dream_agent_interactions_created_at ON dream_agent_interactions (created_at DESC);"),
     pool.query("CREATE INDEX IF NOT EXISTS idx_dream_agent_interactions_variant ON dream_agent_interactions (variant, provider, created_at DESC);"),
     pool.query("CREATE INDEX IF NOT EXISTS idx_dream_agent_interactions_policy ON dream_agent_interactions (policy_variant, provider, created_at DESC);"),
+    pool.query("CREATE INDEX IF NOT EXISTS idx_dream_agent_request_outcomes_policy ON dream_agent_request_outcomes (policy_variant, outcome, created_at DESC);"),
   ]);
 
   await normalizeUserEmails(pool);

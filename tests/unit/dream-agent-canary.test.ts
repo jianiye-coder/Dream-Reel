@@ -40,6 +40,33 @@ function snapshot(): DreamAgentCanarySnapshot {
         },
       ],
     },
+    reliability: {
+      days: 14,
+      policies: [
+        {
+          policy_variant: "legacy-v1",
+          total_requests: 80,
+          successful_requests: 78,
+          failed_requests: 2,
+          error_rate: 0.025,
+          fallback_requests: 4,
+          fallback_rate: 0.05,
+          timeout_requests: 1,
+          provider_rate_limited_requests: 1,
+        },
+        {
+          policy_variant: "guarded-v2",
+          total_requests: 75,
+          successful_requests: 74,
+          failed_requests: 1,
+          error_rate: 0.0133,
+          fallback_requests: 3,
+          fallback_rate: 0.04,
+          timeout_requests: 0,
+          provider_rate_limited_requests: 1,
+        },
+      ],
+    },
   };
 }
 
@@ -77,6 +104,18 @@ describe("dream agent production canary gate", () => {
       name: "no_guarded_unsafe_feedback",
       passed: false,
     }));
+  });
+
+  it("blocks promotion when request errors or provider fallback materially increase", () => {
+    const input = snapshot();
+    input.reliability.policies[1].error_rate = 0.05;
+    input.reliability.policies[1].fallback_rate = 0.12;
+    const report = analyzeDreamAgentCanary(input, {}, now);
+    expect(report.passed).toBe(false);
+    expect(report.checks.filter((check) => !check.passed).map((check) => check.name)).toEqual(expect.arrayContaining([
+      "request_error_rate_within_budget",
+      "fallback_rate_within_budget",
+    ]));
   });
 
   it("rejects stale snapshots and unexpected content-bearing fields", () => {

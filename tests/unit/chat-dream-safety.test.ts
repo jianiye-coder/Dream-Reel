@@ -6,7 +6,10 @@ const billing = vi.hoisted(() => ({
   checkAndConsumeUsage: vi.fn(),
   refundConsumedUsage: vi.fn(),
 }));
-const agentMetrics = vi.hoisted(() => ({ scheduleDreamAgentInteraction: vi.fn() }));
+const agentMetrics = vi.hoisted(() => ({
+  scheduleDreamAgentInteraction: vi.fn(),
+  scheduleDreamAgentRequestOutcome: vi.fn(),
+}));
 
 vi.mock("@/auth", () => ({ auth: vi.fn(async () => ({ user: { id: "7" } })) }));
 vi.mock("@/lib/billing", () => billing);
@@ -71,6 +74,11 @@ describe("dream chat safety routing", () => {
       questions: [],
     });
     expect(fetchSpy).toHaveBeenCalledOnce();
+    expect(agentMetrics.scheduleDreamAgentRequestOutcome).toHaveBeenLastCalledWith(7, expect.objectContaining({
+      policyVariant: "guarded-v2",
+      outcome: "success",
+      source: "deterministic",
+    }));
   });
 
   it("returns immediate support without quota use or an upstream model call", async () => {
@@ -94,6 +102,56 @@ describe("dream chat safety routing", () => {
       expect.objectContaining({ nextAction: "summarize" }),
       expect.objectContaining({ source: "deterministic" }),
     );
+    expect(agentMetrics.scheduleDreamAgentRequestOutcome).toHaveBeenCalledWith(7, expect.objectContaining({
+      outcome: "success",
+      source: "deterministic",
+      providerAttempts: 0,
+    }));
+  });
+
+  it("records application rate limits and plan quota failures without content", async () => {
+    billing.checkAiRateLimit.mockResolvedValueOnce({ allowed: false, retryAfterSeconds: 30 });
+    const rateLimited = await POST(new NextRequest("http://localhost/api/chat-dream", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ lang: "en", messages: [{ role: "user", content: "A long corridor in a dream." }] }),
+    }));
+    expect(rateLimited.status).toBe(429);
+    expect(agentMetrics.scheduleDreamAgentRequestOutcome).toHaveBeenLastCalledWith(7, expect.objectContaining({
+      outcome: "app_rate_limited",
+      source: "none",
+      providerAttempts: 0,
+    }));
+
+    billing.checkAiRateLimit.mockResolvedValueOnce({ allowed: true });
+    billing.checkAndConsumeUsage.mockResolvedValueOnce({ allowed: false });
+    const quotaExceeded = await POST(new NextRequest("http://localhost/api/chat-dream", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ lang: "en", messages: [{ role: "user", content: "A different long corridor in a dream." }] }),
+    }));
+    expect(quotaExceeded.status).toBe(402);
+    expect(agentMetrics.scheduleDreamAgentRequestOutcome).toHaveBeenLastCalledWith(7, expect.objectContaining({
+      outcome: "quota_exceeded",
+      source: "none",
+      providerAttempts: 0,
+    }));
+  });
+
+  it("classifies upstream provider throttling separately", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("throttled", { status: 429 }));
+    const response = await POST(new NextRequest("http://localhost/api/chat-dream", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ lang: "en", messages: [{ role: "user", content: "I was walking through an unfamiliar market." }] }),
+    }));
+    expect(response.status).toBe(502);
+    expect(agentMetrics.scheduleDreamAgentRequestOutcome).toHaveBeenCalledWith(7, expect.objectContaining({
+      outcome: "provider_rate_limited",
+      provider: "openai",
+      providerAttempts: 1,
+    }));
   });
 
   it("returns normalized evidence-based state and signed metadata from the model path", async () => {
@@ -138,6 +196,13 @@ describe("dream chat safety routing", () => {
       expect.objectContaining({ provider: "openai" }),
       { promptTokens: 500, completionTokens: 80 },
     );
+    expect(agentMetrics.scheduleDreamAgentRequestOutcome).toHaveBeenCalledWith(7, expect.objectContaining({
+      outcome: "success",
+      source: "model",
+      provider: "openai",
+      providerAttempts: 1,
+      fallbackUsed: false,
+    }));
   });
 
   it("uses Groq before OpenAI when both providers are configured", async () => {
@@ -175,6 +240,12 @@ describe("dream chat safety routing", () => {
       reasoning_effort: "low",
     });
     expect(billing.refundConsumedUsage).not.toHaveBeenCalled();
+    expect(agentMetrics.scheduleDreamAgentRequestOutcome).toHaveBeenCalledWith(7, expect.objectContaining({
+      outcome: "success",
+      provider: "groq",
+      providerAttempts: 1,
+      fallbackUsed: false,
+    }));
   });
 
   it("refunds usage once when both providers fail", async () => {
@@ -199,5 +270,11 @@ describe("dream chat safety routing", () => {
     expect(fetchSpy.mock.calls[1][0]).toBe("https://api.openai.com/v1/chat/completions");
     expect(billing.refundConsumedUsage).toHaveBeenCalledTimes(1);
     expect(billing.refundConsumedUsage).toHaveBeenCalledWith(9, "analysis");
+    expect(agentMetrics.scheduleDreamAgentRequestOutcome).toHaveBeenCalledWith(7, expect.objectContaining({
+      outcome: "upstream_error",
+      provider: "openai",
+      providerAttempts: 2,
+      fallbackUsed: true,
+    }));
   });
 });
