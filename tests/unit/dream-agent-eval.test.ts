@@ -45,7 +45,38 @@ describe("dream agent evaluator", () => {
 
   it("reports bilingual and safety aggregates", () => {
     const passed = evaluateDreamAgentResult(fragment, good);
-    expect(summarizeEvalResults([passed])).toMatchObject({ cases: 1, passed: 1, enPassRate: 1 });
+    expect(summarizeEvalResults([passed])).toMatchObject({
+      cases: 1,
+      passed: 1,
+      enPassRate: 1,
+      structuredOutputValidityRate: 1,
+      usefulTargetedFollowUpRate: 1,
+      repetitiveOrIrrelevantFollowUpRate: 0,
+      prematureReadyRate: 0,
+    });
+  });
+
+  it("reports explicit promotion scorecard failures", () => {
+    const repeated = evaluateDreamAgentResult({
+      ...fragment,
+      messages: [
+        { role: "user", content: "I was running through a station." },
+        { role: "assistant", content: "What did running through that station feel like?" },
+      ],
+    }, good, false);
+    const premature = evaluateDreamAgentResult(fragment, {
+      ...good,
+      questions: [],
+      stage: "ready",
+      nextAction: "ready_to_analyze",
+    });
+    const summary = summarizeEvalResults([repeated, premature]);
+    expect(summary).toMatchObject({
+      structuredOutputValidityRate: 0.5,
+      usefulTargetedFollowUpRate: 0,
+      repetitiveOrIrrelevantFollowUpRate: 1,
+      prematureReadyRate: 0.5,
+    });
   });
 
   it("retries transient failures but stops immediately when credits are exhausted", () => {

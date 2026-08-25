@@ -15,6 +15,7 @@ import {
   resolveDeterministicAgentResponse,
 } from "@/lib/dreamFollowUpAgent";
 import { createDreamAgentResponseMeta, logDreamAgentCompletion, selectDreamAgentModelVariant } from "@/lib/dreamAgentTelemetry";
+import { scheduleDreamAgentInteraction } from "@/lib/dreamAgentMetrics";
 import { API_ERROR_CODES } from "@/lib/apiErrors";
 import { safeErrorMetadata } from "@/lib/safeServerLog";
 
@@ -128,6 +129,7 @@ export async function POST(req: NextRequest) {
   if (deterministicResponse) {
     const meta = createDreamAgentResponseMeta("deterministic-v1", "deterministic", Date.now() - requestStartedAt, userId);
     logDreamAgentCompletion(deterministicResponse, meta);
+    scheduleDreamAgentInteraction(userId, deterministicResponse, meta);
     return NextResponse.json({ ...deterministicResponse, meta });
   }
   const modelProviders = configuredModelProviders();
@@ -225,10 +227,12 @@ export async function POST(req: NextRequest) {
         userId,
         provider.name,
       );
-      logDreamAgentCompletion(result, meta, {
+      const tokenUsage = {
         promptTokens: payload.usage?.prompt_tokens,
         completionTokens: payload.usage?.completion_tokens,
-      });
+      };
+      logDreamAgentCompletion(result, meta, tokenUsage);
+      scheduleDreamAgentInteraction(userId, result, meta, tokenUsage);
       return NextResponse.json({ ...result, meta });
     } catch (err) {
       lastFailureWasTimeout = err instanceof Error && err.name === "AbortError";

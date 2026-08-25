@@ -32,7 +32,7 @@ export function getPool(): Pool {
 
 // Bump this whenever you add new migrations. ensureSchema will skip all DDL
 // once this version is recorded in the DB, making cold starts near-instant.
-const SCHEMA_VERSION = 7;
+const SCHEMA_VERSION = 8;
 
 let schemaReady = false;
 
@@ -398,6 +398,26 @@ export async function ensureSchema(): Promise<void> {
     `),
   ]);
 
+  // Operational agent telemetry intentionally excludes dream text and model messages.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS dream_agent_interactions (
+      interaction_id UUID PRIMARY KEY,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      variant TEXT NOT NULL,
+      source TEXT NOT NULL CHECK (source IN ('deterministic', 'model')),
+      provider TEXT NOT NULL CHECK (provider IN ('deterministic', 'openai', 'groq')),
+      stage TEXT NOT NULL CHECK (stage IN ('exploring', 'deepening', 'ready')),
+      next_action TEXT NOT NULL CHECK (next_action IN ('ask_followup', 'summarize', 'ready_to_analyze')),
+      question_count INTEGER NOT NULL CHECK (question_count BETWEEN 0 AND 1),
+      latency_ms INTEGER NOT NULL CHECK (latency_ms >= 0),
+      prompt_tokens INTEGER CHECK (prompt_tokens IS NULL OR prompt_tokens >= 0),
+      completion_tokens INTEGER CHECK (completion_tokens IS NULL OR completion_tokens >= 0),
+      dream_entry_id BIGINT REFERENCES dream_entries(id) ON DELETE SET NULL,
+      journal_saved_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+
   // All ALTER TABLE and CREATE INDEX in parallel (idempotent)
   await Promise.all([
     pool.query("ALTER TABLE dream_entries ADD COLUMN IF NOT EXISTS sleep_start TEXT;"),
@@ -420,6 +440,8 @@ export async function ensureSchema(): Promise<void> {
     pool.query("CREATE INDEX IF NOT EXISTS idx_auth_rate_limits_window_start ON auth_rate_limits (window_start);"),
     pool.query("CREATE INDEX IF NOT EXISTS idx_agent_feedback_created_at ON agent_feedback (created_at DESC);"),
     pool.query("CREATE INDEX IF NOT EXISTS idx_agent_feedback_variant ON agent_feedback (variant, rating);"),
+    pool.query("CREATE INDEX IF NOT EXISTS idx_dream_agent_interactions_created_at ON dream_agent_interactions (created_at DESC);"),
+    pool.query("CREATE INDEX IF NOT EXISTS idx_dream_agent_interactions_variant ON dream_agent_interactions (variant, provider, created_at DESC);"),
   ]);
 
   await normalizeUserEmails(pool);

@@ -4,9 +4,11 @@ import { NextRequest } from "next/server";
 const mocks = vi.hoisted(() => ({
   auth: vi.fn(),
   getAgentFeedbackMetrics: vi.fn(),
+  getDreamAgentFunnelMetrics: vi.fn(),
 }));
 vi.mock("@/auth", () => ({ auth: mocks.auth }));
 vi.mock("@/lib/agentFeedback", () => ({ getAgentFeedbackMetrics: mocks.getAgentFeedbackMetrics }));
+vi.mock("@/lib/dreamAgentMetrics", () => ({ getDreamAgentFunnelMetrics: mocks.getDreamAgentFunnelMetrics }));
 
 import { GET } from "@/app/api/admin/agent-feedback/route";
 
@@ -23,10 +25,19 @@ describe("admin agent feedback metrics", () => {
       variants: [{ variant: "json-object-v1", total: 10, positive: 8, negative: 2, positive_rate: 0.8 }],
       negativeReasons: [{ variant: "json-object-v1", reason: "repetitive", count: 2 }],
     });
+    mocks.getDreamAgentFunnelMetrics.mockResolvedValue({
+      days: 14,
+      variants: [{ variant: "json-object-v1", provider: "groq", interactions: 10, journal_saves: 7, journal_save_rate: 0.7 }],
+    });
     const response = await GET(new NextRequest("http://localhost/api/admin/agent-feedback?days=14"));
     expect(response.status).toBe(200);
-    expect(await response.json()).toMatchObject({ days: 14, variants: [{ positive_rate: 0.8 }] });
+    expect(await response.json()).toMatchObject({
+      days: 14,
+      variants: [{ positive_rate: 0.8 }],
+      funnel: { variants: [{ journal_save_rate: 0.7 }] },
+    });
     expect(mocks.getAgentFeedbackMetrics).toHaveBeenCalledWith(14);
+    expect(mocks.getDreamAgentFunnelMetrics).toHaveBeenCalledWith(14);
   });
 
   it("rejects non-admin users before reading metrics", async () => {
@@ -35,5 +46,6 @@ describe("admin agent feedback metrics", () => {
     const response = await GET(new NextRequest("http://localhost/api/admin/agent-feedback"));
     expect(response.status).toBe(403);
     expect(mocks.getAgentFeedbackMetrics).not.toHaveBeenCalled();
+    expect(mocks.getDreamAgentFunnelMetrics).not.toHaveBeenCalled();
   });
 });

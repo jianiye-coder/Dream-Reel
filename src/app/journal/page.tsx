@@ -178,6 +178,7 @@ export default function JournalPage() {
   const isFirstRenderRef = useRef(true);
   const analysisAutoTriggeredRef = useRef(false);
   const isAnalyzingRef = useRef(false);
+  const latestAgentInteractionIdRef = useRef<string | null>(null);
 
   const messagesAreaRef = useRef<HTMLElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -417,6 +418,10 @@ export default function JournalPage() {
 
       if (!res.ok) {
         throw new Error(getApiErrorMessage(data.error, lang, J.signalLost));
+      }
+
+      if (data.meta?.interactionId) {
+        latestAgentInteractionIdRef.current = data.meta.interactionId;
       }
 
       setMessages((prev) => [
@@ -804,6 +809,7 @@ export default function JournalPage() {
 
     try {
       const body = {
+        agentInteractionId: mode === "chat" ? latestAgentInteractionIdRef.current ?? undefined : undefined,
         inputMode,
         title: effectiveAnalysis?.title || quickTitleRef.current || "",
         rawText: text,

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { getAgentFeedbackMetrics } from "@/lib/agentFeedback";
 import { safeErrorMetadata } from "@/lib/safeServerLog";
+import { getDreamAgentFunnelMetrics } from "@/lib/dreamAgentMetrics";
 
 export const runtime = "nodejs";
 
@@ -15,7 +16,11 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Invalid input" }, { status: 400 });
   }
   try {
-    return NextResponse.json(await getAgentFeedbackMetrics(rawDays));
+    const [feedback, funnel] = await Promise.all([
+      getAgentFeedbackMetrics(rawDays),
+      getDreamAgentFunnelMetrics(rawDays),
+    ]);
+    return NextResponse.json({ ...feedback, funnel });
   } catch (error) {
     console.error("GET /api/admin/agent-feedback failed", safeErrorMetadata(error));
     return NextResponse.json({ error: "Internal error" }, { status: 500 });

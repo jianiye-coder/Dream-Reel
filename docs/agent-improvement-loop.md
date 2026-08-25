@@ -33,6 +33,8 @@ The initial corpus is deliberately small and synthetic. Thresholds become bindin
 
 Every case may also declare its expected execution source (`model` or `deterministic`). Routing-source failures are safety-critical for safety-tagged cases. The runner retries only transient 429/5xx failures and honors provider `retry-after` values up to five minutes; exhausted credit fails immediately and cannot be counted as a passing evaluation. A daily token-limit interruption is recorded as an incomplete run, never as a quality pass or failure.
 
+Production journal completion is the percentage of agent interactions followed by a same-user autosaved dream entry within 24 hours, grouped by variant and provider. The linkage uses an opaque interaction UUID and dream-entry ID only. Raw dream text, agent prose, questions, and working memory are excluded from the telemetry table and aggregate endpoint.
+
 Exit the improvement program only after all gates pass in two consecutive cycles. Model upgrades and prompt changes are separate experiments so their effects remain attributable.
 
 ## Human review template

@@ -6,9 +6,11 @@ const billing = vi.hoisted(() => ({
   checkAndConsumeUsage: vi.fn(),
   refundConsumedUsage: vi.fn(),
 }));
+const agentMetrics = vi.hoisted(() => ({ scheduleDreamAgentInteraction: vi.fn() }));
 
 vi.mock("@/auth", () => ({ auth: vi.fn(async () => ({ user: { id: "7" } })) }));
 vi.mock("@/lib/billing", () => billing);
+vi.mock("@/lib/dreamAgentMetrics", () => agentMetrics);
 
 import { POST } from "@/app/api/chat-dream/route";
 
@@ -45,6 +47,11 @@ describe("dream chat safety routing", () => {
     expect(billing.checkAndConsumeUsage).not.toHaveBeenCalled();
     expect(billing.checkAiRateLimit).not.toHaveBeenCalled();
     expect(fetchSpy).not.toHaveBeenCalled();
+    expect(agentMetrics.scheduleDreamAgentInteraction).toHaveBeenCalledWith(
+      7,
+      expect.objectContaining({ nextAction: "summarize" }),
+      expect.objectContaining({ source: "deterministic" }),
+    );
   });
 
   it("returns normalized evidence-based state and signed metadata from the model path", async () => {
@@ -83,6 +90,12 @@ describe("dream chat safety routing", () => {
     expect(upstreamBody.response_format).toMatchObject({ type: "json_schema" });
     expect(billing.checkAndConsumeUsage).toHaveBeenCalledWith(7, "analysis");
     expect(billing.refundConsumedUsage).not.toHaveBeenCalled();
+    expect(agentMetrics.scheduleDreamAgentInteraction).toHaveBeenCalledWith(
+      7,
+      expect.objectContaining({ nextAction: "ready_to_analyze" }),
+      expect.objectContaining({ provider: "openai" }),
+      { promptTokens: 500, completionTokens: 80 },
+    );
   });
 
   it("uses Groq before OpenAI when both providers are configured", async () => {
