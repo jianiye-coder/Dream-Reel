@@ -22,12 +22,12 @@ describe("admin agent feedback metrics", () => {
     mocks.auth.mockResolvedValue({ user: { email: "admin@example.com" } });
     mocks.getAgentFeedbackMetrics.mockResolvedValue({
       days: 14,
-      variants: [{ variant: "json-object-v1", total: 10, positive: 8, negative: 2, positive_rate: 0.8 }],
-      negativeReasons: [{ variant: "json-object-v1", reason: "repetitive", count: 2 }],
+      variants: [{ policy_variant: "guarded-v2", variant: "json-object-v1", total: 10, positive: 8, negative: 2, positive_rate: 0.8 }],
+      negativeReasons: [{ policy_variant: "guarded-v2", variant: "json-object-v1", reason: "repetitive", count: 2 }],
     });
     mocks.getDreamAgentFunnelMetrics.mockResolvedValue({
       days: 14,
-      variants: [{ variant: "json-object-v1", provider: "groq", interactions: 10, journal_saves: 7, journal_save_rate: 0.7 }],
+      variants: [{ policy_variant: "guarded-v2", variant: "json-object-v1", provider: "groq", interactions: 10, journal_saves: 7, journal_save_rate: 0.7 }],
     });
     const response = await GET(new NextRequest("http://localhost/api/admin/agent-feedback?days=14"));
     expect(response.status).toBe(200);

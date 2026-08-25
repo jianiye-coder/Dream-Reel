@@ -14,7 +14,7 @@ import { POST } from "@/app/api/agent-feedback/route";
 describe("agent feedback API", () => {
   it("stores only validated, content-free feedback metadata", async () => {
     process.env.DREAM_AGENT_FEEDBACK_SECRET = "unit-test-feedback-secret";
-    const meta = createDreamAgentResponseMeta("json-object-v1", "model", 10, 11);
+    const meta = createDreamAgentResponseMeta("json-object-v1", "model", 10, 11, "openai", "guarded-v2");
     const input = {
       feedbackToken: meta.feedbackToken,
       rating: "down",
@@ -31,6 +31,7 @@ describe("agent feedback API", () => {
       rating: "down",
       reason: "repetitive",
       variant: "json-object-v1",
+      policyVariant: "guarded-v2",
     });
   });
 

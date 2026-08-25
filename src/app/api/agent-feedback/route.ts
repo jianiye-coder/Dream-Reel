@@ -35,6 +35,7 @@ export async function POST(req: NextRequest) {
       rating: parsed.data.rating,
       reason: parsed.data.reason,
       variant: verified.variant,
+      policyVariant: verified.policyVariant,
     });
     return NextResponse.json({ ok: true });
   } catch (error) {

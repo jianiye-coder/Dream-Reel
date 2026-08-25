@@ -28,7 +28,49 @@ describe("dream chat safety routing", () => {
     delete process.env.GROQ_MODEL;
     delete process.env.DREAM_AGENT_FEEDBACK_SECRET;
     delete process.env.DREAM_AGENT_JSON_SCHEMA_PERCENT;
+    delete process.env.DREAM_AGENT_GUARDED_PERCENT;
     vi.restoreAllMocks();
+  });
+
+  it("keeps the guarded recall policy behind a deterministic rollout", async () => {
+    vi.spyOn(console, "info").mockImplementation(() => undefined);
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(Response.json({
+      choices: [{ message: { content: JSON.stringify({
+        message: "You can decide what to save.",
+        questions: [],
+        stage: "deepening",
+        nextAction: "summarize",
+        memory: { missingDetails: [], observedSignals: ["bathroom"] },
+      }) } }],
+    }));
+    const requestBody = JSON.stringify({
+      lang: "en",
+      messages: [{
+        role: "user",
+        content: "I dreamed I was hiding in a bathroom. Will you automatically save or share this?",
+      }],
+    });
+
+    process.env.DREAM_AGENT_GUARDED_PERCENT = "0";
+    const legacy = await POST(new NextRequest("http://localhost/api/chat-dream", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: requestBody,
+    }));
+    expect(await legacy.json()).toMatchObject({ meta: { policyVariant: "legacy-v1", source: "model" } });
+    expect(fetchSpy).toHaveBeenCalledOnce();
+
+    process.env.DREAM_AGENT_GUARDED_PERCENT = "100";
+    const guarded = await POST(new NextRequest("http://localhost/api/chat-dream", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: requestBody,
+    }));
+    expect(await guarded.json()).toMatchObject({
+      meta: { policyVariant: "guarded-v2", source: "deterministic" },
+      questions: [],
+    });
+    expect(fetchSpy).toHaveBeenCalledOnce();
   });
 
   it("returns immediate support without quota use or an upstream model call", async () => {

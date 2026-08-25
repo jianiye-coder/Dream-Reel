@@ -57,9 +57,10 @@ export function buildImmediateSafetyResponse(lang: "zh" | "en"): DreamAgentResul
 export function resolveDeterministicAgentResponse(
   context: DreamAgentConversationContext,
   lang: "zh" | "en",
+  guardedRecall = true,
 ): DreamAgentResult | null {
   if (context.realityContextStatus === "crisis") return buildImmediateSafetyResponse(lang);
-  if (context.privacyControlQuestion) {
+  if (guardedRecall && context.privacyControlQuestion) {
     return lang === "en" ? {
       message: "You remain in control. I won't automatically save or share this dream; it only becomes a journal entry if you choose to save it. The image of hiding in the bathroom is enough to leave as it is, and you do not have to add anything more.",
       questions: [], stage: "deepening", nextAction: "summarize",
@@ -70,7 +71,7 @@ export function resolveDeterministicAgentResponse(
       memory: { missingDetails: [], observedSignals: ["用户询问隐私与控制权"] },
     };
   }
-  if (context.traumaBoundary) {
+  if (guardedRecall && context.traumaBoundary) {
     return lang === "en" ? {
       message: "You do not have to describe what happened or return to those details. Waking up shaking means taking care of this moment matters more than recalling the dream. If it helps, orient to one steady thing around you and let yourself pause here.",
       questions: ["Do you feel safe where you are right now?"],
@@ -83,7 +84,7 @@ export function resolveDeterministicAgentResponse(
       memory: { missingDetails: ["当下是否有安全感"], observedSignals: ["创伤相关梦境", "用户拒绝细节", "醒来后发抖"] },
     };
   }
-  if (context.turningPointGap) {
+  if (guardedRecall && context.turningPointGap) {
     return lang === "en" ? {
       message: "That sudden drop from happiness into misery feels important, even if the moment between them is blank. You do not need to force the missing piece back. We can stay with the last clear moment before the feeling changed.",
       questions: ["What is the last clear thing you remember before the feeling shifted?"],
@@ -96,7 +97,7 @@ export function resolveDeterministicAgentResponse(
       memory: { missingDetails: ["情绪转折点"], observedSignals: ["开心突然转为难受"] },
     };
   }
-  if (context.nightmareGroundingNeeded) {
+  if (guardedRecall && context.nightmareGroundingNeeded) {
     return lang === "en" ? {
       message: "You have just come out of something frightening, and your racing heart can take a little time to settle. You do not need to return to the dream right now. If it helps, notice one steady thing in the room and let your next breath be unforced.",
       questions: ["Do you feel safe where you are right now?"],
@@ -142,7 +143,8 @@ export function resolveDeterministicAgentResponse(
       memory: { missingDetails: ["梦境内容"], observedSignals: [] },
     };
   }
-  const isTinyFragment = context.latestDreamFragment !== null
+  const isTinyFragment = guardedRecall
+    && context.latestDreamFragment !== null
     && context.latestDreamFragment.length <= (lang === "en" ? 20 : 10)
     && !context.interpretationRequested;
   if (isTinyFragment) {
@@ -326,10 +328,11 @@ export function inferAgentStageFromConversation(
   messages: Array<{ role: "user" | "assistant"; content: string }>,
   lang: "zh" | "en",
   context: DreamAgentConversationContext,
+  guardedRecall = true,
 ): DreamAgentStage {
   const userTurns = messages.filter((message) => message.role === "user").length;
   if (userTurns > 5) return "ready";
-  if (userTurns === 1 && context.runningFragment) return "exploring";
+  if (guardedRecall && userTurns === 1 && context.runningFragment) return "exploring";
   const text = messages.filter((message) => message.role === "user").map((message) => message.content).join("\n");
   const hasNarrative = text.length >= (lang === "en" ? 50 : 20);
   const hasEmotion = lang === "en"
@@ -359,15 +362,16 @@ export function parseDreamAgentContent(
   lang: "zh" | "en",
   fallbackStage: DreamAgentStage,
   conversationContext?: DreamAgentConversationContext,
+  guardedRecall = true,
 ) {
   const fallback = { message: content.trim() || "……" };
   const match = content.match(/\{[\s\S]*\}/);
-  if (!match) return sanitizeDreamAgentResult(fallback, lang, fallbackStage, conversationContext);
+  if (!match) return sanitizeDreamAgentResult(fallback, lang, fallbackStage, conversationContext, guardedRecall);
 
   try {
-    return sanitizeDreamAgentResult(JSON.parse(match[0]) as unknown, lang, fallbackStage, conversationContext);
+    return sanitizeDreamAgentResult(JSON.parse(match[0]) as unknown, lang, fallbackStage, conversationContext, guardedRecall);
   } catch {
-    return sanitizeDreamAgentResult(fallback, lang, fallbackStage, conversationContext);
+    return sanitizeDreamAgentResult(fallback, lang, fallbackStage, conversationContext, guardedRecall);
   }
 }
 
@@ -599,8 +603,36 @@ export function sanitizeDreamAgentResult(
   lang: "zh" | "en",
   fallbackStage: DreamAgentStage,
   conversationContext?: DreamAgentConversationContext,
+  guardedRecall = true,
 ): DreamAgentResult {
   const parsed = agentResponseSchema.safeParse(raw);
+  if (!guardedRecall) {
+    const data: Partial<AgentResponsePayload> = parsed.success ? parsed.data : {};
+    const stage = data.stage ?? fallbackStage;
+    const memory = {
+      missingDetails: cleanList(data.memory?.missingDetails ?? [], 5, lang === "en" ? 80 : 40),
+      observedSignals: cleanList(data.memory?.observedSignals ?? [], 8, lang === "en" ? 80 : 40),
+    };
+    const nextAction = conversationContext?.interpretationRequested
+      ? "summarize"
+      : data.nextAction ?? fallbackNextAction(stage, data.questions ?? []);
+    const normalizedStage: DreamAgentStage = nextAction === "ready_to_analyze"
+      ? "ready"
+      : stage === "ready" ? "deepening" : stage;
+    const maxQuestions = QUESTION_LIMIT_BY_ACTION[nextAction];
+    const cleanedQuestions = conversationContext?.interpretationRequested
+      ? []
+      : cleanList(data.questions ?? [], maxQuestions, lang === "en" ? 120 : 60);
+    return {
+      message: limitText(data.message ?? "……", 1000) || "……",
+      questions: maxQuestions === 0 || conversationContext?.interpretationRequested
+        ? []
+        : applyQuestionTimingPolicy(cleanedQuestions, lang, normalizedStage, conversationContext).slice(0, maxQuestions),
+      stage: normalizedStage,
+      nextAction,
+      memory,
+    };
+  }
   const data: Partial<AgentResponsePayload> = parsed.success ? parsed.data : parseRelaxedAgentPayload(raw);
   // Stage is a product state, so keep deterministic inference authoritative.
   // Model prose may vary, but identical evidence should not advance users differently.

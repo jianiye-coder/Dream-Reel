@@ -14,7 +14,12 @@ import {
   parseDreamAgentContent,
   resolveDeterministicAgentResponse,
 } from "@/lib/dreamFollowUpAgent";
-import { createDreamAgentResponseMeta, logDreamAgentCompletion, selectDreamAgentModelVariant } from "@/lib/dreamAgentTelemetry";
+import {
+  createDreamAgentResponseMeta,
+  logDreamAgentCompletion,
+  selectDreamAgentModelVariant,
+  selectDreamAgentPolicyVariant,
+} from "@/lib/dreamAgentTelemetry";
 import { scheduleDreamAgentInteraction } from "@/lib/dreamAgentMetrics";
 import { API_ERROR_CODES } from "@/lib/apiErrors";
 import { safeErrorMetadata } from "@/lib/safeServerLog";
@@ -123,11 +128,20 @@ export async function POST(req: NextRequest) {
   }
 
   const { messages, lang, preSleepMeal, preSleepActivity } = parsed.data;
+  const policyVariant = selectDreamAgentPolicyVariant(userId, process.env.DREAM_AGENT_GUARDED_PERCENT);
+  const guardedRecall = policyVariant === "guarded-v2";
   const contextLines = buildContextLines(lang, preSleepMeal, preSleepActivity);
   const conversationContext = deriveDreamAgentConversationContext(messages, lang, Boolean(contextLines));
-  const deterministicResponse = resolveDeterministicAgentResponse(conversationContext, lang);
+  const deterministicResponse = resolveDeterministicAgentResponse(conversationContext, lang, guardedRecall);
   if (deterministicResponse) {
-    const meta = createDreamAgentResponseMeta("deterministic-v1", "deterministic", Date.now() - requestStartedAt, userId);
+    const meta = createDreamAgentResponseMeta(
+      "deterministic-v1",
+      "deterministic",
+      Date.now() - requestStartedAt,
+      userId,
+      "deterministic",
+      policyVariant,
+    );
     logDreamAgentCompletion(deterministicResponse, meta);
     scheduleDreamAgentInteraction(userId, deterministicResponse, meta);
     return NextResponse.json({ ...deterministicResponse, meta });
@@ -162,7 +176,7 @@ export async function POST(req: NextRequest) {
   consumedUsagePeriodId = usage.usagePeriodId;
 
   const userTurns = messages.filter((m) => m.role === "user").length;
-  const stage = inferAgentStageFromConversation(messages, lang, conversationContext);
+  const stage = inferAgentStageFromConversation(messages, lang, conversationContext, guardedRecall);
   const variant = selectDreamAgentModelVariant(userId, process.env.DREAM_AGENT_JSON_SCHEMA_PERCENT);
   const systemPrompt = buildDreamFollowUpAgentPrompt(lang, userTurns, stage, contextLines, conversationContext);
   const upstreamMessages = messages.map((message) => {
@@ -219,13 +233,14 @@ export async function POST(req: NextRequest) {
         });
         continue;
       }
-      const result = parseDreamAgentContent(content, lang, stage, conversationContext);
+      const result = parseDreamAgentContent(content, lang, stage, conversationContext, guardedRecall);
       const meta = createDreamAgentResponseMeta(
         variant,
         "model",
         Date.now() - requestStartedAt,
         userId,
         provider.name,
+        policyVariant,
       );
       const tokenUsage = {
         promptTokens: payload.usage?.prompt_tokens,

@@ -37,6 +37,7 @@ describe("privacy-safe dream agent metrics", () => {
     }, {
       interactionId: "d679a3e1-470c-4936-8969-26c73713fe44",
       variant: "deterministic-v1",
+      policyVariant: "legacy-v1",
       source: "deterministic",
       provider: "deterministic",
       latencyMs: 4,
@@ -58,6 +59,7 @@ describe("privacy-safe dream agent metrics", () => {
     }, {
       interactionId: "d679a3e1-470c-4936-8969-26c73713fe44",
       variant: "json-object-v1",
+      policyVariant: "guarded-v2",
       source: "model",
       provider: "groq",
       latencyMs: 250,
@@ -69,6 +71,7 @@ describe("privacy-safe dream agent metrics", () => {
       "d679a3e1-470c-4936-8969-26c73713fe44",
       7,
       "json-object-v1",
+      "guarded-v2",
       "model",
       "groq",
       "exploring",
@@ -91,6 +94,7 @@ describe("privacy-safe dream agent metrics", () => {
 
   it("returns aggregate funnel metrics without per-user rows", async () => {
     db.query.mockResolvedValue({ rows: [{
+      policy_variant: "guarded-v2",
       variant: "json-object-v1",
       provider: "groq",
       interactions: 10,
@@ -101,6 +105,6 @@ describe("privacy-safe dream agent metrics", () => {
       days: 14,
       variants: [{ journal_save_rate: 0.7 }],
     });
-    expect(db.query).toHaveBeenCalledWith(expect.stringContaining("GROUP BY variant, provider"), [14]);
+    expect(db.query).toHaveBeenCalledWith(expect.stringContaining("GROUP BY policy_variant, variant, provider"), [14]);
   });
 });

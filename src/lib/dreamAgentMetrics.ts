@@ -16,15 +16,16 @@ export async function recordDreamAgentInteraction(
   await getPool().query(
     `
       INSERT INTO dream_agent_interactions (
-        interaction_id, user_id, variant, source, provider, stage, next_action,
+        interaction_id, user_id, variant, policy_variant, source, provider, stage, next_action,
         question_count, latency_ms, prompt_tokens, completion_tokens
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
       ON CONFLICT (interaction_id) DO NOTHING
     `,
     [
       meta.interactionId,
       userId,
       meta.variant,
+      meta.policyVariant,
       meta.source,
       meta.provider,
       result.stage,
@@ -83,6 +84,7 @@ export function scheduleDreamAgentJournalSaved(userId: number, interactionId: st
 export async function getDreamAgentFunnelMetrics(days: number) {
   await ensureSchema();
   const result = await getPool().query<{
+    policy_variant: string;
     variant: string;
     provider: string;
     interactions: number;
@@ -93,7 +95,8 @@ export async function getDreamAgentFunnelMetrics(days: number) {
     p95_latency_ms: number | null;
   }>(
     `
-      SELECT variant,
+      SELECT policy_variant,
+             variant,
              provider,
              COUNT(*)::int AS interactions,
              COUNT(*) FILTER (
@@ -115,8 +118,8 @@ export async function getDreamAgentFunnelMetrics(days: number) {
              ROUND(PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY latency_ms))::int AS p95_latency_ms
       FROM dream_agent_interactions
       WHERE created_at >= NOW() - ($1 * INTERVAL '1 day')
-      GROUP BY variant, provider
-      ORDER BY variant, provider
+      GROUP BY policy_variant, variant, provider
+      ORDER BY policy_variant, variant, provider
     `,
     [days],
   );

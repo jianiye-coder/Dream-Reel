@@ -194,6 +194,41 @@ describe("dream follow-up conversation context", () => {
     });
   });
 
+  it("preserves legacy behavior when the guarded policy is disabled", () => {
+    const context = deriveDreamAgentConversationContext([
+      { role: "user", content: "This is private. Will you automatically save or share it? I was hiding in a bathroom." },
+    ], "en");
+    expect(resolveDeterministicAgentResponse(context, "en", false)).toBeNull();
+    expect(sanitizeDreamAgentResult({
+      message: "The old house felt frightening.",
+      questions: ["Where in your body did you feel it?"],
+      stage: "exploring",
+      nextAction: "ask_followup",
+    }, "en", "exploring", context, false)).toMatchObject({
+      questions: ["Where in your body did you feel it?"],
+      nextAction: "ask_followup",
+    });
+    expect(sanitizeDreamAgentResult({
+      message: "Enough to organize.",
+      questions: [],
+      stage: "exploring",
+      nextAction: "ready_to_analyze",
+    }, "en", "exploring", context, false)).toMatchObject({
+      stage: "ready",
+      nextAction: "ready_to_analyze",
+    });
+  });
+
+  it("keeps immediate crisis routing enabled in both policy arms", () => {
+    const context = deriveDreamAgentConversationContext([
+      { role: "user", content: "I may hurt myself tonight." },
+    ], "en");
+    expect(resolveDeterministicAgentResponse(context, "en", false)).toMatchObject({
+      nextAction: "summarize",
+      questions: [expect.stringMatching(/danger|safe/i)],
+    });
+  });
+
   it("responds deterministically when an emotional turning point is missing", () => {
     const context = deriveDreamAgentConversationContext([
       { role: "user", content: "开头我很开心，后来突然特别难受，但中间发生了什么想不起来。" },
