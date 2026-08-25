@@ -45,6 +45,8 @@ export default function ArchiveShell({
   const B = T.billing;
   const [billingStatus, setBillingStatus] = useState<BillingStatus | null>(null);
   const [billingError, setBillingError] = useState("");
+  const [exporting, setExporting] = useState<"markdown" | "json" | null>(null);
+  const [exportError, setExportError] = useState("");
 
   useEffect(() => {
     if (!user) return;
@@ -76,6 +78,31 @@ export default function ArchiveShell({
     }
   }
 
+  async function exportAllDreams(format: "markdown" | "json") {
+    setExporting(format);
+    setExportError("");
+    try {
+      const response = await fetch(`/api/dreams/export?format=${format}&lang=${lang}`, {
+        cache: "no-store",
+      });
+      if (!response.ok) throw new Error(A.export.failed);
+
+      const blob = await response.blob();
+      const href = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = href;
+      anchor.download = `dream-reel-export-${new Date().toISOString().slice(0, 10)}.${format === "json" ? "json" : "md"}`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      window.setTimeout(() => URL.revokeObjectURL(href), 1_000);
+    } catch {
+      setExportError(A.export.failed);
+    } finally {
+      setExporting(null);
+    }
+  }
+
   return (
     <div className="mist-page archive-page">
       <div className="mist-orb left-[-8rem] top-[-5rem] h-[20rem] w-[20rem] bg-[#d7c9ea]/80" aria-hidden />
@@ -103,11 +130,37 @@ export default function ArchiveShell({
       </nav>
 
       <main className="relative z-10 mx-auto w-full max-w-5xl px-4 pb-20 pt-2 sm:px-8">
-        <div className="mb-6">
-          <h1 className="text-3xl font-semibold tracking-[-0.03em] text-[#5d5471]">
-            {A.title}
-          </h1>
-          <p className="mist-muted mt-3 max-w-2xl text-sm leading-7">{A.desc}</p>
+        <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <h1 className="text-3xl font-semibold tracking-[-0.03em] text-[#5d5471]">
+              {A.title}
+            </h1>
+            <p className="mist-muted mt-3 max-w-2xl text-sm leading-7">{A.desc}</p>
+          </div>
+          <div className="shrink-0 rounded-[1.25rem] border border-white/35 bg-white/28 p-2 backdrop-blur-md">
+            <p className="px-2 pb-1.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-[#9185ae]">
+              {exporting ? A.export.exporting : A.export.title}
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => void exportAllDreams("markdown")}
+                disabled={exporting !== null}
+                className="mist-button-secondary rounded-full px-3 py-2 text-xs font-medium transition hover:bg-white/55 disabled:opacity-50"
+              >
+                ↓ {A.export.markdown}
+              </button>
+              <button
+                type="button"
+                onClick={() => void exportAllDreams("json")}
+                disabled={exporting !== null}
+                className="mist-button-secondary rounded-full px-3 py-2 text-xs font-medium transition hover:bg-white/55 disabled:opacity-50"
+              >
+                ↓ {A.export.json}
+              </button>
+            </div>
+            {exportError ? <p className="px-2 pt-2 text-xs text-[#b8758f]">{exportError}</p> : null}
+          </div>
         </div>
 
         {dataError ? (
