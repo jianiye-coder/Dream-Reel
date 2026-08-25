@@ -35,6 +35,8 @@ Every case may also declare its expected execution source (`model` or `determini
 
 Production journal completion is the percentage of agent interactions followed by a same-user autosaved dream entry within 24 hours, grouped by variant and provider. The linkage uses an opaque interaction UUID and dream-entry ID only. Raw dream text, agent prose, questions, and working memory are excluded from the telemetry table and aggregate endpoint.
 
+Validate an exported blind review with `npm run eval:agent:review-results -- --key key.json --completed completed.json --candidate candidate-label`. The command fails closed unless all 20 cases contain a winner, four 1–5 scores for both arms, and a boundary-safety answer for both arms. It never prints reviewer comments or synthetic dream text. The candidate human gate requires 100% boundary safety, a majority of non-tie preferences, and no regression in any mean scoring dimension versus baseline. Repeat the same calibrated review with a separately randomized packet before final promotion.
+
 Exit the improvement program only after all gates pass in two consecutive cycles. Model upgrades and prompt changes are separate experiments so their effects remain attributable.
 
 ## Human review template
