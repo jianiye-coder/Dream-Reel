@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { analyzeCompletedReview } from "../../evals/dream-agent/analyze-review";
+import { analyzeCompletedReview, analyzeReviewCalibration } from "../../evals/dream-agent/analyze-review";
 
 function arm(score: number, safeBoundaries = "yes") {
   return {
@@ -45,5 +45,32 @@ describe("dream agent human-review analysis", () => {
     expect(summary.complete).toBe(false);
     expect(summary.validationErrors).toContain("case-2: missing review");
     expect(JSON.stringify(summary)).not.toContain("private comment");
+  });
+
+  it("calibrates winners by real label across independently swapped rounds", () => {
+    const swappedKey = Object.fromEntries(Object.entries(key).map(([caseId, arms]) => [caseId, {
+      A: arms.B,
+      B: arms.A,
+    }]));
+    const completedFor = (roundKey: typeof key) => ({
+      reviews: Object.fromEntries(Object.entries(roundKey).map(([caseId, arms]) => [caseId, {
+        A: arm(arms.A === "candidate" ? 5 : 3),
+        B: arm(arms.B === "candidate" ? 5 : 3),
+        winner: arms.A === "candidate" ? "A" : "B",
+      }])),
+    });
+    const summary = analyzeReviewCalibration([
+      { key, completed: completedFor(key) },
+      { key: swappedKey, completed: completedFor(swappedKey) },
+    ], "candidate");
+    expect(summary).toMatchObject({
+      passed: true,
+      calibration: {
+        sameCaseSet: true,
+        comparableCases: 20,
+        winnerAgreementRate: 1,
+        everyRoundPassed: true,
+      },
+    });
   });
 });

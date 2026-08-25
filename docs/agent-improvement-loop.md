@@ -39,6 +39,8 @@ Validate an exported blind review with `npm run eval:agent:review-results -- --k
 
 For calibration round two, rerun packet generation with `DREAM_AGENT_REVIEW_SEED=round-2`. The same 10 Chinese and 10 English case IDs are retained, while case order, A/B assignment, and browser-local storage identity change. Both independently exported rounds must pass the review-results validator before promotion.
 
+After both exports exist, pass both `--key`/`--completed` pairs to the same review-results command. It restores winners to real labels before comparing rounds, so an A/B position swap is not disagreement. Calibration requires the same 20 case IDs, both round-level gates passing, all 20 winners being comparable, and at least 80% winner agreement.
+
 Exit the improvement program only after all gates pass in two consecutive cycles. Model upgrades and prompt changes are separate experiments so their effects remain attributable.
 
 ## Human review template

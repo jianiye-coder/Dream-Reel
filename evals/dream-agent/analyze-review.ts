@@ -114,25 +114,80 @@ export function analyzeCompletedReview(
   };
 }
 
+function actualWinners(completed: CompletedReview, key: ComparisonKey) {
+  return Object.fromEntries(Object.keys(key).map((caseId) => {
+    const winner = completed.reviews?.[caseId]?.winner;
+    if (winner === "tie") return [caseId, "tie"];
+    if (winner === "A" || winner === "B") return [caseId, key[caseId][winner]];
+    return [caseId, "incomplete"];
+  }));
+}
+
+export function analyzeReviewCalibration(
+  runs: Array<{ completed: CompletedReview; key: ComparisonKey }>,
+  candidateLabel: string,
+) {
+  const analyses = runs.map((run) => analyzeCompletedReview(run.completed, run.key, candidateLabel));
+  if (runs.length < 2) return { runs: analyses, calibration: null, passed: false };
+  const expectedIds = Object.keys(runs[0].key).sort();
+  const sameCaseSet = runs.every((run) => {
+    const ids = Object.keys(run.key).sort();
+    return ids.length === expectedIds.length && ids.every((id, index) => id === expectedIds[index]);
+  });
+  const winners = runs.map((run) => actualWinners(run.completed, run.key));
+  const comparableCases = sameCaseSet
+    ? expectedIds.filter((id) => winners.every((winner) => winner[id] !== "incomplete"))
+    : [];
+  const agreedCases = comparableCases.filter((id) => winners.every((winner) => winner[id] === winners[0][id]));
+  const winnerAgreementRate = comparableCases.length ? agreedCases.length / comparableCases.length : 0;
+  const calibration = {
+    rounds: runs.length,
+    sameCaseSet,
+    comparableCases: comparableCases.length,
+    winnerAgreementRate,
+    minimumWinnerAgreementRate: 0.8,
+    everyRoundPassed: analyses.every((analysis) => analysis.candidateGate?.passed === true),
+  };
+  return {
+    runs: analyses,
+    calibration,
+    passed: calibration.sameCaseSet
+      && calibration.comparableCases === 20
+      && calibration.winnerAgreementRate >= calibration.minimumWinnerAgreementRate
+      && calibration.everyRoundPassed,
+  };
+}
+
 function argumentValue(flag: string) {
   const index = process.argv.indexOf(flag);
   return index >= 0 ? process.argv[index + 1] : undefined;
 }
 
+function argumentValues(flag: string) {
+  return process.argv.flatMap((value, index) => value === flag && process.argv[index + 1]
+    ? [process.argv[index + 1]]
+    : []);
+}
+
 async function main() {
-  const keyPath = argumentValue("--key");
-  const completedPath = argumentValue("--completed");
+  const keyPaths = argumentValues("--key");
+  const completedPaths = argumentValues("--completed");
   const candidateLabel = argumentValue("--candidate");
-  if (!keyPath || !completedPath) {
-    throw new Error("Usage: npm run eval:agent:review-results -- --key key.json --completed completed.json [--candidate label]");
+  if (!keyPaths.length || keyPaths.length !== completedPaths.length) {
+    throw new Error("Usage: npm run eval:agent:review-results -- --key key.json --completed completed.json [--key round2-key.json --completed round2.json] [--candidate label]");
   }
-  const [key, completed] = await Promise.all([
-    readFile(keyPath, "utf8").then((value) => JSON.parse(value) as ComparisonKey),
-    readFile(completedPath, "utf8").then((value) => JSON.parse(value) as CompletedReview),
-  ]);
-  const summary = analyzeCompletedReview(completed, key, candidateLabel);
+  const runs = await Promise.all(keyPaths.map(async (keyPath, index) => ({
+    key: JSON.parse(await readFile(keyPath, "utf8")) as ComparisonKey,
+    completed: JSON.parse(await readFile(completedPaths[index], "utf8")) as CompletedReview,
+  })));
+  const summary = runs.length === 1
+    ? analyzeCompletedReview(runs[0].completed, runs[0].key, candidateLabel)
+    : analyzeReviewCalibration(runs, candidateLabel ?? "");
   console.log(JSON.stringify(summary, null, 2));
-  if (!summary.complete || (summary.candidateGate && !summary.candidateGate.passed)) process.exitCode = 1;
+  const passed = "complete" in summary
+    ? summary.complete && (!summary.candidateGate || summary.candidateGate.passed)
+    : summary.passed;
+  if (!passed) process.exitCode = 1;
 }
 
 if (process.argv[1]?.endsWith("analyze-review.ts")) {
