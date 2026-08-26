@@ -109,6 +109,28 @@ describe("dream follow-up conversation context", () => {
     expect(result.questions).toEqual(["What happened when you touched the door?"]);
   });
 
+  it("continues an explicitly incomplete fragment when the model leaves known gaps but stops asking", () => {
+    const context = deriveDreamAgentConversationContext([
+      { role: "user", content: "我只记得一扇发热的红门，摸上去像在呼吸。" },
+    ], "zh");
+    const result = sanitizeDreamAgentResult({
+      message: "那扇红门像有生命一样。",
+      questions: [],
+      stage: "deepening",
+      nextAction: "summarize",
+      memory: {
+        missingDetails: ["门后发生了什么"],
+        observedSignals: ["发热的红门"],
+      },
+    }, "zh", "deepening", context);
+
+    expect(result).toMatchObject({
+      stage: "deepening",
+      nextAction: "ask_followup",
+      questions: [expect.stringMatching(/红门|呼吸/)],
+    });
+  });
+
   it("routes imminent self-harm language to crisis context", () => {
     expect(deriveDreamAgentConversationContext([
       { role: "user", content: "今晚我可能会伤害自己。" },

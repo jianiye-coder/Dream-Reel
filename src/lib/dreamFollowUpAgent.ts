@@ -417,7 +417,10 @@ export function deriveDreamAgentConversationContext(
   const traumaBoundary = avoidSensitiveDetails && (lang === "en"
     ? /\b(?:trauma|traumatic)\b/i.test(userText)
     : /(?:创伤|创伤经历)/.test(userText));
-  const latestDreamFragment = latestUserText.length <= (lang === "en" ? 40 : 20)
+  const explicitlyIncompleteFragment = lang === "en"
+    ? /\b(?:only|just) remember\b/i.test(latestUserText)
+    : /(?:只|仅仅?)记得/.test(latestUserText);
+  const latestDreamFragment = latestUserText.length <= (lang === "en" ? 40 : 20) || explicitlyIncompleteFragment
     ? latestUserText
     : null;
   const detectedSignals = {
@@ -650,16 +653,30 @@ export function sanitizeDreamAgentResult(
   const proposedNextAction = conversationContext?.interpretationRequested
     ? "summarize"
     : data.nextAction ?? (fragmentFallbackQuestion ? "ask_followup" : fallbackNextAction(stage, modelQuestions));
-  const nextAction = proposedNextAction === "ready_to_analyze" && fallbackStage !== "ready"
+  const incompleteFragmentQuestion = conversationContext?.latestDreamFragment
+    ? (lang === "en"
+      ? `After “${limitText(conversationContext.latestDreamFragment, 80)},” what happened next in the dream?`
+      : `在“${limitText(conversationContext.latestDreamFragment, 24)}”之后，梦里接下来发生了什么？`)
+    : null;
+  const shouldContinueIncompleteFragment = proposedNextAction === "summarize"
+    && modelQuestions.length === 0
+    && memory.missingDetails.length > 0
+    && conversationContext?.interactionMode === "active"
+    && Boolean(incompleteFragmentQuestion);
+  const consistentNextAction = shouldContinueIncompleteFragment ? "ask_followup" : proposedNextAction;
+  const nextAction = consistentNextAction === "ready_to_analyze" && fallbackStage !== "ready"
     ? "summarize"
-    : proposedNextAction;
+    : consistentNextAction;
   const normalizedStage: DreamAgentStage = nextAction === "ready_to_analyze"
     ? "ready"
     : stage === "ready" ? "deepening" : stage;
   const maxQuestions = QUESTION_LIMIT_BY_ACTION[nextAction];
+  const questionsForCleaning = shouldContinueIncompleteFragment && incompleteFragmentQuestion
+    ? [incompleteFragmentQuestion]
+    : modelQuestions;
   const cleanedQuestions = conversationContext?.interpretationRequested
     ? []
-    : cleanList(modelQuestions, maxQuestions, lang === "en" ? 120 : 60);
+    : cleanList(questionsForCleaning, maxQuestions, lang === "en" ? 120 : 60);
 
   const questions = maxQuestions === 0 || conversationContext?.interpretationRequested
     ? []
