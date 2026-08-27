@@ -4885,6 +4885,15 @@ body:has(.mist-page)::after {
     justify-content: center;
     text-align: center;
   }
+  .quick-entry-actions {
+    align-items: stretch;
+    justify-content: stretch;
+  }
+  .quick-entry-actions > button {
+    flex: 1 1 100%;
+    justify-content: center;
+    text-align: center;
+  }
   .quick-choice-panel {
     align-items: stretch;
     flex-direction: column;
@@ -4983,6 +4992,35 @@ body:has(.mist-page)::after {
   box-shadow: 0 0 20px rgba(128, 95, 218, 0.3);
 }
 .quick-analyze-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+
+.quick-entry-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.55rem;
+  flex-wrap: wrap;
+}
+
+.quick-chat-btn {
+  align-self: flex-start;
+  background: rgba(245, 211, 150, 0.08);
+  border: 1px solid rgba(245, 211, 150, 0.24);
+  border-radius: 2rem;
+  color: rgba(248, 226, 184, 0.92);
+  padding: 0.4rem 1.1rem;
+  font-size: 0.77rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.22s;
+}
+
+.quick-chat-btn:hover:not(:disabled) {
+  background: rgba(245, 211, 150, 0.15);
+  border-color: rgba(245, 211, 150, 0.36);
+  box-shadow: 0 0 18px rgba(245, 196, 118, 0.12);
+}
+
+.quick-chat-btn:disabled { opacity: 0.3; cursor: not-allowed; }
 
 .quick-analysis-entry {
   display: flex;

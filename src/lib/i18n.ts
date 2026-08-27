@@ -282,8 +282,8 @@ const zh = {
       analyze: "读取",
       generate: "显影",
       archive: "入档",
-      beforeAnalyze: "先读取梦境，Dream Reel 会提取人物、地点、符号与情绪，再生成图像或保存档案。",
-      afterAnalyze: "梦境线索已经浮现。现在可以让画面显影，或把它保存进 archive。",
+      beforeAnalyze: "可以让 AI 提取人物、地点、符号与情绪，也可以直接与 Agent 一起回忆这场梦。",
+      afterAnalyze: "梦境线索已经浮现。可以继续与 Agent 对话、生成图像，或保存进 archive。",
     },
     quickFlow: {
       analysisWaiting: "初步读取",
@@ -295,6 +295,7 @@ const zh = {
       imageReady: "图像已显影",
       chatUnlocked: "现在可以带着这段梦和图像继续进入 AI 对话。",
       enterChat: "进入 AI 对话",
+      chatDirect: "与 Agent 对话",
     },
     memoryPreview: {
       label: "梦境线索预览",
@@ -682,8 +683,8 @@ const en: typeof zh = {
       analyze: "Read",
       generate: "Develop",
       archive: "Archive",
-      beforeAnalyze: "Read the dream first. Dream Reel extracts people, places, symbols, and mood before image generation or saving.",
-      afterAnalyze: "The dream signals have surfaced. You can develop an image now, or save it into the archive.",
+      beforeAnalyze: "Let AI extract people, places, symbols, and mood, or start recalling the dream directly with the Agent.",
+      afterAnalyze: "The dream signals have surfaced. Continue with the Agent, develop an image, or save it to the archive.",
     },
     quickFlow: {
       analysisWaiting: "First reading",
@@ -695,6 +696,7 @@ const en: typeof zh = {
       imageReady: "Image developed",
       chatUnlocked: "You can now continue into AI chat with this dream and its image.",
       enterChat: "Enter AI Chat",
+      chatDirect: "Chat with Agent",
     },
     memoryPreview: {
       label: "Dream signal preview",
