@@ -8,6 +8,67 @@ describe("dream follow-up conversation context", () => {
     expect(prompt).toContain("让用户感到被听见、被在意、被温柔地接住");
     expect(prompt).toContain("可以不问任何问题");
     expect(prompt).toContain("不要追问精确身体部位、气味、光线、声音");
+    expect(prompt).toContain("模糊、不确定和身份缺失视为有效的梦境信息");
+    expect(prompt).toContain("清晨安静陪用户回看梦境");
+  });
+
+  it("accepts an unclear dream figure without turning recall into identification", () => {
+    const context = deriveDreamAgentConversationContext([
+      { role: "user", content: "梦里有一个模糊的人影，我看不清脸，也不知道是谁。" },
+    ], "zh");
+
+    expect(context).toMatchObject({ vagueRecall: true, vaguePerson: true });
+    expect(resolveDeterministicAgentResponse(context, "zh")).toMatchObject({
+      nextAction: "ask_followup",
+      message: expect.stringMatching(/不代表你漏掉|空白可以保留/),
+      questions: [expect.stringMatching(/安心|不安/)],
+    });
+  });
+
+  it("uses an easy high-level continuation when emotion is already known but recall stays vague", () => {
+    const context = deriveDreamAgentConversationContext([
+      { role: "user", content: "The figure was blurry and I could not make out the face. I felt anxious." },
+    ], "en");
+
+    expect(context).toMatchObject({ vagueRecall: true, vaguePerson: true, emotionDetailVolunteered: true });
+    expect(resolveDeterministicAgentResponse(context, "en")).toMatchObject({
+      questions: [expect.stringMatching(/move the dream forward|pause/i)],
+      message: expect.stringMatching(/does not mean you missed|uncertainty/i),
+    });
+  });
+
+  it("does not repeat the vagueness acknowledgment after the user answers", () => {
+    const context = deriveDreamAgentConversationContext([
+      { role: "user", content: "There was a vague figure and I could not see the face." },
+      { role: "assistant", content: "The uncertainty can stay. Did the scene feel reassuring or unsettling?" },
+      { role: "user", content: "More reassuring, like I was not alone." },
+    ], "en");
+
+    expect(context).toMatchObject({ vagueRecall: false, emotionDetailVolunteered: true });
+    expect(resolveDeterministicAgentResponse(context, "en")).toBeNull();
+  });
+
+  it("keeps explicit interpretation requests on the interpretation path even when an image is vague", () => {
+    const context = deriveDreamAgentConversationContext([
+      { role: "user", content: "梦里那个人影很模糊，这代表什么？" },
+    ], "zh");
+
+    expect(context).toMatchObject({ vagueRecall: true, interpretationRequested: true });
+    expect(resolveDeterministicAgentResponse(context, "zh")).toBeNull();
+  });
+
+  it("removes model questions that demand precision from an explicitly vague memory", () => {
+    const context = deriveDreamAgentConversationContext([
+      { role: "user", content: "I saw someone, but the person was vague and I could not tell who it was." },
+    ], "en");
+    const result = sanitizeDreamAgentResult({
+      message: "The figure stayed indistinct.",
+      questions: ["Was this person familiar or strange, and what did they look like?"],
+      stage: "exploring",
+      nextAction: "ask_followup",
+    }, "en", "exploring", context);
+
+    expect(result).toMatchObject({ questions: [], nextAction: "summarize" });
   });
   it("recognizes an answered reality question", () => {
     expect(deriveDreamAgentConversationContext([

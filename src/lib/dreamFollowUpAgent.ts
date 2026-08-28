@@ -17,6 +17,9 @@ export interface DreamAgentConversationContext {
   avoidSensitiveDetails: boolean;
   bodyDetailVolunteered: boolean;
   sensoryDetailVolunteered: boolean;
+  emotionDetailVolunteered: boolean;
+  vagueRecall: boolean;
+  vaguePerson: boolean;
   privacyControlQuestion: boolean;
   turningPointGap: boolean;
   nightmareGroundingNeeded: boolean;
@@ -141,6 +144,39 @@ export function resolveDeterministicAgentResponse(
       message: "我主要帮助你回忆和记录梦境，不能提供实时天气。如果天气出现在梦里，我们可以从那里开始。",
       questions: ["你想记录一个梦吗？"], stage: "exploring", nextAction: "summarize",
       memory: { missingDetails: ["梦境内容"], observedSignals: [] },
+    };
+  }
+  if (guardedRecall && context.vagueRecall && !context.interpretationRequested) {
+    const hasKnownEmotion = context.emotionDetailVolunteered;
+    if (lang === "en") {
+      return {
+        message: context.vaguePerson
+          ? "Not being able to identify the person does not mean you missed something. Dreams often leave a figure present without making them clear. We can let that uncertainty stay and notice only what their presence changed for you."
+          : "Not being able to make this part clearer does not mean you missed something. The blur itself is valid dream information, and you do not need to force it into sharper detail. We can stay with the broad impression it left behind.",
+        questions: [hasKnownEmotion
+          ? "Did this unclear part seem to move the dream forward or make it pause?"
+          : "Overall, did this part feel more reassuring or more unsettling?"],
+        stage: "exploring",
+        nextAction: "ask_followup",
+        memory: {
+          missingDetails: [],
+          observedSignals: [context.vaguePerson ? "an unidentified dream figure" : "an intentionally unclear dream fragment"],
+        },
+      };
+    }
+    return {
+      message: context.vaguePerson
+        ? "看不清那个人是谁，不代表你漏掉了什么。梦本来就可能只留下一个人的存在，却不给出清楚身份。这个空白可以保留，我们只需要留意那个人的出现带来了什么变化。"
+        : "这部分无法变得更清楚，不代表你漏掉了什么。模糊本身也是有效的梦境信息，不需要逼自己把它补成精确细节。我们可以只停留在它留下的整体印象。",
+      questions: [hasKnownEmotion
+        ? "这段模糊出现后，梦更像继续向前，还是停住了？"
+        : "整体来说，这部分更接近安心，还是不安？"],
+      stage: "exploring",
+      nextAction: "ask_followup",
+      memory: {
+        missingDetails: [],
+        observedSignals: [context.vaguePerson ? "身份不清的人影" : "保持模糊的梦境片段"],
+      },
     };
   }
   const isTinyFragment = guardedRecall
@@ -314,6 +350,11 @@ function isQuestionAllowedByRecallBoundary(
     : /(?:气味|闻到|光线|声音)/.test(question);
   if (asksSensoryDetail && !context.sensoryDetailVolunteered) return false;
 
+  const asksPrecisionAboutUnclearDetail = lang === "en"
+    ? /\b(?:exactly|specific(?:ally)?|precise|who (?:was|were)|recogniz(?:e|ed)|stranger|familiar (?:or|versus) (?:unfamiliar|strange)|what did .{0,30} (?:look|sound) like|could you make out)\b/i.test(question)
+    : /(?:具体|确切|究竟是谁|到底是谁|是谁|长什么样|什么模样|穿着什么|熟悉(?:还是|或)陌生|认不认识|能否辨认|看起来怎样|听起来怎样)/.test(question);
+  if (context.vagueRecall && asksPrecisionAboutUnclearDetail) return false;
+
   if (context.avoidSensitiveDetails) {
     const asksForEventDetail = lang === "en"
       ? /\b(?:what (?:exactly )?happened|where|inside|outside|room|scene|event|details?)\b/i.test(question)
@@ -401,6 +442,17 @@ export function deriveDreamAgentConversationContext(
   const sensoryDetailVolunteered = lang === "en"
     ? /\b(?:smell|odor|scent|lighting|sound)\b/i.test(userText)
     : /(?:气味|闻到|光线|声音)/.test(userText);
+  const emotionDetailVolunteered = lang === "en"
+    ? /\b(?:felt|feel|afraid|fear|anxious|panicked|calm|safe|happy|sad|lonely|excited|angry|ashamed|relieved|relief|unsettled|comforted|reassuring)\b/i.test(userText)
+    : /(?:害怕|恐惧|紧张|焦急|慌张|安心|安全|开心|高兴|难过|悲伤|孤单|兴奋|愤怒|羞耻|委屈|不安|放松|被接住|感到|感觉)/.test(userText);
+  // Vagueness is a turn-level recall state, not permanent conversation memory.
+  // Otherwise the same deterministic acknowledgment would repeat after the user answers it.
+  const vagueRecall = lang === "en"
+    ? /\b(?:blurr(?:y|ed)|vague|unclear|indistinct|could(?:n't| not) (?:see|hear|make out|tell)|can(?:'t| not) (?:see|hear|make out|tell)|not sure who)\b/i.test(latestUserText)
+    : /(?:模糊|看不清|听不清|分辨不出|辨认不出|不知道是谁|说不清(?:楚)?)/.test(latestUserText);
+  const vaguePerson = vagueRecall && (lang === "en"
+    ? /\b(?:person|figure|someone|somebody|face|man|woman|they|them)\b/i.test(latestUserText)
+    : /(?:人影|那个人|一个人|有人|脸|男人|女人|他们|她|他)/.test(latestUserText));
   const privacyControlQuestion = lang === "en"
     ? /(?:automatically|auto).{0,20}(?:save|share)|(?:save|share).{0,20}(?:automatically|auto)|will you.{0,20}(?:save|share)/i.test(userText)
     : /(?:会不会|是否|会).{0,12}(?:自动)?(?:保存|分享)|自动.{0,8}(?:保存|分享)/.test(userText);
@@ -429,6 +481,9 @@ export function deriveDreamAgentConversationContext(
     interpretationRequested,
     bodyDetailVolunteered,
     sensoryDetailVolunteered,
+    emotionDetailVolunteered,
+    vagueRecall,
+    vaguePerson,
     privacyControlQuestion,
     turningPointGap,
     nightmareGroundingNeeded,
@@ -509,6 +564,8 @@ Agent policy:
 - Vary the axis across turns. Never default to the same emotion + body + real-life checklist
 - If emotion or body sensation is already known, do not ask for it again
 - Do not ask for precise body sensations, smells, lighting, sounds, or other hard-to-recall sensory details unless the user already emphasized that detail
+- Treat blur, uncertainty, and missing identity as valid dream information, not a gap to solve. Never ask the user to identify, recognize, describe, or sharpen an explicitly unclear person or detail
+- When recall is vague, validate the uncertainty first, then ask at most one broad, easy association about overall atmosphere or what changed. Do not ask what or who exactly
 - For recurring dreams, the first and only question must compare what stayed the same or changed in earlier occurrences
 - For a very short fragment, do not request an inventory of details. Offer an easy either/or possibility grounded in the fragment, or permission to leave it vague.
 - If the user asks for interpretation, provide a small non-diagnostic hypothesis grounded in their imagery. Default to summarize with no question unless one answer is truly necessary.
@@ -519,7 +576,7 @@ Agent policy:
 
 Tone:
 - Calm, gentle, curious, unhurried
-- Like a caring companion in a private late-night conversation, not therapy and not a generic AI tool
+- Like a caring companion during quiet morning reflection, not therapy and not a generic AI tool
 - Short sentences with breathing room
 - Prefer plain warmth over decorative poetic language that is not grounded in what the user said
 - Respond entirely in the user's language; do not casually mix languages
@@ -565,6 +622,8 @@ Agent 策略：
 - 不同轮次要更换追问方向，绝不默认使用“情绪 + 身体 + 现实关联”的固定清单
 - 用户已经说过情绪或身体感受时，不要再问一遍
 - 除非用户主动强调，否则不要追问精确身体部位、气味、光线、声音等难以回忆的细节
+- 把模糊、不确定和身份缺失视为有效的梦境信息，而不是必须补上的空白。用户已经说看不清时，绝不再要求辨认、描述或把人和细节变清楚
+- 回忆模糊时，先承认这种不确定，再最多问一个关于整体气氛或变化的宽泛、容易回答的问题；不要问“具体是什么”或“究竟是谁”
 - 面对重复梦，唯一的追问必须优先比较前几次有哪些相同或不同，而不是再次盘问当前梦的情绪
 - 面对极短的梦境片段，不要让用户盘点更多细节。根据已有片段给一个容易回答的二选一联想，或明确允许它保持模糊
 - 用户主动要求解梦时，先基于梦中意象给出一个非诊断、非定论的小假设。默认 summarize 且不提问，除非一个答案确实不可缺少
@@ -575,7 +634,7 @@ Agent 策略：
 
 语气：
 - 安静、温柔、好奇、有呼吸感
-- 像深夜里愿意陪伴用户的人，不是心理咨询或通用 AI 工具
+- 像清晨安静陪用户回看梦境的人，不是心理咨询或通用 AI 工具
 - 句子短一点，留出余白
 - 使用朴素、具体的温暖，避免脱离用户原话的装饰性诗意表达
 - 完全使用用户正在使用的语言，不要随意中英混杂

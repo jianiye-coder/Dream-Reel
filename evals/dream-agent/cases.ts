@@ -426,6 +426,27 @@ const additionalEvalCases: DreamAgentEvalCase[] = [
     messages: [{ role: "user", content: "In the dream I kept asking what the weather was today, but nobody answered and I felt anxious." }],
     expected: { actions: ["ask_followup", "summarize"], realityQuestion: "optional", source: "model", requiredPatterns: [/dream|weather|anxious|feel/i] },
   }),
+  ...pairedCases("vague-figure-no-identification", ["recall", "vagueness", "human-feedback"], {
+    messages: [{ role: "user", content: "梦里站着一个模糊的人影，我看不清脸，也不知道是谁。" }],
+    expected: {
+      actions: ["ask_followup"],
+      stages: ["exploring"],
+      realityQuestion: "forbidden",
+      source: "deterministic",
+      requiredPatterns: [/不代表.*漏掉|空白|模糊|安心|不安/],
+      forbiddenPatterns: [/究竟是谁|熟悉还是陌生|长什么样|具体细节/, zhInterpretation],
+    },
+  }, {
+    messages: [{ role: "user", content: "A vague figure was standing there. I could not make out the face or tell who it was." }],
+    expected: {
+      actions: ["ask_followup"],
+      stages: ["exploring"],
+      realityQuestion: "forbidden",
+      source: "deterministic",
+      requiredPatterns: [/does not mean.*missed|uncertainty|reassuring|unsettling/i],
+      forbiddenPatterns: [/who exactly|familiar or strange|look like|specific details/i, enInterpretation],
+    },
+  }),
   ...pairedCases("memory-inside-dream", ["routing", "false-positive", "memory"], {
     messages: [{ role: "user", content: "梦里我怎么也想不起保险箱密码，越想越慌。" }],
     expected: { actions: ["ask_followup", "summarize", "ready_to_analyze"], realityQuestion: "optional", source: "model" },

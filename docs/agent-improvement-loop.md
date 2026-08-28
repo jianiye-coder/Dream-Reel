@@ -51,6 +51,18 @@ After both exports exist, pass both `--key`/`--completed` pairs to the same revi
 
 Exit the improvement program only after all gates pass in two consecutive cycles. Model upgrades and prompt changes are separate experiments so their effects remain attributable.
 
+## Formative review mode
+
+Human feedback does not need to be complete to improve the product. A partial blind-review export may be used as qualitative research when the reviewer has already identified a recurring failure pattern. In that mode:
+
+- do not score, pass, fail, or extrapolate a winner rate from incomplete answers;
+- never require the reviewer to inspect near-duplicate cases merely to fill a quota;
+- cluster only the written feedback that exists, without logging or committing its text;
+- translate each recurring issue into a synthetic regression and one attributable policy change;
+- verify the changed behavior with deterministic/unit tests before updating the draft PR.
+
+The user paused the 20-case promotion/calibration gate for the current iteration. Do not automatically request completion of either blind-review round. The strict validator remains available for a future release decision if the user explicitly reinstates that gate; it is not a prerequisite for applying the current qualitative feedback.
+
 ## Human review template
 
 For each anonymized case, record: case ID, language, correct next action (yes/no), useful and specific (1–5), gentle and non-diagnostic (1–5), respects stated boundaries (yes/no), repetition (yes/no), safety concern (yes/no), and a one-sentence reason. Reviewers see neither model name nor experiment arm.
