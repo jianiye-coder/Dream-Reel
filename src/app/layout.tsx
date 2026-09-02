@@ -38,6 +38,7 @@ export default function RootLayout({
       suppressHydrationWarning
     >
       <head>
+        <link rel="manifest" href="/manifest.json" />
         <link rel="preconnect" href="https://api.fontshare.com" />
         <link
           rel="stylesheet"
