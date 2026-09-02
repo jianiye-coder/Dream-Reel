@@ -1376,7 +1376,7 @@ export default function DreamGrid({
             </div>
           </div>
 
-          <div className="mt-5 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="archive-calendar-controls mt-5 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-2">
               <button
                 type="button"
@@ -1386,9 +1386,20 @@ export default function DreamGrid({
               >
                 {G.prev}
               </button>
-              <div className="rounded-full border border-[rgba(169,157,202,0.2)] bg-[rgba(225,217,243,0.65)] px-4 py-2 text-sm font-medium text-[#756a95]">
-                {formatMonthLabel(visibleMonth, lang)}
-              </div>
+              <label className="archive-month-filter">
+                <span className="sr-only">{lang === "zh" ? "选择月份" : "Choose month"}</span>
+                <select
+                  value={visibleMonth}
+                  onChange={(event) => setActiveMonth(event.target.value)}
+                  aria-label={lang === "zh" ? "选择月份" : "Choose month"}
+                >
+                  {monthKeys.map((monthKey) => (
+                    <option key={monthKey} value={monthKey}>
+                      {formatMonthLabel(monthKey, lang)}
+                    </option>
+                  ))}
+                </select>
+              </label>
               <button
                 type="button"
                 onClick={() => activeIndex < monthKeys.length - 1 && setActiveMonth(monthKeys[activeIndex + 1])}
@@ -1399,26 +1410,10 @@ export default function DreamGrid({
               </button>
             </div>
 
-            <div className="flex flex-wrap gap-2">
-              {monthKeys.slice(0, 8).map((monthKey) => (
-                <button
-                  key={monthKey}
-                  type="button"
-                  onClick={() => setActiveMonth(monthKey)}
-                  className={`rounded-full px-3 py-1.5 text-xs transition ${
-                    monthKey === visibleMonth
-                      ? "bg-[rgba(205,196,229,0.9)] text-[#5f5673]"
-                      : "border border-[rgba(176,168,197,0.22)] bg-white/35 text-[#847a9a] hover:bg-white/55 hover:text-[#665d7a]"
-                  }`}
-                >
-                  {monthKey.replace("-", ".")}
-                </button>
-              ))}
-            </div>
           </div>
 
-          <div className="mt-6 overflow-hidden rounded-[1.75rem] border border-[rgba(176,168,197,0.22)] bg-[rgba(255,255,255,0.42)]">
-            <div className="grid grid-cols-7 border-b border-[rgba(176,168,197,0.2)]">
+          <div className="archive-calendar-grid mt-6 overflow-hidden rounded-[1.75rem] border border-[rgba(176,168,197,0.22)] bg-[rgba(255,255,255,0.42)]">
+            <div className="archive-calendar-weekdays grid grid-cols-7 border-b border-[rgba(176,168,197,0.2)]">
               {G.weekLabels.map((label) => (
                 <div key={label} className="px-3 py-3 text-center text-[11px] font-semibold tracking-[0.18em] text-[#9b90ba]">
                   {label}
@@ -1432,7 +1427,7 @@ export default function DreamGrid({
                   return (
                     <div
                       key={cell.key}
-                      className="hidden min-h-[110px] border-b border-r border-[rgba(176,168,197,0.14)] bg-white/12 sm:block"
+                      className="archive-calendar-empty hidden min-h-[110px] border-b border-r border-[rgba(176,168,197,0.14)] bg-white/12 sm:block"
                     />
                   );
                 }
@@ -1453,7 +1448,7 @@ export default function DreamGrid({
                         setSelected(lead);
                       }
                     }}
-                    className={`group min-h-[110px] border-b border-[rgba(176,168,197,0.14)] p-2 text-left transition sm:border-r sm:border-r-[rgba(176,168,197,0.14)] ${
+                    className={`archive-calendar-day group min-h-[110px] border-b border-[rgba(176,168,197,0.14)] p-2 text-left transition sm:border-r sm:border-r-[rgba(176,168,197,0.14)] ${
                       cell.entries.length > 0
                         ? "bg-[linear-gradient(180deg,rgba(255,255,255,0.34),rgba(245,241,251,0.55))] hover:bg-white/65"
                         : "bg-transparent hover:bg-white/30"
@@ -1461,7 +1456,7 @@ export default function DreamGrid({
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div
-                        className={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-semibold ${
+                        className={`archive-calendar-day-number flex h-7 w-7 items-center justify-center rounded-full text-xs font-semibold ${
                           cell.isToday ? "bg-[rgba(205,196,229,0.9)] text-[#5f5673]" : "bg-white/52 text-[#7f7694]"
                         }`}
                       >
@@ -1475,7 +1470,7 @@ export default function DreamGrid({
                     </div>
 
                     {lead ? (
-                      <div className={`mt-2 rounded-xl bg-gradient-to-br p-2 ${moodAccent(lead.mood)}`}>
+                      <div className={`archive-calendar-dream mt-2 rounded-xl bg-gradient-to-br p-2 ${moodAccent(lead.mood)}`}>
                         <p className="text-[10px] font-medium">{lead.mood || G.noMood}</p>
                         <p className="mt-0.5 line-clamp-1 text-xs font-semibold opacity-90">
                           {dreamDisplayTitle(lead)}

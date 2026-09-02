@@ -7301,6 +7301,80 @@ body {
 .journal-root .main-input::placeholder { color: #64748b; opacity: 1; }
 .journal-root .dream-date-bar .field-label { color: #5e4b67; }
 
+/* Archive calendar: a compact month filter with clear, paper-like records. */
+.archive-page .archive-month-filter {
+  position: relative;
+  display: inline-flex;
+}
+.archive-page .archive-month-filter::after {
+  content: "⌄";
+  position: absolute;
+  right: .85rem;
+  top: 50%;
+  color: #65465d;
+  font-size: 1rem;
+  line-height: 1;
+  pointer-events: none;
+  transform: translateY(-56%);
+}
+.archive-page .archive-month-filter select {
+  appearance: none;
+  min-height: 42px;
+  border: 1px solid #c9b3a3;
+  border-radius: 999px;
+  background: #fffaf2;
+  color: #51384d;
+  cursor: pointer;
+  font-size: .9rem;
+  font-weight: 650;
+  padding: .55rem 2.5rem .55rem 1rem;
+}
+.archive-page .archive-month-filter select:focus-visible {
+  outline: 3px solid rgba(138, 89, 124, .25);
+  outline-offset: 2px;
+}
+.archive-page .archive-calendar-grid {
+  border-color: #c9b3a3 !important;
+  background: rgba(255, 252, 246, .82) !important;
+  box-shadow: 0 10px 26px rgba(91, 61, 84, .06);
+}
+.archive-page .archive-calendar-weekdays {
+  border-color: #dac8bc !important;
+  background: #fffaf2;
+}
+.archive-page .archive-calendar-weekdays > div {
+  color: #65465d !important;
+  font-weight: 700;
+}
+.archive-page .archive-calendar-empty,
+.archive-page .archive-calendar-day {
+  border-color: #e0d0c6 !important;
+}
+.archive-page .archive-calendar-empty { background: rgba(255, 250, 242, .5) !important; }
+.archive-page .archive-calendar-day { background: rgba(255, 253, 248, .72) !important; }
+.archive-page .archive-calendar-day:hover { background: #fff8ee !important; }
+.archive-page .archive-calendar-day-number {
+  background: #fffaf2 !important;
+  color: #5b3d54 !important;
+  font-weight: 700;
+}
+.archive-page .archive-calendar-dream {
+  border: 1px solid #d8c5d9;
+  background: linear-gradient(145deg, #f5eaf2, #eee6f3) !important;
+  background-image: linear-gradient(145deg, #f5eaf2, #eee6f3) !important;
+  color: #3e2d48 !important;
+  box-shadow: 0 3px 10px rgba(91, 61, 84, .07);
+}
+.archive-page .archive-calendar-dream p {
+  color: inherit !important;
+  opacity: 1 !important;
+}
+.archive-page .archive-calendar-dream span {
+  background: #fffaf2 !important;
+  color: #68475c !important;
+  opacity: 1 !important;
+}
+
 @media (max-width: 1024px) {
   .morning-nav { grid-template-columns: 1fr auto; }
   .morning-nav-links { display: none; }
