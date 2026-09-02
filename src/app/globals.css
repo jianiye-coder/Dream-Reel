@@ -7101,7 +7101,7 @@ body {
   grid-template-columns: .9fr 1.1fr;
   gap: clamp(2.5rem, 6vw, 5.5rem);
   padding: clamp(4rem, 7vw, 6rem) clamp(1.5rem, 5vw, 5rem);
-  border-radius: 2rem;
+  border-radius: .9rem;
   background: linear-gradient(145deg, #f5eee8 0%, #ede4da 100%);
   border: 1px solid rgba(180, 155, 130, 0.22);
   color: var(--morning-ink);
@@ -7109,12 +7109,14 @@ body {
 .morning-studio h2 { color: var(--morning-ink) !important; }
 .morning-studio-copy > p:not(.morning-eyebrow) { margin-top: 1.4rem; color: #5c4a3a; line-height: 1.75; }
 .morning-text-link { display: inline-flex; min-height: 44px; align-items: center; margin-top: 1.8rem; color: #7c5c3b; font-weight: 650; }
-.morning-bento { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-rows: minmax(190px, 1fr); gap: 1rem; }
-.morning-bento-card { display: flex; min-height: 190px; flex-direction: column; padding: 1.4rem; border: 1px solid rgba(180, 155, 130, 0.28); border-radius: 1.25rem; background: rgba(255,255,255,.62); }
+.morning-bento { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-rows: minmax(190px, 1fr); gap: 0; overflow: hidden; border: 1px solid rgba(180, 155, 130, 0.28); border-radius: .75rem; background: rgba(255,255,255,.62); }
+.morning-bento-card { display: flex; min-height: 190px; flex-direction: column; padding: 1.4rem; border: 0; border-radius: 0; background: transparent; }
+.morning-bento-card:nth-child(odd) { border-right: 1px solid rgba(180, 155, 130, 0.28); }
+.morning-bento-card:nth-child(n + 3) { border-top: 1px solid rgba(180, 155, 130, 0.28); }
 .morning-bento-card > p { color: #8b6340; font-size: .72rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
 .morning-bento-card h3 { margin-top: auto; color: var(--morning-ink); font-size: 1.2rem; }
 .morning-bento-card span { display: block; margin-top: .65rem; color: #5c4a3a; font-size: .9rem; line-height: 1.65; }
-.morning-bento-1 { background: linear-gradient(180deg, rgba(240,232,224,.88), rgba(255,255,255,.62)); }
+.morning-bento-1 { background: rgba(255,255,255,.12); }
 
 .morning-section-heading-row { display: grid; grid-template-columns: 1.2fr .8fr; gap: 4rem; max-width: none; align-items: end; }
 .morning-section-heading-row > p { max-width: 32rem; color: var(--morning-muted); line-height: 1.75; }
@@ -7241,6 +7243,107 @@ body {
   color: var(--morning-primary) !important;
 }
 
+/* Keep the archive export control legible against the light morning surface. */
+.archive-page .archive-export-panel {
+  border-color: #d5bca9 !important;
+  background: #fffaf2 !important;
+  box-shadow: 0 8px 22px rgba(120, 53, 15, .07) !important;
+}
+.archive-page .archive-export-label {
+  color: #70452f !important;
+  font-weight: 700;
+}
+.archive-page .archive-export-action {
+  min-height: 40px;
+  border-color: #ae7555 !important;
+  background: #fff !important;
+  color: #8a4526 !important;
+  font-weight: 700;
+}
+.archive-page .archive-export-action:hover:not(:disabled) {
+  border-color: #7a351c !important;
+  background: #fff3e7 !important;
+  color: #6b2c17 !important;
+}
+.archive-page .archive-export-action:focus-visible {
+  outline: 3px solid rgba(138, 69, 38, .28);
+  outline-offset: 2px;
+}
+
+/* Chat uses the same calm, readable morning surface as the journal. */
+.journal-root .messages-area,
+.journal-root .chips-bar {
+  background: transparent;
+}
+.journal-root .msg-avatar {
+  border-color: #d8c9bf;
+  background: #fff8ed;
+  color: #7c4d65;
+  font-size: 1.1rem;
+  line-height: 1;
+  box-shadow: 0 3px 10px rgba(120, 53, 15, .1);
+}
+.journal-root .bubble-ai {
+  border-color: #d9c7da;
+  background: #f4ecf5;
+  color: #352b42;
+  backdrop-filter: none;
+}
+.journal-root .bubble-user {
+  border-color: #d7b99f;
+  background: #ead9c9;
+  color: #34243a;
+  backdrop-filter: none;
+}
+.journal-root .msg-bubble .msg-text {
+  color: inherit !important;
+  font-size: .95rem;
+  line-height: 1.75;
+}
+.journal-root .input-wrapper {
+  border-top: 0;
+  background: transparent;
+  backdrop-filter: none;
+  padding-bottom: 1.25rem;
+}
+.journal-root .input-form {
+  border-color: #d8c9bf;
+  background: rgba(255, 255, 255, .94);
+  box-shadow: 0 10px 28px rgba(120, 53, 15, .1);
+}
+.journal-root .main-input {
+  background: transparent !important;
+  color: #352b42 !important;
+}
+.journal-root .main-input::placeholder {
+  color: #5f6278 !important;
+  opacity: 1;
+}
+.journal-root .journal-mode-tabs {
+  border: 1px solid #d8c9bf;
+  border-radius: .8rem;
+  background: rgba(255, 255, 255, .82);
+  padding: .2rem;
+  box-shadow: 0 4px 16px rgba(120, 53, 15, .06);
+}
+.journal-root .mode-tab {
+  min-height: 40px;
+  border-radius: .6rem;
+  color: #5d4058;
+}
+.journal-root .mode-tab span { font-weight: 750; }
+.journal-root .mode-tab:hover {
+  background: rgba(124, 77, 101, .1);
+  color: #472e43;
+}
+.journal-root .mode-tab-active {
+  background: #7c4d65;
+  color: #fff;
+  box-shadow: none;
+}
+.journal-root .bubble-ai,
+.journal-root .bubble-ai .msg-text { cursor: default; }
+
 @media (max-width: 1024px) {
   .morning-nav { grid-template-columns: 1fr auto; }
   .morning-nav-links { display: none; }
@@ -7286,6 +7389,8 @@ body {
   .morning-capture-card { width: calc(100% - 1rem); }
   .morning-bento,
   .morning-archive-grid { grid-template-columns: 1fr; }
+  .morning-bento-card:nth-child(odd) { border-right: 0; }
+  .morning-bento-card + .morning-bento-card { border-top: 1px solid rgba(180, 155, 130, 0.28); }
   .morning-bento-1 { grid-row: auto; }
   .morning-section-heading h2,
   .morning-studio h2,
