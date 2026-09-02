@@ -37,7 +37,7 @@ const zh = {
     navItems: [
       { label: "记录", href: "/journal" },
       { label: "档案", href: "/archive" },
-      { label: "关于梦", href: "/blog/dreams-and-consciousness" },
+      { label: "博客", href: "/blog/dreams-and-consciousness" },
       { label: "订阅", href: "/pricing" },
     ] as { label: string; href: string }[],
     navCta: "记录梦境",

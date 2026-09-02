@@ -2128,9 +2128,9 @@ body:has(.dream-landing)::after {
   max-width: 10ch;
   margin: 0;
   font-family: var(--font-serif), system-ui, sans-serif;
-  font-size: clamp(3rem, 5.5vw, 5rem);
-  line-height: 1;
-  letter-spacing: -.05em;
+  font-size: clamp(2.1rem, 3.2vw, 3.1rem);
+  line-height: 1.08;
+  letter-spacing: -.04em;
 }
 .auth-intro > p:last-child {
   max-width: 34rem;
@@ -2191,7 +2191,7 @@ body:has(.dream-landing)::after {
   .auth-header,
   .auth-shell { width: min(100% - 2rem, 1040px); }
   .auth-shell { grid-template-columns: 1fr; gap: 2.5rem; align-content: center; }
-  .auth-intro h1 { max-width: 12ch; font-size: clamp(2.7rem, 12vw, 4rem); }
+  .auth-intro h1 { max-width: 12ch; font-size: clamp(2rem, 8.5vw, 2.7rem); }
   .auth-card { padding: 1.35rem; }
   .morning-pricing { width: min(100% - 2rem, 1100px); }
   .morning-plan-grid { grid-template-columns: 1fr; }
@@ -6901,7 +6901,7 @@ body {
 
 .morning-hero h1 {
   max-width: 11ch;
-  font-size: clamp(3.3rem, 6.2vw, 6.25rem);
+  font-size: clamp(2.35rem, 3.7vw, 3.8rem);
   font-weight: 650;
   letter-spacing: -0.055em;
   line-height: 0.98;
@@ -6988,7 +6988,6 @@ body {
 .morning-process,
 .morning-studio,
 .morning-archive,
-.morning-insight,
 .morning-privacy,
 .morning-footer {
   width: min(100% - 3rem, 1200px);
@@ -7000,8 +6999,7 @@ body {
 .morning-section-heading { max-width: 760px; margin-bottom: 3rem; }
 .morning-section-heading h2,
 .morning-studio h2,
-.morning-insight h2,
-.morning-privacy h2 { font-size: clamp(2.3rem, 4.6vw, 4.5rem); line-height: 1.05; letter-spacing: -.045em; }
+.morning-privacy h2 { font-size: clamp(2.05rem, 3.7vw, 3.55rem); line-height: 1.08; letter-spacing: -.04em; }
 
 .morning-step-grid { display: grid; grid-template-columns: repeat(3, 1fr); border-top: 1px solid var(--morning-border); }
 .morning-step-card { padding: 2rem 2rem 1rem 0; }
@@ -7012,9 +7010,9 @@ body {
 
 .morning-studio {
   display: grid;
-  grid-template-columns: .78fr 1.22fr;
-  gap: clamp(3rem, 8vw, 8rem);
-  padding: 7.5rem clamp(1.5rem, 5vw, 5rem);
+  grid-template-columns: .9fr 1.1fr;
+  gap: clamp(2.5rem, 6vw, 5.5rem);
+  padding: clamp(4rem, 7vw, 6rem) clamp(1.5rem, 5vw, 5rem);
   border-radius: 2rem;
   background: var(--morning-ink);
   color: #fff;
@@ -7022,12 +7020,12 @@ body {
 .morning-studio h2 { color: #fff; }
 .morning-studio-copy > p:not(.morning-eyebrow) { margin-top: 1.4rem; color: #cbd5e1; line-height: 1.75; }
 .morning-text-link { display: inline-flex; min-height: 44px; align-items: center; margin-top: 1.8rem; color: #fde68a; font-weight: 650; }
-.morning-bento { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
-.morning-bento-card { min-height: 190px; padding: 1.4rem; border: 1px solid rgba(255,255,255,.12); border-radius: 1.25rem; background: rgba(255,255,255,.075); }
+.morning-bento { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-rows: minmax(190px, 1fr); gap: 1rem; }
+.morning-bento-card { display: flex; min-height: 190px; flex-direction: column; padding: 1.4rem; border: 1px solid rgba(255,255,255,.12); border-radius: 1.25rem; background: rgba(255,255,255,.075); }
 .morning-bento-card > p { color: #fbbf24; font-size: .72rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
-.morning-bento-card h3 { margin-top: 2rem; color: #fff; font-size: 1.25rem; }
+.morning-bento-card h3 { margin-top: auto; color: #fff; font-size: 1.2rem; }
 .morning-bento-card span { display: block; margin-top: .65rem; color: #cbd5e1; font-size: .9rem; line-height: 1.65; }
-.morning-bento-1 { grid-row: span 2; display: flex; flex-direction: column; justify-content: flex-end; background: linear-gradient(180deg, rgba(99,102,241,.26), rgba(255,255,255,.07)); }
+.morning-bento-1 { background: linear-gradient(180deg, rgba(99,102,241,.26), rgba(255,255,255,.07)); }
 
 .morning-section-heading-row { display: grid; grid-template-columns: 1.2fr .8fr; gap: 4rem; max-width: none; align-items: end; }
 .morning-section-heading-row > p { max-width: 32rem; color: var(--morning-muted); line-height: 1.75; }
@@ -7039,14 +7037,7 @@ body {
 .morning-dream-card p { margin-top: .75rem; color: var(--morning-muted); line-height: 1.65; }
 .morning-dream-card strong { display: block; margin-top: 1.1rem; color: var(--morning-primary); font-size: .8rem; }
 
-.morning-insight { display: grid; grid-template-columns: .8fr 1.2fr; gap: 5rem; padding: 6rem; border-radius: 2rem; background: #f4eee8; }
-.morning-insight-copy > p:last-child,
 .morning-privacy > div > p:last-child { margin-top: 1.25rem; color: var(--morning-muted); line-height: 1.75; }
-.morning-metrics { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; }
-.morning-metrics article { min-height: 150px; padding: 1.2rem; border: 1px solid rgba(146,64,14,.14); border-radius: 1rem; background: rgba(255,255,255,.7); }
-.morning-metrics span { color: var(--morning-muted); font-size: .78rem; }
-.morning-metrics strong { display: block; margin-top: 1.2rem; color: var(--morning-primary); font-family: var(--font-serif), sans-serif; font-size: 2.3rem; }
-.morning-metrics p { margin-top: .35rem; color: var(--morning-faint); font-size: .78rem; }
 
 .morning-privacy { display: grid; grid-template-columns: 1fr 1fr; gap: 6rem; align-items: center; padding: 8rem 0; }
 .morning-privacy ul { display: grid; gap: .8rem; margin: 0; padding: 0; list-style: none; }
@@ -7148,7 +7139,6 @@ body {
   .morning-nav-links { display: none; }
   .morning-hero { grid-template-columns: 1fr 1fr; gap: 2.5rem; }
   .morning-archive-grid { grid-template-columns: repeat(2, 1fr); }
-  .morning-insight { padding: 4rem 3rem; gap: 3rem; }
 }
 
 @media (max-width: 760px) {
@@ -7157,13 +7147,12 @@ body {
   .morning-process,
   .morning-studio,
   .morning-archive,
-  .morning-insight,
   .morning-privacy,
   .morning-footer { width: min(100% - 2rem, 1200px); }
   .morning-nav { min-height: 70px; }
   .morning-nav-cta { display: none; }
   .morning-hero { grid-template-columns: 1fr; min-height: 0; padding: 4.5rem 0 5rem; }
-  .morning-hero h1 { max-width: 9ch; font-size: clamp(3.2rem, 15vw, 5rem); }
+  .morning-hero h1 { max-width: 9ch; font-size: clamp(2.2rem, 9vw, 3rem); }
   .morning-hero-visual { min-height: 490px; }
   .morning-photo-frame { left: 0; }
   .morning-capture-card { right: -.4rem; }
@@ -7175,9 +7164,7 @@ body {
   .morning-step-card h3 { margin-top: 1.2rem; }
   .morning-studio { grid-template-columns: 1fr; padding: 4rem 1.5rem; }
   .morning-section-heading-row,
-  .morning-insight,
   .morning-privacy { grid-template-columns: 1fr; gap: 2.5rem; }
-  .morning-insight { padding: 4rem 1.5rem; }
   .morning-privacy { padding: 5rem 0; }
   .morning-footer { grid-template-columns: 1fr; gap: 1rem; align-content: center; padding: 2rem 0; }
   .morning-footer > div:last-child { justify-content: flex-start; flex-wrap: wrap; }
@@ -7191,13 +7178,11 @@ body {
   .morning-photo-frame { inset: 0 0 1.5rem; border-radius: 8rem 8rem 1.5rem 1.5rem; }
   .morning-capture-card { width: calc(100% - 1rem); }
   .morning-bento,
-  .morning-archive-grid,
-  .morning-metrics { grid-template-columns: 1fr; }
+  .morning-archive-grid { grid-template-columns: 1fr; }
   .morning-bento-1 { grid-row: auto; }
   .morning-section-heading h2,
   .morning-studio h2,
-  .morning-insight h2,
-  .morning-privacy h2 { font-size: 2.3rem; }
+  .morning-privacy h2 { font-size: 2.05rem; }
   .morning-capture-actions { flex-wrap: wrap; }
   input,
   textarea,
