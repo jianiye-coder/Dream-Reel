@@ -7273,6 +7273,14 @@ body {
 .journal-root .chips-bar {
   background: transparent;
 }
+.journal-root .msg-avatar {
+  border-color: #d8c9bf;
+  background: #fff8ed;
+  color: #7c4d65;
+  font-size: 1.1rem;
+  line-height: 1;
+  box-shadow: 0 3px 10px rgba(120, 53, 15, .1);
+}
 .journal-root .bubble-ai {
   border-color: #d9c7da;
   background: #f4ecf5;
