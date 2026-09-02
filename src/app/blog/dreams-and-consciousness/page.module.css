@@ -16,7 +16,7 @@
 .article { position: relative; z-index: 1; width: min(72rem, calc(100% - 2rem)); margin: 0 auto; padding-bottom: 7rem; }
 .hero { max-width: 61rem; padding: clamp(4rem, 8vw, 6.5rem) 0 clamp(3rem, 5vw, 4.5rem); }
 .eyebrow, .sectionNumber { color: #92400e; font-size: .72rem; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; }
-.hero h1 { max-width: 13em; margin: 1.25rem 0 1.25rem; font-family: var(--font-serif), sans-serif; font-size: clamp(2.2rem, 3.5vw, 3.6rem); font-weight: 650; line-height: 1.1; letter-spacing: -.035em; text-wrap: balance; }
+.hero h1 { max-width: 13em; margin: 1.25rem 0 1.25rem; font-family: var(--font-serif), sans-serif; font-size: clamp(2rem, 3vw, 3.1rem); font-weight: 650; line-height: 1.12; letter-spacing: -.03em; text-wrap: balance; }
 .dek { max-width: 46rem; color: #334155; font-family: var(--font-serif), sans-serif; font-size: clamp(1rem, 1.25vw, 1.12rem); line-height: 1.8; }
 .meta { margin-top: 2rem; color: #64748b; font-size: .78rem; }
 .toc { display: flex; flex-wrap: wrap; gap: .65rem 1.4rem; padding: 1.5rem 0; border-block: 1px solid #e9ded6; }
@@ -25,13 +25,13 @@
 .toc a:hover { color: #92400e; }
 .proseSection, .person, .practice { scroll-margin-top: 2rem; padding: clamp(4.5rem, 9vw, 8rem) 0; border-bottom: 1px solid #e9ded6; }
 .proseSection { max-width: 52rem; }
-.proseSection h2, .practice h2 { margin: .9rem 0 1.6rem; font-family: var(--font-serif), sans-serif; font-size: clamp(2rem, 3.5vw, 3.3rem); font-weight: 650; line-height: 1.1; letter-spacing: -.035em; text-wrap: balance; }
+.proseSection h2, .practice h2 { margin: .9rem 0 1.35rem; font-family: var(--font-serif), sans-serif; font-size: clamp(1.65rem, 2.6vw, 2.45rem); font-weight: 650; line-height: 1.16; letter-spacing: -.025em; text-wrap: balance; }
 .proseSection > p:not(.sectionNumber), .practice > p { max-width: 46rem; margin-top: 1.2rem; color: var(--muted); font-size: 1.02rem; line-height: 1.95; }
 .personHeading { display: grid; grid-template-columns: 4rem 1fr; gap: 1rem; align-items: start; }
 .personHeading > p { color: #a16207; font-size: .76rem; font-weight: 700; letter-spacing: .14em; }
-.personHeading h2 { margin: 0; font-family: var(--font-serif), sans-serif; font-size: clamp(2.2rem, 3.9vw, 3.8rem); font-weight: 650; line-height: 1.06; letter-spacing: -.04em; }
+.personHeading h2 { margin: 0; font-family: var(--font-serif), sans-serif; font-size: clamp(1.85rem, 3vw, 2.75rem); font-weight: 650; line-height: 1.12; letter-spacing: -.03em; }
 .personHeading span { display: block; margin-top: .7rem; color: #64748b; font-size: .78rem; }
-.thesis { max-width: 44rem; margin: 3rem 0 2.5rem 5rem; color: #1e293b; font-family: var(--font-serif), sans-serif; font-size: clamp(1.2rem, 1.9vw, 1.6rem); line-height: 1.55; }
+.thesis { max-width: 44rem; margin: 2.4rem 0 2rem 5rem; color: #1e293b; font-family: var(--font-serif), sans-serif; font-size: clamp(1.05rem, 1.55vw, 1.3rem); line-height: 1.6; }
 .columns { display: grid; grid-template-columns: 1fr 1fr; gap: clamp(2rem, 5vw, 5rem); margin-left: 5rem; }
 .columns p { color: var(--muted); font-size: .98rem; line-height: 1.95; }
 .prompt { max-width: 48rem; margin: 3rem 0 0 5rem; padding: 1.15rem 1.4rem; border-left: 3px solid #a16207; border-radius: 0 .8rem .8rem 0; color: #334155; background: rgba(255,255,255,.72); font-size: .92rem; line-height: 1.75; }
@@ -39,9 +39,9 @@
 .practice ol { margin: 3rem 0 0; padding: 0; list-style: none; border-top: 1px solid #e9ded6; }
 .practice li { display: grid; grid-template-columns: 4rem minmax(0, 1fr); gap: 1rem; padding: 1.6rem 0; border-bottom: 1px solid #e9ded6; }
 .practice li > span { color: #a16207; font-size: .72rem; font-weight: 700; letter-spacing: .12em; }
-.practice h3 { margin: 0 0 .45rem; font-size: 1.08rem; font-weight: 650; }
+.practice h3 { margin: 0 0 .45rem; font-size: 1rem; font-weight: 650; }
 .practice li p { max-width: 42rem; color: var(--muted); line-height: 1.75; }
-.closing { max-width: 57rem; margin: clamp(4rem, 8vw, 7rem) auto 3rem; padding: 0; border: 0; color: #1e293b; font-family: var(--font-serif), sans-serif; font-size: clamp(1.6rem, 2.9vw, 2.75rem); font-weight: 550; line-height: 1.4; text-align: center; }
+.closing { max-width: 50rem; margin: clamp(4rem, 8vw, 7rem) auto 3rem; padding: 0; border: 0; color: #1e293b; font-family: var(--font-serif), sans-serif; font-size: clamp(1.25rem, 2vw, 1.85rem); font-weight: 550; line-height: 1.55; text-align: center; }
 .cta { display: flex; width: fit-content; min-height: 48px; align-items: center; margin: 0 auto clamp(6rem, 12vw, 10rem); padding: .8rem 1.4rem; border-radius: 999px; color: #fff; background: #92400e; font-weight: 700; text-decoration: none; }
 .cta:hover { background: #78350f; }
 .sources { padding-top: 3rem; border-top: 1px solid #e9ded6; }
