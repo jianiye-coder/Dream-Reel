@@ -127,7 +127,6 @@ export default function LandingPage() {
       <section className="morning-archive" aria-labelledby="morning-archive-title">
         <div className="morning-section-heading morning-section-heading-row">
           <div>
-            <p className="morning-eyebrow">{lang === "zh" ? "慢慢形成的档案" : "An archive that grows slowly"}</p>
             <h2 id="morning-archive-title">{L.archiveIntroTitle}</h2>
           </div>
           <p>{L.archiveIntroBody}</p>
