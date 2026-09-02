@@ -890,9 +890,25 @@ export default function JournalPage() {
           <span>Dream Reel</span>
         </Link>
 
-        <div className="journal-flow-label" aria-label={J.modeLabel}>
-          <span>{mode === "chat" ? J.chatMode : J.quickMode}</span>
-          <small>{mode === "chat" ? J.chatModeDesc : J.quickModeDesc}</small>
+        <div className="journal-mode-tabs" role="tablist">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={mode === "quick"}
+            onClick={() => setMode("quick")}
+            className={`mode-tab ${mode === "quick" ? "mode-tab-active" : ""}`}
+          >
+            <span>{J.quickMode}</span>
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={mode === "chat"}
+            onClick={() => { setMode("chat"); setStep("dream"); }}
+            className={`mode-tab ${mode === "chat" ? "mode-tab-active" : ""}`}
+          >
+            <span>{J.chatMode}</span>
+          </button>
         </div>
 
         <div className="nav-actions">
@@ -1229,6 +1245,13 @@ export default function JournalPage() {
                   >
                     {isGeneratingImage ? J.image.genLoading : J.quickFlow.generateImage}
                   </button>
+                  <button
+                    type="button"
+                    className="tool-btn action-secondary"
+                    onClick={() => setStep("sleep")}
+                  >
+                    {J.quickFlow.sleepNext}
+                  </button>
                   <Link href="/archive" className="tool-btn action-secondary" style={{ textDecoration: "none", display: "inline-flex", alignItems: "center" }}>
                     {lang === "zh" ? "保存并退出" : "Save & exit"}
                   </Link>
@@ -1249,6 +1272,54 @@ export default function JournalPage() {
       )}
 
       {/* Sleep log — step 2 */}
+      {step === "sleep" && (
+        <main className="sleep-step-screen">
+          <div className="sleep-step-inner">
+            <div className="sleep-step-header">
+              <button type="button" className="sleep-step-back" onClick={() => setStep("dream")}>
+                ← {lang === "zh" ? "返回" : "Back"}
+              </button>
+              <h2>{J.sleep.title}</h2>
+            </div>
+            <div className="sleep-context-grid">
+              <label className="sleep-context-field">
+                <span>{J.sleep.sleepStart}</span>
+                <input type="time" value={sleepStart} onChange={(e) => setSleepStart(e.target.value)} className="dream-input-sm" />
+              </label>
+              <label className="sleep-context-field">
+                <span>{J.sleep.wakeTime}</span>
+                <input type="time" value={wakeTime} onChange={(e) => setWakeTime(e.target.value)} className="dream-input-sm" />
+              </label>
+              <fieldset className="sleep-context-field sleep-context-quality">
+                <legend>{J.sleep.quality}</legend>
+                <div className="quality-btns">
+                  {[1, 2, 3, 4, 5].map((n) => (
+                    <button key={n} type="button" onClick={() => setSleepQuality(sleepQuality === n ? null : n)} className={`quality-btn ${sleepQuality === n ? "quality-btn-active" : ""}`} aria-pressed={sleepQuality === n}>{n}</button>
+                  ))}
+                </div>
+              </fieldset>
+              <label className="sleep-context-field sleep-context-stress">
+                <span>{J.sleep.stress}: {stressScore}</span>
+                <input type="range" min="1" max="5" step="1" value={stressScore} onChange={(e) => setStressScore(Number(e.target.value))} />
+                <small><span>{J.sleep.stressLow}</span><span>{J.sleep.stressHigh}</span></small>
+              </label>
+              <label className="sleep-context-field">
+                <span>{J.sleep.meal}</span>
+                <input type="text" value={preSleepMeal} onChange={(e) => setPreSleepMeal(e.target.value)} placeholder={J.sleep.mealPlaceholder} className="dream-input-sm" maxLength={500} />
+              </label>
+              <label className="sleep-context-field">
+                <span>{J.sleep.activity}</span>
+                <input type="text" value={preSleepActivity} onChange={(e) => setPreSleepActivity(e.target.value)} placeholder={J.sleep.activityPlaceholder} className="dream-input-sm" maxLength={500} />
+              </label>
+            </div>
+            <div className="sleep-step-footer">
+              <Link href="/archive" className="tool-btn action-primary" style={{ textDecoration: "none", display: "inline-flex", alignItems: "center" }}>
+                {lang === "zh" ? "保存并退出" : "Save & exit"}
+              </Link>
+            </div>
+          </div>
+        </main>
+      )}
 
       {/* Question chips — chat mode only */}
       {mode === "chat" && step === "dream" && agentReadyToAnalyze && (
@@ -1300,45 +1371,6 @@ export default function JournalPage() {
             </div>
           )}
 
-          {step === "dream" && (
-            <details className="sleep-context-panel">
-              <summary>
-                <span>{J.sleep.title}</span>
-                <small>{J.toolbar.sleepOptional}</small>
-              </summary>
-              <div className="sleep-context-grid">
-                <label className="sleep-context-field">
-                  <span>{J.sleep.sleepStart}</span>
-                  <input type="time" value={sleepStart} onChange={(e) => setSleepStart(e.target.value)} className="dream-input-sm" />
-                </label>
-                <label className="sleep-context-field">
-                  <span>{J.sleep.wakeTime}</span>
-                  <input type="time" value={wakeTime} onChange={(e) => setWakeTime(e.target.value)} className="dream-input-sm" />
-                </label>
-                <fieldset className="sleep-context-field sleep-context-quality">
-                  <legend>{J.sleep.quality}</legend>
-                  <div className="quality-btns">
-                    {[1, 2, 3, 4, 5].map((n) => (
-                      <button key={n} type="button" onClick={() => setSleepQuality(sleepQuality === n ? null : n)} className={`quality-btn ${sleepQuality === n ? "quality-btn-active" : ""}`} aria-pressed={sleepQuality === n}>{n}</button>
-                    ))}
-                  </div>
-                </fieldset>
-                <label className="sleep-context-field sleep-context-stress">
-                  <span>{J.sleep.stress}: {stressScore}</span>
-                  <input type="range" min="1" max="5" step="1" value={stressScore} onChange={(e) => setStressScore(Number(e.target.value))} />
-                  <small><span>{J.sleep.stressLow}</span><span>{J.sleep.stressHigh}</span></small>
-                </label>
-                <label className="sleep-context-field">
-                  <span>{J.sleep.meal}</span>
-                  <input type="text" value={preSleepMeal} onChange={(e) => setPreSleepMeal(e.target.value)} placeholder={J.sleep.mealPlaceholder} className="dream-input-sm" maxLength={500} />
-                </label>
-                <label className="sleep-context-field">
-                  <span>{J.sleep.activity}</span>
-                  <input type="text" value={preSleepActivity} onChange={(e) => setPreSleepActivity(e.target.value)} placeholder={J.sleep.activityPlaceholder} className="dream-input-sm" maxLength={500} />
-                </label>
-              </div>
-            </details>
-          )}
 
           {/* Image panel — chat mode only (quick mode shows inline next to dream textarea) */}
           {panel === "image" && mode === "chat" && (
