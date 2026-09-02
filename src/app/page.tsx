@@ -144,19 +144,6 @@ export default function LandingPage() {
         </div>
       </section>
 
-      <section className="morning-insight" aria-labelledby="morning-insight-title">
-        <div className="morning-insight-copy">
-          <p className="morning-eyebrow">{L.sleepEyebrow}</p>
-          <h2 id="morning-insight-title">{L.sleepTitle}</h2>
-          <p>{L.sleepBody}</p>
-        </div>
-        <div className="morning-metrics">
-          {L.sleepMetrics.map((metric) => (
-            <article key={metric.label}><span>{metric.label}</span><strong>{metric.value}</strong><p>{metric.note}</p></article>
-          ))}
-        </div>
-      </section>
-
       <section className="morning-privacy" aria-labelledby="morning-privacy-title">
         <div>
           <p className="morning-eyebrow">{L.privacyEyebrow}</p>
