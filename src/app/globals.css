@@ -7241,6 +7241,33 @@ body {
   color: var(--morning-primary) !important;
 }
 
+/* Keep the archive export control legible against the light morning surface. */
+.archive-page .archive-export-panel {
+  border-color: #d5bca9 !important;
+  background: #fffaf2 !important;
+  box-shadow: 0 8px 22px rgba(120, 53, 15, .07) !important;
+}
+.archive-page .archive-export-label {
+  color: #70452f !important;
+  font-weight: 700;
+}
+.archive-page .archive-export-action {
+  min-height: 40px;
+  border-color: #ae7555 !important;
+  background: #fff !important;
+  color: #8a4526 !important;
+  font-weight: 700;
+}
+.archive-page .archive-export-action:hover:not(:disabled) {
+  border-color: #7a351c !important;
+  background: #fff3e7 !important;
+  color: #6b2c17 !important;
+}
+.archive-page .archive-export-action:focus-visible {
+  outline: 3px solid rgba(138, 69, 38, .28);
+  outline-offset: 2px;
+}
+
 @media (max-width: 1024px) {
   .morning-nav { grid-template-columns: 1fr auto; }
   .morning-nav-links { display: none; }
