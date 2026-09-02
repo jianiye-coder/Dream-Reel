@@ -43,7 +43,7 @@ export default function LandingPage() {
 
       <section className="morning-hero" aria-labelledby="morning-hero-title">
         <div className="morning-hero-copy">
-          <p className="morning-eyebrow">{lang === "zh" ? "早上使用的 AI 梦境日记与自我反思工具" : "An AI dream journal for morning reflection"}</p>
+          <p className="morning-eyebrow">{lang === "zh" ? "AI 梦境日记与自我反思工具" : "An AI dream journal for morning reflection"}</p>
           <h1 id="morning-hero-title">{lang === "zh" ? "趁梦还在，先把它留下。" : "Before the dream fades, leave it here."}</h1>
           <p className="morning-lede">
             {lang === "zh"
