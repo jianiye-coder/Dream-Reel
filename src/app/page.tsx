@@ -33,7 +33,7 @@ export default function LandingPage() {
         <div className="morning-nav-links">
           <Link href="/journal">{T.nav.journal}</Link>
           <Link href="/archive">{T.nav.archive}</Link>
-          <Link href="/blog/dreams-and-consciousness">{lang === "zh" ? "关于梦" : "About dreams"}</Link>
+          <Link href="/blog/dreams-and-consciousness">{lang === "zh" ? "博客" : "Blog"}</Link>
         </div>
         <div className="morning-nav-actions">
           <LangToggle className="morning-language" />
@@ -43,7 +43,7 @@ export default function LandingPage() {
 
       <section className="morning-hero" aria-labelledby="morning-hero-title">
         <div className="morning-hero-copy">
-          <p className="morning-eyebrow">{lang === "zh" ? "早上使用的 AI 梦境日记与自我反思工具" : "An AI dream journal for morning reflection"}</p>
+          <p className="morning-eyebrow">{lang === "zh" ? "AI 梦境日记与自我反思工具" : "An AI dream journal for morning reflection"}</p>
           <h1 id="morning-hero-title">{lang === "zh" ? "趁梦还在，先把它留下。" : "Before the dream fades, leave it here."}</h1>
           <p className="morning-lede">
             {lang === "zh"
@@ -140,19 +140,6 @@ export default function LandingPage() {
               <p>{node.fragment}</p>
               <strong>{node.signal}</strong>
             </article>
-          ))}
-        </div>
-      </section>
-
-      <section className="morning-insight" aria-labelledby="morning-insight-title">
-        <div className="morning-insight-copy">
-          <p className="morning-eyebrow">{L.sleepEyebrow}</p>
-          <h2 id="morning-insight-title">{L.sleepTitle}</h2>
-          <p>{L.sleepBody}</p>
-        </div>
-        <div className="morning-metrics">
-          {L.sleepMetrics.map((metric) => (
-            <article key={metric.label}><span>{metric.label}</span><strong>{metric.value}</strong><p>{metric.note}</p></article>
           ))}
         </div>
       </section>
