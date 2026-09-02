@@ -7268,6 +7268,48 @@ body {
   outline-offset: 2px;
 }
 
+/* Chat uses the same calm, readable morning surface as the journal. */
+.journal-root .messages-area,
+.journal-root .chips-bar {
+  background: transparent;
+}
+.journal-root .bubble-ai {
+  border-color: #d9c7da;
+  background: #f4ecf5;
+  color: #352b42;
+  backdrop-filter: none;
+}
+.journal-root .bubble-user {
+  border-color: #d7b99f;
+  background: #ead9c9;
+  color: #34243a;
+  backdrop-filter: none;
+}
+.journal-root .msg-bubble .msg-text {
+  color: inherit !important;
+  font-size: .95rem;
+  line-height: 1.75;
+}
+.journal-root .input-wrapper {
+  border-top-color: rgba(146, 64, 14, .14);
+  background: transparent;
+  backdrop-filter: none;
+  padding-bottom: 1.25rem;
+}
+.journal-root .input-form {
+  border-color: #d8c9bf;
+  background: rgba(255, 255, 255, .94);
+  box-shadow: 0 10px 28px rgba(120, 53, 15, .1);
+}
+.journal-root .main-input {
+  background: transparent !important;
+  color: #352b42 !important;
+}
+.journal-root .main-input::placeholder {
+  color: #5f6278 !important;
+  opacity: 1;
+}
+
 @media (max-width: 1024px) {
   .morning-nav { grid-template-columns: 1fr auto; }
   .morning-nav-links { display: none; }
