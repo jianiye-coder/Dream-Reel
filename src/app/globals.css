@@ -7121,7 +7121,7 @@ body {
 .morning-archive-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; }
 .morning-dream-card { min-height: 270px; padding: 1.25rem; border: 1px solid var(--morning-border); border-radius: 1.25rem; background: rgba(255,255,255,.68); transition: transform .2s ease, border-color .2s ease; }
 .morning-dream-card:hover { transform: translateY(-4px); border-color: #c7a995; }
-.morning-dream-card > div { color: var(--morning-secondary); font-size: .72rem; font-weight: 700; }
+.morning-dream-card > div { color: #7c3f26; font-size: .72rem; font-weight: 700; }
 .morning-dream-card h3 { margin-top: 3.2rem; font-size: 1.35rem; }
 .morning-dream-card p { margin-top: .75rem; color: var(--morning-muted); line-height: 1.65; }
 .morning-dream-card strong { display: block; margin-top: 1.1rem; color: var(--morning-primary); font-size: .8rem; }

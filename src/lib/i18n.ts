@@ -106,8 +106,8 @@ const zh = {
       "这是你第三次做这个梦了",
     ] as string[],
     archiveIntroEyebrow: "",
-    archiveIntroTitle: "梦境像电影胶片的碎片一样聚集。",
-    archiveIntroBody: "每条记录都成为一个节点：一个人、一个地点、一个意象、一种情绪、一个睡眠之夜。滚动浏览档案，碎片开始彼此认出。",
+    archiveIntroTitle: "按日期翻看你的梦境档案。",
+    archiveIntroBody: "回到任何一天，重新遇见当时的人、地点、意象与情绪，让零散的记忆慢慢连成线索。",
     archiveNodes: [
       { time: "04:18", title: "楼梯间", fragment: "楼梯间的灯是灭的，但月光够亮。有人从楼下喊我的小名，声音像隔了一层水。我往下走，台阶越来越软。", signal: "地点：老家楼梯 / 情绪：恍惚" },
       { time: "凌晨", title: "教室最后一排", fragment: "窗外不是操场，是大海。老师转身的时候，粉笔变成了贝壳。旁边的人说：别出声，这是你第三次做这个梦了。", signal: "意象：海 / 规律：重复" },
