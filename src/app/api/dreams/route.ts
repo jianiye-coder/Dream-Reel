@@ -12,6 +12,7 @@ import { auth } from "@/auth";
 import { z } from "zod";
 import { checkAndConsumeUsage, refundConsumedUsage } from "@/lib/billing";
 import { API_ERROR_CODES } from "@/lib/apiErrors";
+import { scheduleDreamAgentJournalSaved } from "@/lib/dreamAgentMetrics";
 
 const deleteSchema = z.object({ id: z.number().int().positive() });
 
@@ -79,6 +80,9 @@ export async function POST(request: NextRequest) {
       if (usage.usagePeriodId) await refundConsumedUsage(usage.usagePeriodId, "dream_entries");
       throw error;
     }
+    if (parsed.data.agentInteractionId) {
+      scheduleDreamAgentJournalSaved(userId, parsed.data.agentInteractionId, entry.id);
+    }
     return NextResponse.json({ entry }, { status: 201 });
   } catch (error) {
     console.error("POST /api/dreams failed", error);
@@ -101,6 +105,9 @@ export async function PUT(request: NextRequest) {
     }
 
     const entry = await updateDreamEntry(parsed.data, userId);
+    if (parsed.data.agentInteractionId) {
+      scheduleDreamAgentJournalSaved(userId, parsed.data.agentInteractionId, entry.id);
+    }
     return NextResponse.json({ entry });
   } catch (error) {
     console.error("PUT /api/dreams failed", error);

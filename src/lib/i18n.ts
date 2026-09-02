@@ -37,12 +37,13 @@ const zh = {
     navItems: [
       { label: "记录", href: "/journal" },
       { label: "档案", href: "/archive" },
+      { label: "关于梦", href: "/blog/dreams-and-consciousness" },
       { label: "订阅", href: "/pricing" },
     ] as { label: string; href: string }[],
     navCta: "记录梦境",
     heroKicker: "AI 梦境日记 · 记忆图谱 · 睡眠反思",
     heroSubtitle: "把梦境变成记忆、画面与隐藏的规律。",
-    heroCta1: "记录一个梦",
+    heroCta1: "记录梦境",
     heroCta2: "浏览梦境档案",
     galleryHeading: "Dream Gallery",
     gallerySubtitle: "值得再回看一眼的片段",
@@ -194,30 +195,6 @@ const zh = {
         ],
       },
     ] as { name: string; price: string; cadence: string; badge: string; cta: string; features: string[] }[],
-    voicesEyebrow: "梦与意识",
-    voicesTitle: "有人比你更早看见这些",
-    voices: [
-      {
-        name: "西格蒙德·弗洛伊德",
-        thought: "释梦，是通往认识心灵无意识活动的康庄大道。",
-        source: "《梦的解析》第 7 章 · 1900",
-      },
-      {
-        name: "卡尔·荣格",
-        thought: "我们每个人内心都住着一个我们不认识的人。他在梦中向我们诉说，告诉我们他所看到的自己与我们所看到的自己有多么不同。",
-        source: "《回忆、梦、思考》· 1962",
-      },
-      {
-        name: "马塞尔·普鲁斯特",
-        thought: "如果一点点的梦是危险的，治愈它的方法不是少做梦，而是多做，彻底地做梦。",
-        source: "《追忆似水年华》· 1913–1927",
-      },
-      {
-        name: "阿尔弗雷德·阿德勒",
-        thought: "梦是对未来问题的预演。",
-        source: "《自卑与超越》· 1931",
-      },
-    ] as { name: string; thought: string; source?: string }[],
   },
 
   billing: {
@@ -305,8 +282,8 @@ const zh = {
       analyze: "读取",
       generate: "显影",
       archive: "入档",
-      beforeAnalyze: "先读取梦境，Dream Reel 会提取人物、地点、符号与情绪，再生成图像或保存档案。",
-      afterAnalyze: "梦境线索已经浮现。现在可以让画面显影，或把它保存进 archive。",
+      beforeAnalyze: "可以让 AI 提取人物、地点、符号与情绪，也可以直接与 Agent 一起回忆这场梦。",
+      afterAnalyze: "梦境线索已经浮现。可以继续与 Agent 对话、生成图像，或保存进 archive。",
     },
     quickFlow: {
       analysisWaiting: "初步读取",
@@ -318,6 +295,7 @@ const zh = {
       imageReady: "图像已显影",
       chatUnlocked: "现在可以带着这段梦和图像继续进入 AI 对话。",
       enterChat: "进入 AI 对话",
+      chatDirect: "与 Agent 对话",
     },
     memoryPreview: {
       label: "梦境线索预览",
@@ -363,6 +341,13 @@ const zh = {
     dbErrorTitle: "暂时无法连接到梦境档案",
     dbErrorHint:
       "数据库连接出现问题，稍后刷新页面重试。如果持续出现，可能是服务器连接数暂时满载，通常几分钟内会自动恢复。",
+    export: {
+      title: "导出全部梦境",
+      markdown: "Markdown 阅读版",
+      json: "JSON 完整备份",
+      exporting: "正在整理档案…",
+      failed: "导出失败，请稍后再试",
+    },
     recap: {
       title: "本周回顾",
       entries: "记录次数",
@@ -442,6 +427,8 @@ const zh = {
     updateFailed: "更新失败",
     analyzeError: "分析失败",
     downloadImage: "↓ 下载图片",
+    exportMarkdown: "导出 Markdown",
+    exportJson: "备份 JSON",
     tagPlaceholder: "输入后按 Enter 或逗号添加",
   },
 };
@@ -463,6 +450,7 @@ const en: typeof zh = {
     navItems: [
       { label: "Record", href: "/journal" },
       { label: "Archive", href: "/archive" },
+      { label: "On Dreams", href: "/blog/dreams-and-consciousness" },
       { label: "Pricing", href: "/pricing" },
     ],
     navCta: "Record Dream",
@@ -620,30 +608,6 @@ const en: typeof zh = {
         ],
       },
     ],
-    voicesEyebrow: "Dreams & consciousness",
-    voicesTitle: "Others saw this before you did",
-    voices: [
-      {
-        name: "Sigmund Freud",
-        thought: "The interpretation of dreams is the royal road to a knowledge of the unconscious activities of the mind.",
-        source: "The Interpretation of Dreams (1900), Chapter 7",
-      },
-      {
-        name: "Carl Jung",
-        thought: "We each have a person inside us that we do not know. He speaks to us in dreams and tells us how differently he sees us from the way we see ourselves.",
-        source: "Memories, Dreams, Reflections (1962)",
-      },
-      {
-        name: "Marcel Proust",
-        thought: "If a little dreaming is dangerous, the cure for it is not to dream less but to dream more, to dream all the time.",
-        source: "In Search of Lost Time (1913–1927)",
-      },
-      {
-        name: "Alfred Adler",
-        thought: "The dream is a rehearsal for future problems.",
-        source: "What Life Could Mean to You (1931)",
-      },
-    ],
   },
 
   billing: {
@@ -731,8 +695,8 @@ const en: typeof zh = {
       analyze: "Read",
       generate: "Develop",
       archive: "Archive",
-      beforeAnalyze: "Read the dream first. Dream Reel extracts people, places, symbols, and mood before image generation or saving.",
-      afterAnalyze: "The dream signals have surfaced. You can develop an image now, or save it into the archive.",
+      beforeAnalyze: "Let AI extract people, places, symbols, and mood, or start recalling the dream directly with the Agent.",
+      afterAnalyze: "The dream signals have surfaced. Continue with the Agent, develop an image, or save it to the archive.",
     },
     quickFlow: {
       analysisWaiting: "First reading",
@@ -744,6 +708,7 @@ const en: typeof zh = {
       imageReady: "Image developed",
       chatUnlocked: "You can now continue into AI chat with this dream and its image.",
       enterChat: "Enter AI Chat",
+      chatDirect: "Chat with Agent",
     },
     memoryPreview: {
       label: "Dream signal preview",
@@ -789,6 +754,13 @@ const en: typeof zh = {
     dbErrorTitle: "Unable to reach the dream archive right now",
     dbErrorHint:
       "There was a problem connecting to the database. Try refreshing in a moment. If it keeps happening, the server may be temporarily at capacity and should recover within a few minutes.",
+    export: {
+      title: "Export all dreams",
+      markdown: "Readable Markdown",
+      json: "Complete JSON backup",
+      exporting: "Preparing archive…",
+      failed: "Export failed. Please try again.",
+    },
     recap: {
       title: "This Week",
       entries: "Dreams Recorded",
@@ -869,6 +841,8 @@ const en: typeof zh = {
     updateFailed: "Update failed",
     analyzeError: "Analysis failed",
     downloadImage: "↓ Download Image",
+    exportMarkdown: "Export Markdown",
+    exportJson: "Backup JSON",
     tagPlaceholder: "Type then press Enter or comma to add",
   },
 };

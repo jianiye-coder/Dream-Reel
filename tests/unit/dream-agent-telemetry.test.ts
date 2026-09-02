@@ -1,5 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createDreamAgentResponseMeta, logDreamAgentCompletion, selectDreamAgentModelVariant, verifyDreamAgentFeedbackToken } from "@/lib/dreamAgentTelemetry";
+import {
+  createDreamAgentResponseMeta,
+  logDreamAgentCompletion,
+  selectDreamAgentModelVariant,
+  selectDreamAgentPolicyVariant,
+  verifyDreamAgentFeedbackToken,
+} from "@/lib/dreamAgentTelemetry";
 
 describe("dream agent telemetry", () => {
   afterEach(() => { delete process.env.DREAM_AGENT_FEEDBACK_SECRET; });
@@ -8,14 +14,19 @@ describe("dream agent telemetry", () => {
     expect(selectDreamAgentModelVariant(42, "100")).toBe("json-schema-v1");
     expect(selectDreamAgentModelVariant(42, "12.5")).toBe(selectDreamAgentModelVariant(42, "12.5"));
     expect(selectDreamAgentModelVariant(42, "invalid")).toBe("json-object-v1");
+    expect(selectDreamAgentPolicyVariant(42, "0")).toBe("legacy-v1");
+    expect(selectDreamAgentPolicyVariant(42, "100")).toBe("guarded-v2");
+    expect(selectDreamAgentPolicyVariant(42, "12.5")).toBe(selectDreamAgentPolicyVariant(42, "12.5"));
+    expect(selectDreamAgentPolicyVariant(42, "invalid")).toBe("legacy-v1");
   });
 
   it("signs feedback metadata and rejects tampering", () => {
     process.env.DREAM_AGENT_FEEDBACK_SECRET = "unit-test-feedback-secret";
-    const meta = createDreamAgentResponseMeta("json-object-v1", "model", 10, 7);
+    const meta = createDreamAgentResponseMeta("json-object-v1", "model", 10, 7, "openai", "guarded-v2");
     expect(verifyDreamAgentFeedbackToken(meta.feedbackToken!, 7)).toMatchObject({
       interactionId: meta.interactionId,
       variant: "json-object-v1",
+      policyVariant: "guarded-v2",
     });
     expect(verifyDreamAgentFeedbackToken(meta.feedbackToken!, 8)).toBeNull();
     expect(verifyDreamAgentFeedbackToken(`${meta.feedbackToken}x`, 7)).toBeNull();
@@ -32,6 +43,7 @@ describe("dream agent telemetry", () => {
     }, {
       interactionId: "test-id",
       variant: "json-object-v1",
+      policyVariant: "guarded-v2",
       source: "model",
       provider: "openai",
       latencyMs: 250,

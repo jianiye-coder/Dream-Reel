@@ -1,21 +1,19 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import { Cormorant_Garamond, Courier_Prime } from "next/font/google";
+import { Outfit, Work_Sans } from "next/font/google";
 import { SessionProvider } from "next-auth/react";
 import { LanguageProvider } from "@/contexts/LanguageContext";
 
-const cormorant = Cormorant_Garamond({
+const outfit = Outfit({
   subsets: ["latin"],
-  weight: ["300", "400", "500", "600", "700"],
-  style: ["normal", "italic"],
+  weight: ["400", "500", "600", "700"],
   variable: "--font-serif",
   display: "swap",
 });
 
-const courierPrime = Courier_Prime({
+const workSans = Work_Sans({
   subsets: ["latin"],
-  weight: ["400", "700"],
-  style: ["normal", "italic"],
+  weight: ["400", "500", "600", "700"],
   variable: "--font-sub",
   display: "swap",
 });
@@ -34,7 +32,7 @@ export default function RootLayout({
   return (
     <html
       lang="zh-CN"
-      className={`h-full antialiased ${cormorant.variable} ${courierPrime.variable}`}
+      className={`h-full antialiased ${outfit.variable} ${workSans.variable}`}
       suppressHydrationWarning
     >
       <head>

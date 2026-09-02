@@ -5,6 +5,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { DreamEntry } from "@/lib/dreams";
 import { buildDreamImagePrompt } from "@/lib/imagePrompt";
+import {
+  buildDreamExport,
+  sanitizeDreamExportFilename,
+  type DreamExportFormat,
+} from "@/lib/dreamExport";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { formatDateTime, formatMonthLabel } from "@/lib/i18n";
 import { getApiErrorMessage } from "@/lib/apiErrors";
@@ -71,6 +76,20 @@ function dreamDisplayTitle(entry: Pick<DreamEntry, "title" | "cleanText" | "rawT
   if (explicitTitle) return explicitTitle;
   const text = (entry.cleanText || entry.rawText).replace(/\s+/g, " ").trim();
   return truncate(text, 32);
+}
+
+function downloadDreamFile(content: string, filename: string, format: DreamExportFormat) {
+  const blob = new Blob([content], {
+    type: format === "json" ? "application/json;charset=utf-8" : "text/markdown;charset=utf-8",
+  });
+  const href = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = href;
+  anchor.download = filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  window.setTimeout(() => URL.revokeObjectURL(href), 1_000);
 }
 
 function splitCommaList(value: string): string[] {
@@ -617,6 +636,39 @@ function DreamEditorModal({
     }
   }
 
+  function exportCurrentDream(format: DreamExportFormat) {
+    if (!entry || !form) return;
+    const capturedAt = form.dreamDate && form.dreamDate !== entry.capturedAt.slice(0, 10)
+      ? `${form.dreamDate}T00:00:00.000Z`
+      : entry.capturedAt;
+    const currentEntry: DreamEntry = {
+      ...entry,
+      title: form.title,
+      capturedAt,
+      rawText: form.rawText,
+      cleanText: form.cleanText.trim() || form.rawText.trim(),
+      mood: form.mood,
+      stressScore: form.stressScore ? Number(form.stressScore) : null,
+      tags: splitCommaList(form.tags),
+      people: splitCommaList(form.people),
+      locations: splitCommaList(form.locations),
+      symbols: splitCommaList(form.symbols),
+      imageUrl: form.imageUrl,
+      thumbnailUrl: form.imageUrl === entry.imageUrl ? entry.thumbnailUrl : form.imageUrl,
+      assetStatus: form.assetStatus,
+      sleepStart: form.sleepStart || null,
+      wakeTime: form.wakeTime || null,
+      sleepQuality: form.sleepQuality,
+      preSleepMeal: form.preSleepMeal || null,
+      preSleepActivity: form.preSleepActivity || null,
+      sleepInsight: form.sleepInsight || null,
+      visualBrief: localVisualBrief,
+    };
+    const extension = format === "json" ? "json" : "md";
+    const filename = `${currentEntry.capturedAt.slice(0, 10)}-${sanitizeDreamExportFilename(dreamDisplayTitle(currentEntry))}.${extension}`;
+    downloadDreamFile(buildDreamExport([currentEntry], format, lang), filename, format);
+  }
+
   function appendAnswer(index: number) {
     const answer = followUpAnswers[index]?.trim();
     if (!answer) return;
@@ -632,7 +684,9 @@ function DreamEditorModal({
   return (
     <div
       className="fixed inset-0 z-50 flex items-end justify-center bg-[rgba(232,225,242,0.58)] backdrop-blur-xl sm:items-center"
-      onClick={onClose}
+      onClick={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
     >
       <div
         className="mist-card relative max-h-[94vh] w-full max-w-4xl overflow-y-auto rounded-t-[2rem] p-5 sm:rounded-[2rem] sm:p-6"
@@ -904,6 +958,20 @@ function DreamEditorModal({
 
             <div className="mist-card rounded-[1.8rem] p-4">
               <div className="flex flex-wrap items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => exportCurrentDream("markdown")}
+                  className="mist-button-secondary rounded-full px-4 py-2.5 text-sm font-medium text-[#756a90] transition hover:bg-white/55"
+                >
+                  ↓ {M.exportMarkdown}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => exportCurrentDream("json")}
+                  className="mist-button-secondary rounded-full px-4 py-2.5 text-sm font-medium text-[#756a90] transition hover:bg-white/55"
+                >
+                  ↓ {M.exportJson}
+                </button>
                 <button
                   type="button"
                   onClick={deleteEntry}
@@ -1895,7 +1963,9 @@ export default function DreamGrid({
       {selectedDay && (
         <div
           className="fixed inset-0 z-50 flex items-end justify-center bg-[rgba(232,225,242,0.58)] backdrop-blur-xl sm:items-center"
-          onClick={() => setSelectedDay(null)}
+          onClick={(event) => {
+            if (event.target === event.currentTarget) setSelectedDay(null);
+          }}
         >
           <div
             className="mist-card relative max-h-[85vh] w-full max-w-xl overflow-y-auto rounded-t-[2rem] p-5 sm:rounded-[2rem] sm:p-6"

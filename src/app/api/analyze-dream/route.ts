@@ -135,12 +135,39 @@ const EN_SYSTEM_PROMPT = `You are a dream analysis assistant. The user will prov
 Return ONLY JSON, no extra text. Format:
 {"title":"...","mood":"...","stressScore":3,"people":["..."],"locations":["..."],"symbols":["..."],"sleepInsight":"...","followUpQuestions":["...","..."],"visualBrief":"..."}`;
 
-type OpenAIResponse = {
+type ChatCompletionResponse = {
   choices?: Array<{ message?: { content?: string } }>;
 };
 
-const OPENAI_MODEL = "gpt-4o-mini";
-const OPENAI_TIMEOUT_MS = 60_000;
+const DEFAULT_OPENAI_ANALYSIS_MODEL = "gpt-4o-mini";
+const DEFAULT_GROQ_ANALYSIS_MODEL = "openai/gpt-oss-120b";
+const ANALYSIS_TIMEOUT_MS = 60_000;
+
+type AnalysisProvider = {
+  name: "groq" | "openai";
+  apiKey: string;
+  model: string;
+  url: string;
+};
+
+function configuredAnalysisProviders(): AnalysisProvider[] {
+  return [
+    process.env.GROQ_API_KEY && {
+      name: "groq" as const,
+      apiKey: process.env.GROQ_API_KEY,
+      model: process.env.GROQ_ANALYSIS_MODEL
+        ?? process.env.GROQ_MODEL
+        ?? DEFAULT_GROQ_ANALYSIS_MODEL,
+      url: "https://api.groq.com/openai/v1/chat/completions",
+    },
+    process.env.OPENAI_API_KEY && {
+      name: "openai" as const,
+      apiKey: process.env.OPENAI_API_KEY,
+      model: process.env.OPENAI_ANALYSIS_MODEL ?? DEFAULT_OPENAI_ANALYSIS_MODEL,
+      url: "https://api.openai.com/v1/chat/completions",
+    },
+  ].filter((provider): provider is AnalysisProvider => Boolean(provider));
+}
 
 function ensureRealityQuestion(questions: string[], lang: "zh" | "en") {
   const requiredQuestion = getRealityQuestion(lang);
@@ -202,8 +229,8 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const apiKey = process.env.OPENAI_API_KEY;
-    if (!apiKey) {
+    const providers = configuredAnalysisProviders();
+    if (!providers.length) {
       return NextResponse.json(
         { error: API_ERROR_CODES.configurationError },
         { status: 500 },
@@ -241,80 +268,109 @@ export async function POST(request: NextRequest) {
 
     const systemPrompt = lang === "en" ? EN_SYSTEM_PROMPT : ZH_SYSTEM_PROMPT;
 
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), OPENAI_TIMEOUT_MS);
+    let lastFailure: "upstream" | "timeout" | "invalid-response" = "upstream";
 
-    let upstream: Response;
-    try {
-      upstream = await fetch("https://api.openai.com/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          "Content-Type": "application/json",
-        },
-        signal: controller.signal,
-        body: JSON.stringify({
-          model: OPENAI_MODEL,
-          messages: [
-            { role: "system", content: systemPrompt },
-            { role: "user", content: userContent },
-          ],
-          max_completion_tokens: 2000,
-          response_format: { type: "json_object" },
-        }),
-      });
-    } finally {
-      clearTimeout(timeout);
+    for (const provider of providers) {
+      try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), ANALYSIS_TIMEOUT_MS);
+        let upstream: Response;
+        try {
+          upstream = await fetch(provider.url, {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${provider.apiKey}`,
+              "Content-Type": "application/json",
+            },
+            signal: controller.signal,
+            body: JSON.stringify({
+              model: provider.model,
+              messages: [
+                { role: "system", content: systemPrompt },
+                { role: "user", content: userContent },
+              ],
+              max_completion_tokens: provider.name === "groq" ? 3000 : 2000,
+              reasoning_effort: provider.name === "groq" && provider.model.startsWith("openai/gpt-oss-")
+                ? "low"
+                : undefined,
+              response_format: { type: "json_object" },
+            }),
+          });
+        } finally {
+          clearTimeout(timeout);
+        }
+
+        if (!upstream.ok) {
+          lastFailure = "upstream";
+          console.error("POST /api/analyze-dream provider failed", {
+            provider: provider.name,
+            status: upstream.status,
+          });
+          continue;
+        }
+
+        const payload = (await upstream.json()) as ChatCompletionResponse;
+        const content = payload.choices?.[0]?.message?.content ?? "";
+
+        let raw: unknown;
+        try {
+          raw = JSON.parse(content);
+        } catch {
+          lastFailure = "invalid-response";
+          console.error("POST /api/analyze-dream provider returned invalid JSON", {
+            provider: provider.name,
+          });
+          continue;
+        }
+
+        const result = analysisSchema.safeParse(unwrapAnalysisPayload(raw));
+        if (!result.success) {
+          lastFailure = "invalid-response";
+          console.error("POST /api/analyze-dream provider returned invalid schema", {
+            provider: provider.name,
+            issues: safeValidationIssues(result.error.issues),
+          });
+          continue;
+        }
+
+        const cleaned = {
+          title: limitText(result.data.title, lang === "en" ? 80 : 40),
+          mood: limitText(result.data.mood, 20),
+          stressScore: result.data.stressScore,
+          people: cleanList(result.data.people, 5, lang === "en" ? 40 : 12),
+          locations: cleanList(result.data.locations, 5, lang === "en" ? 48 : 16),
+          symbols: cleanList(result.data.symbols, 5, lang === "en" ? 40 : 12),
+          sleepInsight: limitText(result.data.sleepInsight, 1000),
+          followUpQuestions: ensureRealityQuestion(
+            cleanList(result.data.followUpQuestions, 3, lang === "en" ? 160 : 80),
+            lang,
+          ),
+          visualBrief: limitText(result.data.visualBrief, 2500),
+        };
+
+        consumedUsagePeriodId = undefined;
+        return NextResponse.json(cleaned, {
+          headers: { "X-Dream-AI-Provider": provider.name },
+        });
+      } catch (providerError) {
+        lastFailure = providerError instanceof Error && providerError.name === "AbortError"
+          ? "timeout"
+          : "upstream";
+        console.error("POST /api/analyze-dream provider request failed", {
+          provider: provider.name,
+          ...safeErrorMetadata(providerError),
+        });
+      }
     }
 
-    if (!upstream.ok) {
-      await refundAnalysisUsageOnce();
-      console.error("POST /api/analyze-dream upstream failed", {
-        status: upstream.status,
-      });
-      return NextResponse.json({ error: API_ERROR_CODES.upstreamError }, { status: 502 });
+    await refundAnalysisUsageOnce();
+    if (lastFailure === "timeout") {
+      return NextResponse.json({ error: API_ERROR_CODES.timeout }, { status: 504 });
     }
-
-    const payload = (await upstream.json()) as OpenAIResponse;
-    const content = payload.choices?.[0]?.message?.content ?? "";
-
-    let raw: unknown;
-    try {
-      raw = JSON.parse(content);
-    } catch {
-      await refundAnalysisUsageOnce();
+    if (lastFailure === "invalid-response") {
       return NextResponse.json({ error: API_ERROR_CODES.invalidResponse }, { status: 422 });
     }
-
-    const result = analysisSchema.safeParse(unwrapAnalysisPayload(raw));
-    if (!result.success) {
-      console.error(
-        "POST /api/analyze-dream parse failed",
-        safeValidationIssues(result.error.issues),
-      );
-      await refundAnalysisUsageOnce();
-      return NextResponse.json({ error: API_ERROR_CODES.invalidResponse }, { status: 422 });
-    }
-
-    const cleaned = {
-      title: limitText(result.data.title, lang === "en" ? 80 : 40),
-      mood: limitText(result.data.mood, 20),
-      stressScore: result.data.stressScore,
-      people: cleanList(result.data.people, 5, lang === "en" ? 40 : 12),
-      locations: cleanList(result.data.locations, 5, lang === "en" ? 48 : 16),
-      symbols: cleanList(result.data.symbols, 5, lang === "en" ? 40 : 12),
-      sleepInsight: limitText(result.data.sleepInsight, 1000),
-      followUpQuestions: ensureRealityQuestion(
-        cleanList(result.data.followUpQuestions, 3, lang === "en" ? 160 : 80),
-        lang,
-      ),
-      visualBrief: limitText(result.data.visualBrief, 2500),
-    };
-
-    consumedUsagePeriodId = undefined;
-    return NextResponse.json({
-      ...cleaned,
-    });
+    return NextResponse.json({ error: API_ERROR_CODES.upstreamError }, { status: 502 });
   } catch (error) {
     console.error("POST /api/analyze-dream failed", safeErrorMetadata(error));
     await refundAnalysisUsageOnce();

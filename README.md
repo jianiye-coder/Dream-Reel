@@ -56,11 +56,12 @@ DREAM_TEXT_ENCRYPTION_KEY_ID=primary
 DREAM_TEXT_PREVIOUS_ENCRYPTION_KEYS=
 OPENAI_API_KEY=your_openai_api_key
 OPENAI_MODEL=gpt-5.5
-# Optional fallback for the dream chat agent; OpenAI remains primary.
+# Primary provider for dream analysis and chat; OpenAI is used as fallback.
 GROQ_API_KEY=your_groq_api_key
 GROQ_MODEL=openai/gpt-oss-120b
 DREAM_AGENT_FEEDBACK_SECRET=your_separate_feedback_signing_secret
 DREAM_AGENT_JSON_SCHEMA_PERCENT=0
+DREAM_AGENT_GUARDED_PERCENT=0
 BLOB_READ_WRITE_TOKEN=your_vercel_blob_token
 NEXT_PUBLIC_APP_URL=http://localhost:3000
 ```
@@ -82,11 +83,13 @@ npm run dev
 - To rotate dream encryption, give the new key a new `DREAM_TEXT_ENCRYPTION_KEY_ID` and retain old keys temporarily in `DREAM_TEXT_PREVIOUS_ENCRYPTION_KEYS`. Reads stay compatible while stored rows are re-encrypted in batches.
 - `GET /api/health` returns `503` when PostgreSQL is unavailable, without exposing connection details.
 - Application logs must retain operational metadata only. Never log dream text, AI prompts/responses, generated visual briefs, credentials, or encryption material; configure the hosting provider's retention period to the shortest operationally useful window.
-- Administrators can read content-free feedback aggregates at `GET /api/admin/agent-feedback?days=7` (1–90 days). The endpoint returns variant totals, positive rate, and negative reason counts only.
+- Administrators can read content-free aggregates at `GET /api/admin/agent-feedback?days=7` (1–90 days). The endpoint returns policy/format totals, feedback, mature completion, latency, request-error categories, and fallback rates only.
 
 - `OPENAI_MODEL` controls the dream chat model and defaults to `gpt-5.5`.
 - `DREAM_AGENT_FEEDBACK_SECRET` signs short-lived, user-bound feedback tokens. It falls back to `AUTH_SECRET`, but a separate secret is recommended.
 - `DREAM_AGENT_JSON_SCHEMA_PERCENT` enables the strict-output canary for a stable percentage of users; keep it at `0` unless a monitored experiment is active.
+- `DREAM_AGENT_GUARDED_PERCENT` enables the guarded recall-policy canary for a stable percentage of users. It defaults to `0`; advance it only through the documented quality gates.
+- Download `/api/admin/agent-feedback?days=14&download=1` while signed in as the administrator and validate it with `npm run eval:agent:canary -- snapshot.json` before each rollout increase.
 - Dream analysis currently uses `gpt-4o-mini`.
 - Image generation currently uses `gpt-image-2`.
 - Generated images and thumbnails are stored in Vercel Blob; `BLOB_READ_WRITE_TOKEN` is required for image generation.
@@ -145,11 +148,12 @@ DREAM_TEXT_ENCRYPTION_KEY_ID=primary
 DREAM_TEXT_PREVIOUS_ENCRYPTION_KEYS=
 OPENAI_API_KEY=your_openai_api_key
 OPENAI_MODEL=gpt-5.5
-# 梦境对话 Agent 的可选备选；OpenAI 始终优先。
+# 梦境分析与对话优先使用 Groq；失败时回退 OpenAI。
 GROQ_API_KEY=your_groq_api_key
 GROQ_MODEL=openai/gpt-oss-120b
 DREAM_AGENT_FEEDBACK_SECRET=your_separate_feedback_signing_secret
 DREAM_AGENT_JSON_SCHEMA_PERCENT=0
+DREAM_AGENT_GUARDED_PERCENT=0
 BLOB_READ_WRITE_TOKEN=your_vercel_blob_token
 NEXT_PUBLIC_APP_URL=http://localhost:3000
 ```
@@ -171,11 +175,13 @@ npm run dev
 - 轮换梦境加密密钥时，为新密钥设置新的 `DREAM_TEXT_ENCRYPTION_KEY_ID`，并暂时把旧密钥保留在 `DREAM_TEXT_PREVIOUS_ENCRYPTION_KEYS`；服务会兼容读取并分批重加密旧数据。
 - `GET /api/health` 会在 PostgreSQL 不可用时返回 `503`，且不会暴露连接信息。
 - 应用日志只保留运行元数据；禁止记录梦境正文、AI 提示词/响应、视觉描述、登录凭据或加密材料，并应把托管平台的日志保留期设为满足运维所需的最短时间。
-- 管理员可通过 `GET /api/admin/agent-feedback?days=7`（1–90 天）查看不含内容的反馈汇总；接口只返回各 variant 的数量、好评率和负反馈原因计数。
+- 管理员可通过 `GET /api/admin/agent-feedback?days=7`（1–90 天）查看不含内容的汇总；接口只返回策略/格式数量、反馈、成熟完成率、延迟、请求错误类别和 fallback 比率。
 
 - `OPENAI_MODEL` 控制梦境 Chat 模型，默认是 `gpt-5.5`。
 - `DREAM_AGENT_FEEDBACK_SECRET` 用于签发短期、绑定用户的反馈令牌；未配置时会回退到 `AUTH_SECRET`，但推荐使用独立密钥。
 - `DREAM_AGENT_JSON_SCHEMA_PERCENT` 控制严格结构化输出的稳定用户灰度比例；没有监控实验时保持为 `0`。
+- `DREAM_AGENT_GUARDED_PERCENT` 控制新梦境回忆策略的稳定用户灰度比例；默认保持 `0`，只按质量门禁逐级提高。
+- 管理员登录后可下载 `/api/admin/agent-feedback?days=14&download=1`，并在每次提高灰度前运行 `npm run eval:agent:canary -- snapshot.json`。
 - 梦境分析当前使用 `gpt-4o-mini`。
 - 图像生成当前使用 `gpt-image-2`。
 - 生成的原图与缩略图存储在 Vercel Blob；图片生成功能需要配置 `BLOB_READ_WRITE_TOKEN`。

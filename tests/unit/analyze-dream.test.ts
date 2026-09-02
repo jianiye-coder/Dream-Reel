@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 
 const billing = vi.hoisted(() => ({
@@ -30,6 +30,55 @@ describe("POST /api/analyze-dream usage accounting", () => {
       status: {},
     });
     billing.refundConsumedUsage.mockResolvedValue(undefined);
+  });
+
+  afterEach(() => {
+    delete process.env.OPENAI_API_KEY;
+    delete process.env.OPENAI_ANALYSIS_MODEL;
+    delete process.env.GROQ_API_KEY;
+    delete process.env.GROQ_MODEL;
+    delete process.env.GROQ_ANALYSIS_MODEL;
+    vi.restoreAllMocks();
+  });
+
+  it("uses Groq first when both providers are configured", async () => {
+    process.env.GROQ_API_KEY = "groq-test-key";
+    process.env.GROQ_ANALYSIS_MODEL = "openai/gpt-oss-120b";
+    const fetchMock = vi.fn(async () => Response.json({
+      choices: [{ message: { content: "{}" } }],
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const response = await POST(request());
+    expect(response.status).toBe(200);
+    expect(response.headers.get("X-Dream-AI-Provider")).toBe("groq");
+    expect(fetchMock).toHaveBeenCalledOnce();
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe("https://api.groq.com/openai/v1/chat/completions");
+    expect(JSON.parse(String(init.body))).toMatchObject({
+      model: "openai/gpt-oss-120b",
+      max_completion_tokens: 3000,
+      reasoning_effort: "low",
+    });
+  });
+
+  it("falls back to OpenAI when Groq is unavailable", async () => {
+    process.env.GROQ_API_KEY = "groq-test-key";
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response("rate limited", { status: 429 }))
+      .mockResolvedValueOnce(Response.json({
+        choices: [{ message: { content: "{}" } }],
+      }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const response = await POST(request());
+    expect(response.status).toBe(200);
+    expect(response.headers.get("X-Dream-AI-Provider")).toBe("openai");
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls[0][0]).toBe("https://api.groq.com/openai/v1/chat/completions");
+    expect(fetchMock.mock.calls[1][0]).toBe("https://api.openai.com/v1/chat/completions");
+    expect(billing.refundConsumedUsage).not.toHaveBeenCalled();
   });
 
   it("refunds an upstream failure", async () => {

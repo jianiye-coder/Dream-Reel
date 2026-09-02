@@ -15,6 +15,16 @@ export interface DreamAgentConversationContext {
   realityContextStatus: RealityContextStatus;
   interactionMode: "active" | "stop" | "no_more_recall" | "off_topic";
   avoidSensitiveDetails: boolean;
+  bodyDetailVolunteered: boolean;
+  sensoryDetailVolunteered: boolean;
+  emotionDetailVolunteered: boolean;
+  vagueRecall: boolean;
+  vaguePerson: boolean;
+  privacyControlQuestion: boolean;
+  turningPointGap: boolean;
+  nightmareGroundingNeeded: boolean;
+  traumaBoundary: boolean;
+  latestDreamFragment: string | null;
   recurringDream: boolean;
   runningFragment: boolean;
   interpretationRequested: boolean;
@@ -50,8 +60,59 @@ export function buildImmediateSafetyResponse(lang: "zh" | "en"): DreamAgentResul
 export function resolveDeterministicAgentResponse(
   context: DreamAgentConversationContext,
   lang: "zh" | "en",
+  guardedRecall = true,
 ): DreamAgentResult | null {
   if (context.realityContextStatus === "crisis") return buildImmediateSafetyResponse(lang);
+  if (guardedRecall && context.privacyControlQuestion) {
+    return lang === "en" ? {
+      message: "You remain in control. I won't automatically save or share this dream; it only becomes a journal entry if you choose to save it. The image of hiding in the bathroom is enough to leave as it is, and you do not have to add anything more.",
+      questions: [], stage: "deepening", nextAction: "summarize",
+      memory: { missingDetails: [], observedSignals: ["user asked about privacy and control"] },
+    } : {
+      message: "控制权仍然在你手里。我不会替你自动保存或分享这段梦；只有你主动选择保存，它才会成为梦境记录。躲在浴室里的画面已经足够，你不必再补充任何内容。",
+      questions: [], stage: "deepening", nextAction: "summarize",
+      memory: { missingDetails: [], observedSignals: ["用户询问隐私与控制权"] },
+    };
+  }
+  if (guardedRecall && context.traumaBoundary) {
+    return lang === "en" ? {
+      message: "You do not have to describe what happened or return to those details. Waking up shaking means taking care of this moment matters more than recalling the dream. If it helps, orient to one steady thing around you and let yourself pause here.",
+      questions: ["Do you feel safe where you are right now?"],
+      stage: "deepening", nextAction: "summarize",
+      memory: { missingDetails: ["immediate sense of safety"], observedSignals: ["trauma-related dream", "user declined details", "woke up shaking"] },
+    } : {
+      message: "你不必讲那段经历具体发生了什么，也不用重新回到那些细节里。醒来后还在发抖，先照顾此刻比继续回忆梦更重要。可以看看身边一个稳定的东西，让自己先停在这里。",
+      questions: ["你现在待的地方安全吗？"],
+      stage: "deepening", nextAction: "summarize",
+      memory: { missingDetails: ["当下是否有安全感"], observedSignals: ["创伤相关梦境", "用户拒绝细节", "醒来后发抖"] },
+    };
+  }
+  if (guardedRecall && context.turningPointGap) {
+    return lang === "en" ? {
+      message: "That sudden drop from happiness into misery feels important, even if the moment between them is blank. You do not need to force the missing piece back. We can stay with the last clear moment before the feeling changed.",
+      questions: ["What is the last clear thing you remember before the feeling shifted?"],
+      stage: "deepening", nextAction: "summarize",
+      memory: { missingDetails: ["emotional turning point"], observedSignals: ["happiness changed suddenly into misery"] },
+    } : {
+      message: "从开心突然落到难受，这个变化本身已经很显眼，即使中间是一段空白。你不必逼自己把缺失的部分想回来。我们可以只停在情绪转折之前最后清楚的片段。",
+      questions: ["在变得难受之前，你最后清楚记得的画面是什么？"],
+      stage: "deepening", nextAction: "summarize",
+      memory: { missingDetails: ["情绪转折点"], observedSignals: ["开心突然转为难受"] },
+    };
+  }
+  if (guardedRecall && context.nightmareGroundingNeeded) {
+    return lang === "en" ? {
+      message: "You have just come out of something frightening, and your racing heart can take a little time to settle. You do not need to return to the dream right now. If it helps, notice one steady thing in the room and let your next breath be unforced.",
+      questions: ["Do you feel safe where you are right now?"],
+      stage: "deepening", nextAction: "summarize",
+      memory: { missingDetails: ["immediate sense of safety"], observedSignals: ["just woke from a nightmare", "heart racing", "room still feels frightening"] },
+    } : {
+      message: "你刚从很吓人的梦里出来，心跳可能还需要一点时间慢下来。现在不用重新回到梦里，也不必马上讲清楚。可以先看看房间里一个稳定的东西，让下一次呼吸自然发生，给自己缓一缓。",
+      questions: ["你现在待的地方安全吗？"],
+      stage: "deepening", nextAction: "summarize",
+      memory: { missingDetails: ["当下是否有安全感"], observedSignals: ["刚从噩梦惊醒", "心跳很快", "房间仍令人害怕"] },
+    };
+  }
   if (context.interactionMode === "stop") {
     return lang === "en" ? {
       message: "Of course. We can stop here. What you shared can stay as it is, and you remain in control of whether to return to it later.",
@@ -83,6 +144,61 @@ export function resolveDeterministicAgentResponse(
       message: "我主要帮助你回忆和记录梦境，不能提供实时天气。如果天气出现在梦里，我们可以从那里开始。",
       questions: ["你想记录一个梦吗？"], stage: "exploring", nextAction: "summarize",
       memory: { missingDetails: ["梦境内容"], observedSignals: [] },
+    };
+  }
+  if (guardedRecall && context.vagueRecall && !context.interpretationRequested) {
+    const hasKnownEmotion = context.emotionDetailVolunteered;
+    if (lang === "en") {
+      return {
+        message: context.vaguePerson
+          ? "Not being able to identify the person does not mean you missed something. Dreams often leave a figure present without making them clear. We can let that uncertainty stay and notice only what their presence changed for you."
+          : "Not being able to make this part clearer does not mean you missed something. The blur itself is valid dream information, and you do not need to force it into sharper detail. We can stay with the broad impression it left behind.",
+        questions: [hasKnownEmotion
+          ? "Did this unclear part seem to move the dream forward or make it pause?"
+          : "Overall, did this part feel more reassuring or more unsettling?"],
+        stage: "exploring",
+        nextAction: "ask_followup",
+        memory: {
+          missingDetails: [],
+          observedSignals: [context.vaguePerson ? "an unidentified dream figure" : "an intentionally unclear dream fragment"],
+        },
+      };
+    }
+    return {
+      message: context.vaguePerson
+        ? "看不清那个人是谁，不代表你漏掉了什么。梦本来就可能只留下一个人的存在，却不给出清楚身份。这个空白可以保留，我们只需要留意那个人的出现带来了什么变化。"
+        : "这部分无法变得更清楚，不代表你漏掉了什么。模糊本身也是有效的梦境信息，不需要逼自己把它补成精确细节。我们可以只停留在它留下的整体印象。",
+      questions: [hasKnownEmotion
+        ? "这段模糊出现后，梦更像继续向前，还是停住了？"
+        : "整体来说，这部分更接近安心，还是不安？"],
+      stage: "exploring",
+      nextAction: "ask_followup",
+      memory: {
+        missingDetails: [],
+        observedSignals: [context.vaguePerson ? "身份不清的人影" : "保持模糊的梦境片段"],
+      },
+    };
+  }
+  const isTinyFragment = guardedRecall
+    && context.latestDreamFragment !== null
+    && context.latestDreamFragment.length <= (lang === "en" ? 20 : 10)
+    && !context.interpretationRequested;
+  if (isTinyFragment) {
+    const fragment = context.latestDreamFragment as string;
+    return lang === "en" ? {
+      message: `“${fragment}” feels like a small piece left behind after waking. It can stay incomplete for now.`,
+      questions: [context.runningFragment
+        ? "Did the running feel more like escaping or moving toward somewhere?"
+        : "Does this feel more like a still image or something in motion?"],
+      stage: "exploring", nextAction: "ask_followup",
+      memory: { missingDetails: ["whether the fragment is still or moving"], observedSignals: [fragment] },
+    } : {
+      message: `“${fragment}”像是梦醒后留下的一小块画面。它可以先保持不完整，不必急着补全。`,
+      questions: [context.runningFragment
+        ? "这段奔跑更像是在逃离什么，还是赶往哪里？"
+        : "这个片段更像静止的画面，还是正在发生什么？"],
+      stage: "exploring", nextAction: "ask_followup",
+      memory: { missingDetails: ["片段是静止还是正在发生"], observedSignals: [fragment] },
     };
   }
   return null;
@@ -146,6 +262,30 @@ export const dreamAgentStrictResponseFormat = {
 
 type AgentResponsePayload = z.infer<typeof agentResponseSchema>;
 
+function parseRelaxedAgentPayload(raw: unknown): Partial<AgentResponsePayload> {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
+  const candidate = raw as Record<string, unknown>;
+  const message = z.string().trim().safeParse(candidate.message);
+  const questions = textListSchema.safeParse(candidate.questions);
+  const stage = z.enum(["exploring", "deepening", "ready"]).safeParse(candidate.stage);
+  const nextAction = z.enum(["ask_followup", "summarize", "ready_to_analyze"]).safeParse(candidate.nextAction);
+  const memoryCandidate = candidate.memory && typeof candidate.memory === "object" && !Array.isArray(candidate.memory)
+    ? candidate.memory as Record<string, unknown>
+    : {};
+  const missingDetails = textListSchema.safeParse(memoryCandidate.missingDetails);
+  const observedSignals = textListSchema.safeParse(memoryCandidate.observedSignals);
+  return {
+    ...(message.success ? { message: message.data } : {}),
+    ...(questions.success ? { questions: questions.data } : {}),
+    ...(stage.success ? { stage: stage.data } : {}),
+    ...(nextAction.success ? { nextAction: nextAction.data } : {}),
+    memory: {
+      missingDetails: missingDetails.success ? missingDetails.data : [],
+      observedSignals: observedSignals.success ? observedSignals.data : [],
+    },
+  };
+}
+
 function limitText(value: string, maxLength: number) {
   const text = value.trim();
   return text.length > maxLength ? text.slice(0, maxLength).trim() : text;
@@ -194,13 +334,46 @@ function applyQuestionTimingPolicy(
   return [lang === "en" ? "What changed next in the dream?" : "梦里接下来发生了什么？"];
 }
 
+function isQuestionAllowedByRecallBoundary(
+  question: string,
+  lang: "zh" | "en",
+  context?: DreamAgentConversationContext,
+) {
+  if (!context) return true;
+  const asksBodyDetail = lang === "en"
+    ? /\b(?:body|chest|shoulders?|jaw|heart|breath|stomach|hands?|feet)\b/i.test(question)
+    : /(?:身体|胸口|肩膀|下巴|心跳|呼吸|胃|手|脚)/.test(question);
+  if (asksBodyDetail && !context.bodyDetailVolunteered) return false;
+
+  const asksSensoryDetail = lang === "en"
+    ? /\b(?:smell|odor|scent|lighting|sound)\b/i.test(question)
+    : /(?:气味|闻到|光线|声音)/.test(question);
+  if (asksSensoryDetail && !context.sensoryDetailVolunteered) return false;
+
+  const asksPrecisionAboutUnclearDetail = lang === "en"
+    ? /\b(?:exactly|specific(?:ally)?|precise|who (?:was|were)|recogniz(?:e|ed)|stranger|familiar (?:or|versus) (?:unfamiliar|strange)|what did .{0,30} (?:look|sound) like|could you make out)\b/i.test(question)
+    : /(?:具体|确切|究竟是谁|到底是谁|是谁|长什么样|什么模样|穿着什么|熟悉(?:还是|或)陌生|认不认识|能否辨认|看起来怎样|听起来怎样)/.test(question);
+  if (context.vagueRecall && asksPrecisionAboutUnclearDetail) return false;
+
+  if (context.avoidSensitiveDetails) {
+    const asksForEventDetail = lang === "en"
+      ? /\b(?:what (?:exactly )?happened|where|inside|outside|room|scene|event|details?)\b/i.test(question)
+      : /(?:发生了什么|具体发生|哪里|室内|室外|房间|场景|经过|细节)/.test(question);
+    if (asksForEventDetail) return false;
+  }
+
+  return lang === "en" ? question.trim().split(/\s+/).length <= 20 : question.length <= 60;
+}
+
 export function inferAgentStageFromConversation(
   messages: Array<{ role: "user" | "assistant"; content: string }>,
   lang: "zh" | "en",
   context: DreamAgentConversationContext,
+  guardedRecall = true,
 ): DreamAgentStage {
   const userTurns = messages.filter((message) => message.role === "user").length;
   if (userTurns > 5) return "ready";
+  if (guardedRecall && userTurns === 1 && context.runningFragment) return "exploring";
   const text = messages.filter((message) => message.role === "user").map((message) => message.content).join("\n");
   const hasNarrative = text.length >= (lang === "en" ? 50 : 20);
   const hasEmotion = lang === "en"
@@ -230,15 +403,16 @@ export function parseDreamAgentContent(
   lang: "zh" | "en",
   fallbackStage: DreamAgentStage,
   conversationContext?: DreamAgentConversationContext,
+  guardedRecall = true,
 ) {
   const fallback = { message: content.trim() || "……" };
   const match = content.match(/\{[\s\S]*\}/);
-  if (!match) return sanitizeDreamAgentResult(fallback, lang, fallbackStage, conversationContext);
+  if (!match) return sanitizeDreamAgentResult(fallback, lang, fallbackStage, conversationContext, guardedRecall);
 
   try {
-    return sanitizeDreamAgentResult(JSON.parse(match[0]) as unknown, lang, fallbackStage, conversationContext);
+    return sanitizeDreamAgentResult(JSON.parse(match[0]) as unknown, lang, fallbackStage, conversationContext, guardedRecall);
   } catch {
-    return sanitizeDreamAgentResult(fallback, lang, fallbackStage, conversationContext);
+    return sanitizeDreamAgentResult(fallback, lang, fallbackStage, conversationContext, guardedRecall);
   }
 }
 
@@ -262,10 +436,60 @@ export function deriveDreamAgentConversationContext(
   const interpretationRequested = !interpretationDeclined && (lang === "en"
     ? /\b(?:what does .{0,80} mean|interpret(?:ation)?|meaning of (?:this|the) dream)\b/i.test(userText)
     : /(?:代表什么|什么意思|意味着什么|有什么含义|解梦|帮我分析.{0,8}梦)/.test(userText));
-  const detectedSignals = { recurringDream, runningFragment, interpretationRequested };
+  const bodyDetailVolunteered = lang === "en"
+    ? /\b(?:body|chest|shoulders?|jaw|heart|breath|stomach|hands?|feet)\b/i.test(userText)
+    : /(?:身体|胸口|肩膀|下巴|心跳|呼吸|胃|手|脚)/.test(userText);
+  const sensoryDetailVolunteered = lang === "en"
+    ? /\b(?:smell|odor|scent|lighting|sound)\b/i.test(userText)
+    : /(?:气味|闻到|光线|声音)/.test(userText);
+  const emotionDetailVolunteered = lang === "en"
+    ? /\b(?:felt|feel|afraid|fear|anxious|panicked|calm|safe|happy|sad|lonely|excited|angry|ashamed|relieved|relief|unsettled|comforted|reassuring)\b/i.test(userText)
+    : /(?:害怕|恐惧|紧张|焦急|慌张|安心|安全|开心|高兴|难过|悲伤|孤单|兴奋|愤怒|羞耻|委屈|不安|放松|被接住|感到|感觉)/.test(userText);
+  // Vagueness is a turn-level recall state, not permanent conversation memory.
+  // Otherwise the same deterministic acknowledgment would repeat after the user answers it.
+  const vagueRecall = lang === "en"
+    ? /\b(?:blurr(?:y|ed)|vague|unclear|indistinct|could(?:n't| not) (?:see|hear|make out|tell)|can(?:'t| not) (?:see|hear|make out|tell)|not sure who)\b/i.test(latestUserText)
+    : /(?:模糊|看不清|听不清|分辨不出|辨认不出|不知道是谁|说不清(?:楚)?)/.test(latestUserText);
+  const vaguePerson = vagueRecall && (lang === "en"
+    ? /\b(?:person|figure|someone|somebody|face|man|woman|they|them)\b/i.test(latestUserText)
+    : /(?:人影|那个人|一个人|有人|脸|男人|女人|他们|她|他)/.test(latestUserText));
+  const privacyControlQuestion = lang === "en"
+    ? /(?:automatically|auto).{0,20}(?:save|share)|(?:save|share).{0,20}(?:automatically|auto)|will you.{0,20}(?:save|share)/i.test(userText)
+    : /(?:会不会|是否|会).{0,12}(?:自动)?(?:保存|分享)|自动.{0,8}(?:保存|分享)/.test(userText);
+  const turningPointGap = lang === "en"
+    ? /(?:happy|good|calm|relieved).{0,80}(?:then|suddenly).{0,80}(?:miserable|sad|afraid|anxious|bad).{0,120}(?:can't|cannot|don't|do not).{0,20}remember/i.test(userText)
+    : /(?:开心|高兴|轻松|安心).{0,40}(?:后来|然后|突然).{0,40}(?:难受|难过|害怕|焦急|不安).{0,60}(?:想不起来|记不清|不记得)/.test(userText);
+  const nightmareGroundingNeeded = lang === "en"
+    ? /(?:just woke|woke up).{0,40}(?:nightmare|frightening dream)/i.test(userText) && /(?:heart.{0,12}(?:racing|pounding)|room.{0,30}(?:frightening|scary)|still.{0,20}(?:afraid|scared))/i.test(userText)
+    : /(?:刚|才).{0,8}(?:噩梦|梦).{0,8}(?:惊醒|醒来)|(?:刚|才).{0,8}(?:惊醒|醒来).{0,8}(?:噩梦|梦)/.test(userText)
+      && /(?:心跳.{0,6}(?:很快|加速)|房间.{0,12}(?:害怕|吓人)|现在.{0,12}(?:害怕|恐惧))/.test(userText);
   const avoidSensitiveDetails = lang === "en"
     ? /(?:don't|do not|rather not|won't|will not)\s+(?:want to\s+)?(?:share|say|describe|discuss|remember)?\s*(?:the\s+)?(?:details|what happened|event)/i.test(userText)
     : /(?:不想|不要|别|不愿意)(?:再)?(?:说|讲|描述|透露|回忆)?(?:这件事的?|那些)?(?:细节|具体经过|具体发生了什么|发生了什么)/.test(userText);
+  const traumaBoundary = avoidSensitiveDetails && (lang === "en"
+    ? /\b(?:trauma|traumatic)\b/i.test(userText)
+    : /(?:创伤|创伤经历)/.test(userText));
+  const explicitlyIncompleteFragment = lang === "en"
+    ? /\b(?:only|just) remember\b/i.test(latestUserText)
+    : /(?:只|仅仅?)记得/.test(latestUserText);
+  const latestDreamFragment = latestUserText.length <= (lang === "en" ? 40 : 20) || explicitlyIncompleteFragment
+    ? latestUserText
+    : null;
+  const detectedSignals = {
+    recurringDream,
+    runningFragment,
+    interpretationRequested,
+    bodyDetailVolunteered,
+    sensoryDetailVolunteered,
+    emotionDetailVolunteered,
+    vagueRecall,
+    vaguePerson,
+    privacyControlQuestion,
+    turningPointGap,
+    nightmareGroundingNeeded,
+    traumaBoundary,
+    latestDreamFragment,
+  };
   const declined = avoidSensitiveDetails || (lang === "en"
     ? /(?:do not|don't|dont|rather not|won't|will not).{0,30}(?:real life|waking life|personal)/i.test(userText)
     : /(?:不想|不要|别|不愿意).{0,12}(?:现实|生活|私人|个人)/.test(userText));
@@ -340,6 +564,8 @@ Agent policy:
 - Vary the axis across turns. Never default to the same emotion + body + real-life checklist
 - If emotion or body sensation is already known, do not ask for it again
 - Do not ask for precise body sensations, smells, lighting, sounds, or other hard-to-recall sensory details unless the user already emphasized that detail
+- Treat blur, uncertainty, and missing identity as valid dream information, not a gap to solve. Never ask the user to identify, recognize, describe, or sharpen an explicitly unclear person or detail
+- When recall is vague, validate the uncertainty first, then ask at most one broad, easy association about overall atmosphere or what changed. Do not ask what or who exactly
 - For recurring dreams, the first and only question must compare what stayed the same or changed in earlier occurrences
 - For a very short fragment, do not request an inventory of details. Offer an easy either/or possibility grounded in the fragment, or permission to leave it vague.
 - If the user asks for interpretation, provide a small non-diagnostic hypothesis grounded in their imagery. Default to summarize with no question unless one answer is truly necessary.
@@ -350,7 +576,7 @@ Agent policy:
 
 Tone:
 - Calm, gentle, curious, unhurried
-- Like a caring companion in a private late-night conversation, not therapy and not a generic AI tool
+- Like a caring companion during quiet morning reflection, not therapy and not a generic AI tool
 - Short sentences with breathing room
 - Prefer plain warmth over decorative poetic language that is not grounded in what the user said
 - Respond entirely in the user's language; do not casually mix languages
@@ -396,6 +622,8 @@ Agent 策略：
 - 不同轮次要更换追问方向，绝不默认使用“情绪 + 身体 + 现实关联”的固定清单
 - 用户已经说过情绪或身体感受时，不要再问一遍
 - 除非用户主动强调，否则不要追问精确身体部位、气味、光线、声音等难以回忆的细节
+- 把模糊、不确定和身份缺失视为有效的梦境信息，而不是必须补上的空白。用户已经说看不清时，绝不再要求辨认、描述或把人和细节变清楚
+- 回忆模糊时，先承认这种不确定，再最多问一个关于整体气氛或变化的宽泛、容易回答的问题；不要问“具体是什么”或“究竟是谁”
 - 面对重复梦，唯一的追问必须优先比较前几次有哪些相同或不同，而不是再次盘问当前梦的情绪
 - 面对极短的梦境片段，不要让用户盘点更多细节。根据已有片段给一个容易回答的二选一联想，或明确允许它保持模糊
 - 用户主动要求解梦时，先基于梦中意象给出一个非诊断、非定论的小假设。默认 summarize 且不提问，除非一个答案确实不可缺少
@@ -406,7 +634,7 @@ Agent 策略：
 
 语气：
 - 安静、温柔、好奇、有呼吸感
-- 像深夜里愿意陪伴用户的人，不是心理咨询或通用 AI 工具
+- 像清晨安静陪用户回看梦境的人，不是心理咨询或通用 AI 工具
 - 句子短一点，留出余白
 - 使用朴素、具体的温暖，避免脱离用户原话的装饰性诗意表达
 - 完全使用用户正在使用的语言，不要随意中英混杂
@@ -437,32 +665,96 @@ export function sanitizeDreamAgentResult(
   lang: "zh" | "en",
   fallbackStage: DreamAgentStage,
   conversationContext?: DreamAgentConversationContext,
+  guardedRecall = true,
 ): DreamAgentResult {
   const parsed = agentResponseSchema.safeParse(raw);
-  const data: Partial<AgentResponsePayload> = parsed.success ? parsed.data : {};
-  const stage = data.stage ?? fallbackStage;
+  if (!guardedRecall) {
+    const data: Partial<AgentResponsePayload> = parsed.success ? parsed.data : {};
+    const stage = data.stage ?? fallbackStage;
+    const memory = {
+      missingDetails: cleanList(data.memory?.missingDetails ?? [], 5, lang === "en" ? 80 : 40),
+      observedSignals: cleanList(data.memory?.observedSignals ?? [], 8, lang === "en" ? 80 : 40),
+    };
+    const nextAction = conversationContext?.interpretationRequested
+      ? "summarize"
+      : data.nextAction ?? fallbackNextAction(stage, data.questions ?? []);
+    const normalizedStage: DreamAgentStage = nextAction === "ready_to_analyze"
+      ? "ready"
+      : stage === "ready" ? "deepening" : stage;
+    const maxQuestions = QUESTION_LIMIT_BY_ACTION[nextAction];
+    const cleanedQuestions = conversationContext?.interpretationRequested
+      ? []
+      : cleanList(data.questions ?? [], maxQuestions, lang === "en" ? 120 : 60);
+    return {
+      message: limitText(data.message ?? "……", 1000) || "……",
+      questions: maxQuestions === 0 || conversationContext?.interpretationRequested
+        ? []
+        : applyQuestionTimingPolicy(cleanedQuestions, lang, normalizedStage, conversationContext).slice(0, maxQuestions),
+      stage: normalizedStage,
+      nextAction,
+      memory,
+    };
+  }
+  const data: Partial<AgentResponsePayload> = parsed.success ? parsed.data : parseRelaxedAgentPayload(raw);
+  // Stage is a product state, so keep deterministic inference authoritative.
+  // Model prose may vary, but identical evidence should not advance users differently.
+  const stage = fallbackStage;
   const memory = {
     missingDetails: cleanList(data.memory?.missingDetails ?? [], 5, lang === "en" ? 80 : 40),
     observedSignals: cleanList(data.memory?.observedSignals ?? [], 8, lang === "en" ? 80 : 40),
   };
-  const nextAction = conversationContext?.interpretationRequested
+  const fragmentFallbackQuestion = !parsed.success && conversationContext?.latestDreamFragment
+    ? (lang === "en"
+      ? "Does this fragment feel more like a still image or something in motion?"
+      : "这个片段更像静止的画面，还是正在发生什么？")
+    : null;
+  const modelQuestions = data.questions?.length ? data.questions : fragmentFallbackQuestion ? [fragmentFallbackQuestion] : [];
+  const proposedNextAction = conversationContext?.interpretationRequested
     ? "summarize"
-    : data.nextAction ?? fallbackNextAction(stage, data.questions ?? []);
+    : data.nextAction ?? (fragmentFallbackQuestion ? "ask_followup" : fallbackNextAction(stage, modelQuestions));
+  const incompleteFragmentQuestion = conversationContext?.latestDreamFragment
+    ? (lang === "en"
+      ? `After “${limitText(conversationContext.latestDreamFragment, 80)},” what happened next in the dream?`
+      : `在“${limitText(conversationContext.latestDreamFragment, 24)}”之后，梦里接下来发生了什么？`)
+    : null;
+  const shouldContinueIncompleteFragment = proposedNextAction === "summarize"
+    && modelQuestions.length === 0
+    && memory.missingDetails.length > 0
+    && conversationContext?.interactionMode === "active"
+    && Boolean(incompleteFragmentQuestion);
+  const consistentNextAction = shouldContinueIncompleteFragment ? "ask_followup" : proposedNextAction;
+  const nextAction = consistentNextAction === "ready_to_analyze" && fallbackStage !== "ready"
+    ? "summarize"
+    : consistentNextAction;
   const normalizedStage: DreamAgentStage = nextAction === "ready_to_analyze"
     ? "ready"
     : stage === "ready" ? "deepening" : stage;
   const maxQuestions = QUESTION_LIMIT_BY_ACTION[nextAction];
+  const questionsForCleaning = shouldContinueIncompleteFragment && incompleteFragmentQuestion
+    ? [incompleteFragmentQuestion]
+    : modelQuestions;
   const cleanedQuestions = conversationContext?.interpretationRequested
     ? []
-    : cleanList(data.questions ?? [], maxQuestions, lang === "en" ? 120 : 60);
+    : cleanList(questionsForCleaning, maxQuestions, lang === "en" ? 120 : 60);
+
+  const questions = maxQuestions === 0 || conversationContext?.interpretationRequested
+    ? []
+    : applyQuestionTimingPolicy(cleanedQuestions, lang, normalizedStage, conversationContext)
+      .filter((question) => isQuestionAllowedByRecallBoundary(question, lang, conversationContext))
+      .slice(0, maxQuestions);
+  const guardedNextAction = nextAction === "ask_followup" && questions.length === 0
+    ? "summarize"
+    : nextAction;
 
   return {
-    message: limitText(data.message ?? "……", 1000) || "……",
-    questions: maxQuestions === 0 || conversationContext?.interpretationRequested
-      ? []
-      : applyQuestionTimingPolicy(cleanedQuestions, lang, normalizedStage, conversationContext).slice(0, maxQuestions),
+    message: limitText(data.message ?? (conversationContext?.latestDreamFragment
+      ? (lang === "en"
+        ? `“${conversationContext.latestDreamFragment}” feels like a small piece left behind after waking. It can stay incomplete for now.`
+        : `“${conversationContext.latestDreamFragment}”像是梦醒后留下的一小块画面。它可以先保持不完整，不必急着补全。`)
+      : "……"), 1000) || "……",
+    questions,
     stage: normalizedStage,
-    nextAction,
+    nextAction: guardedNextAction,
     memory,
   };
 }
