@@ -1,5 +1,11 @@
 import { readFile } from "node:fs/promises";
-import type { DreamAgentResult } from "../../src/lib/dreamFollowUpAgent";
+import {
+  deriveDreamAgentConversationContext,
+  inferAgentStageFromConversation,
+  resolveDeterministicAgentResponse,
+  sanitizeDreamAgentResult,
+  type DreamAgentResult,
+} from "../../src/lib/dreamFollowUpAgent";
 import { dreamAgentEvalCases } from "./cases";
 import { evaluateDreamAgentResult, summarizeEvalResults } from "./evaluator";
 
@@ -11,13 +17,31 @@ interface StoredArtifact {
 
 async function main() {
   const artifactPath = process.argv[2];
-  if (!artifactPath) throw new Error("Usage: npm run eval:agent:replay -- /path/to/artifact.json");
+  const resanitize = process.argv.includes("--resanitize");
+  if (!artifactPath) throw new Error("Usage: npm run eval:agent:replay -- /path/to/artifact.json [--resanitize]");
   const stored = JSON.parse(await readFile(artifactPath, "utf8")) as StoredArtifact;
   const casesById = new Map(dreamAgentEvalCases.map((evalCase) => [evalCase.id, evalCase]));
   const results = stored.cases.map(({ artifact }) => {
     const evalCase = casesById.get(artifact.id);
     if (!evalCase) throw new Error(`Unknown evaluation case: ${artifact.id}`);
-    return evaluateDreamAgentResult(evalCase, artifact.result, artifact.rawJsonValid, artifact.source ?? "model");
+    if (!resanitize) {
+      return evaluateDreamAgentResult(evalCase, artifact.result, artifact.rawJsonValid, artifact.source ?? "model");
+    }
+    const context = deriveDreamAgentConversationContext(evalCase.messages, evalCase.lang, Boolean(evalCase.preSleepContext));
+    const deterministic = resolveDeterministicAgentResponse(context, evalCase.lang);
+    const inferredStage = inferAgentStageFromConversation(evalCase.messages, evalCase.lang, context);
+    const result = deterministic ?? sanitizeDreamAgentResult(
+      artifact.result,
+      evalCase.lang,
+      inferredStage,
+      context,
+    );
+    return evaluateDreamAgentResult(
+      evalCase,
+      result,
+      artifact.rawJsonValid,
+      deterministic ? "deterministic" : artifact.source ?? "model",
+    );
   });
   for (const result of results.filter((item) => !item.passed)) {
     const failed = result.checks.filter((check) => !check.passed).map((check) => check.name);

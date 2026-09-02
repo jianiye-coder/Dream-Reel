@@ -2,7 +2,13 @@ import { createHash } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import type { DreamAgentResult } from "../../src/lib/dreamFollowUpAgent";
+import {
+  deriveDreamAgentConversationContext,
+  inferAgentStageFromConversation,
+  resolveDeterministicAgentResponse,
+  sanitizeDreamAgentResult,
+  type DreamAgentResult,
+} from "../../src/lib/dreamFollowUpAgent";
 import { dreamAgentEvalCases } from "./cases";
 
 interface ArtifactFile {
@@ -14,6 +20,11 @@ interface ArtifactFile {
 
 function hash(value: string) {
   return createHash("sha256").update(value).digest("hex");
+}
+
+export function reviewArmOrder(caseId: string, seed: string) {
+  const swap = Number.parseInt(hash(`blind:${seed}:${caseId}`).slice(0, 2), 16) % 2 === 1;
+  return swap ? [1, 0] as const : [0, 1] as const;
 }
 
 function buildReviewHtml(reviewCases: unknown, reviewId: string) {
@@ -77,14 +88,30 @@ function buildReviewHtml(reviewCases: unknown, reviewId: string) {
 }
 
 async function main() {
-  const paths = process.argv.slice(2);
+  const resanitizeAll = process.argv.includes("--resanitize");
+  const resanitizeCandidate = process.argv.includes("--resanitize-candidate");
+  const paths = process.argv.slice(2).filter((value) => !value.startsWith("--resanitize"));
   if (paths.length !== 2) {
-    throw new Error("Usage: npm run eval:agent:review-pack -- artifact-a.json artifact-b.json");
+    throw new Error("Usage: npm run eval:agent:review-pack -- artifact-a.json artifact-b.json [--resanitize-candidate|--resanitize]");
   }
   const artifacts = await Promise.all(paths.map(async (path) => JSON.parse(await readFile(path, "utf8")) as ArtifactFile));
+  const reviewSeed = process.env.DREAM_AGENT_REVIEW_SEED?.trim() || "round-1";
   const reviewLabels = (process.env.DREAM_AGENT_REVIEW_LABELS ?? "").split(",").map((value) => value.trim());
   const artifactLabel = (index: number) => reviewLabels[index] || artifacts[index].label || `${artifacts[index].model}/${artifacts[index].responseFormat}`;
-  const outputs = artifacts.map((artifact) => new Map(artifact.cases.map((item) => [item.artifact.id, item.artifact.result])));
+  const casesById = new Map(dreamAgentEvalCases.map((evalCase) => [evalCase.id, evalCase]));
+  const outputs = artifacts.map((artifact, artifactIndex) => new Map(artifact.cases.map((item) => {
+    const evalCase = casesById.get(item.artifact.id);
+    const shouldResanitize = resanitizeAll || (resanitizeCandidate && artifactIndex === 1);
+    if (!shouldResanitize || !evalCase) return [item.artifact.id, item.artifact.result] as const;
+    const context = deriveDreamAgentConversationContext(evalCase.messages, evalCase.lang, Boolean(evalCase.preSleepContext));
+    const result = resolveDeterministicAgentResponse(context, evalCase.lang) ?? sanitizeDreamAgentResult(
+      item.artifact.result,
+      evalCase.lang,
+      inferAgentStageFromConversation(evalCase.messages, evalCase.lang, context),
+      context,
+    );
+    return [item.artifact.id, result] as const;
+  })));
   const requestedIds = new Set((process.env.DREAM_AGENT_REVIEW_CASE_IDS ?? "").split(",").map((value) => value.trim()).filter(Boolean));
   const shared = dreamAgentEvalCases.filter((evalCase) =>
     (!requestedIds.size || requestedIds.has(evalCase.id)) && outputs.every((output) => output.has(evalCase.id)));
@@ -93,13 +120,12 @@ async function main() {
     .sort((left, right) => hash(left.id).localeCompare(hash(right.id)))
     .slice(0, 10);
   const selected = [...selectLanguage("zh"), ...selectLanguage("en")]
-    .sort((left, right) => hash(`order:${left.id}`).localeCompare(hash(`order:${right.id}`)));
+    .sort((left, right) => hash(`order:${reviewSeed}:${left.id}`).localeCompare(hash(`order:${reviewSeed}:${right.id}`)));
   if (selected.length < 20) throw new Error("Both artifacts must share at least 20 current evaluation cases.");
 
   const key: Record<string, { A: string; B: string }> = {};
   const cases = selected.map((evalCase) => {
-    const swap = Number.parseInt(hash(`blind:${evalCase.id}`).slice(0, 2), 16) % 2 === 1;
-    const order = swap ? [1, 0] : [0, 1];
+    const order = reviewArmOrder(evalCase.id, reviewSeed);
     key[evalCase.id] = {
       A: artifactLabel(order[0]),
       B: artifactLabel(order[1]),
@@ -122,10 +148,10 @@ async function main() {
     };
   });
   const stamp = new Date().toISOString().replace(/[:.]/g, "-");
-  const reviewId = hash(JSON.stringify(cases.map((item) => ({
-    id: item.id,
-    candidates: item.candidates,
-  }))));
+  const reviewId = hash(JSON.stringify({
+    reviewSeed,
+    cases: cases.map((item) => ({ id: item.id, candidates: item.candidates })),
+  }));
   const outputDir = process.env.DREAM_AGENT_REVIEW_OUTPUT_DIR
     ?? join(homedir(), ".dream-reel", "agent-reviews");
   await mkdir(outputDir, { recursive: true });
@@ -133,7 +159,7 @@ async function main() {
   const markdownPath = join(outputDir, `dream-agent-blind-review-${stamp}.md`);
   const htmlPath = join(outputDir, `dream-agent-blind-review-${stamp}.html`);
   const keyPath = join(outputDir, `dream-agent-blind-review-key-${stamp}.json`);
-  await writeFile(packetPath, JSON.stringify({ instructions: "Review without opening the key. Scores are 1-5; winner is A, B, or tie.", cases }, null, 2));
+  await writeFile(packetPath, JSON.stringify({ reviewRound: reviewSeed, instructions: "Review without opening the key. Scores are 1-5; winner is A, B, or tie.", cases }, null, 2));
   const markdown = [
     "# Dream Agent Blind Review",
     "",
@@ -187,7 +213,9 @@ async function main() {
   console.log(`Sealed comparison key: ${keyPath}`);
 }
 
-main().catch((error: unknown) => {
-  console.error(error instanceof Error ? error.message : "Review pack generation failed.");
-  process.exitCode = 1;
-});
+if (process.argv[1]?.endsWith("prepare-review.ts")) {
+  void main().catch((error: unknown) => {
+    console.error(error instanceof Error ? error.message : "Review pack generation failed.");
+    process.exitCode = 1;
+  });
+}

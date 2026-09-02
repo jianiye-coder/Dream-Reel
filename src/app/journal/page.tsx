@@ -55,6 +55,18 @@ interface ChatMessage {
   retryUserId?: string;
 }
 
+type AgentHistoryMessage = Pick<ChatMessage, "role" | "content" | "questions" | "memory">;
+
+interface AgentReply {
+  message?: string;
+  questions?: string[];
+  stage?: DreamAgentStage;
+  nextAction?: DreamAgentNextAction;
+  memory?: DreamAgentMemory;
+  meta?: DreamAgentResponseMeta;
+  error?: string;
+}
+
 interface AnalysisResult {
   title: string;
   mood: string;
@@ -178,6 +190,7 @@ export default function JournalPage() {
   const isFirstRenderRef = useRef(true);
   const analysisAutoTriggeredRef = useRef(false);
   const isAnalyzingRef = useRef(false);
+  const latestAgentInteractionIdRef = useRef<string | null>(null);
 
   const messagesAreaRef = useRef<HTMLElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -371,6 +384,44 @@ export default function JournalPage() {
     });
   }, [messages, isTyping, hasContent]);
 
+  async function requestAgentReply(history: AgentHistoryMessage[]) {
+    const res = await fetch("/api/chat-dream", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        messages: history,
+        lang,
+        preSleepMeal: preSleepMeal || undefined,
+        preSleepActivity: preSleepActivity || undefined,
+      }),
+    });
+
+    const data = (await res.json()) as AgentReply;
+
+    if (!res.ok) {
+      throw new Error(getApiErrorMessage(data.error, lang, J.signalLost));
+    }
+
+    if (data.meta?.interactionId) {
+      latestAgentInteractionIdRef.current = data.meta.interactionId;
+    }
+
+    return data;
+  }
+
+  function agentReplyMessage(data: AgentReply): ChatMessage {
+    return {
+      id: `a-${Date.now()}`,
+      role: "assistant",
+      content: data.message ?? "……",
+      questions: data.questions ?? [],
+      stage: data.stage,
+      nextAction: data.nextAction,
+      memory: data.memory,
+      meta: data.meta,
+    };
+  }
+
   async function sendMessage() {
     const text = input.trim();
     if (!text || isTyping) return;
@@ -384,7 +435,7 @@ export default function JournalPage() {
     setIsTyping(true);
 
     try {
-      const history = messages
+      const history: AgentHistoryMessage[] = messages
         .filter((m) => m.id !== "welcome")
         .map((m) => ({
           role: m.role,
@@ -392,49 +443,51 @@ export default function JournalPage() {
           questions: m.questions,
           memory: m.memory,
         }));
-      history.push({ role: "user" as const, content: text, questions: undefined, memory: undefined });
+      history.push({ role: "user", content: text });
+      const data = await requestAgentReply(history);
 
-      const res = await fetch("/api/chat-dream", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          messages: history,
-          lang,
-          preSleepMeal: preSleepMeal || undefined,
-          preSleepActivity: preSleepActivity || undefined,
-        }),
-      });
-
-      const data = (await res.json()) as {
-        message?: string;
-        questions?: string[];
-        stage?: DreamAgentStage;
-        nextAction?: DreamAgentNextAction;
-        memory?: DreamAgentMemory;
-        meta?: DreamAgentResponseMeta;
-        error?: string;
-      };
-
-      if (!res.ok) {
-        throw new Error(getApiErrorMessage(data.error, lang, J.signalLost));
-      }
-
+      setMessages((prev) => [
+        ...prev,
+        agentReplyMessage(data),
+      ]);
+    } catch (err) {
       setMessages((prev) => [
         ...prev,
         {
           id: `a-${Date.now()}`,
           role: "assistant",
-          content: data.message ?? "……",
-          questions: data.questions ?? [],
-          stage: data.stage,
-          nextAction: data.nextAction,
-          memory: data.memory,
-          meta: data.meta,
+          content: err instanceof Error ? err.message : J.signalLost,
+          questions: [],
+          isError: true,
+          retryText: text,
+          retryUserId: userMsg.id,
         },
       ]);
+    } finally {
+      setIsTyping(false);
+    }
+  }
+
+  async function startDirectDreamChat() {
+    const text = quickText.trim();
+    if (!text || isTyping) return;
+
+    const userMsg: ChatMessage = { id: `u-dream-${Date.now()}`, role: "user", content: text };
+    setMessages([
+      { id: "welcome", role: "assistant", content: J.welcome },
+      userMsg,
+    ]);
+    setMode("chat");
+    setPanel("none");
+    setStep("dream");
+    setIsTyping(true);
+
+    try {
+      const data = await requestAgentReply([{ role: "user", content: text }]);
+      setMessages((current) => [...current, agentReplyMessage(data)]);
     } catch (err) {
-      setMessages((prev) => [
-        ...prev,
+      setMessages((current) => [
+        ...current,
         {
           id: `a-${Date.now()}`,
           role: "assistant",
@@ -804,6 +857,7 @@ export default function JournalPage() {
 
     try {
       const body = {
+        agentInteractionId: mode === "chat" ? latestAgentInteractionIdRef.current ?? undefined : undefined,
         inputMode,
         title: effectiveAnalysis?.title || quickTitleRef.current || "",
         rawText: text,
@@ -1144,18 +1198,28 @@ export default function JournalPage() {
                       : J.workflow.beforeAnalyze}
                   </span>
                 </div>
-                <button
-                  type="button"
-                  className="quick-analyze-btn"
-                  onClick={() => void analyzeDream()}
-                  disabled={isAnalyzing || !hasContent}
-                >
-                  {isAnalyzing
-                    ? J.analyzingBtn
-                    : currentAnalysis
-                      ? J.quickFlow.reanalyze
-                      : J.analyzeBtn}
-                </button>
+                <div className="quick-entry-actions">
+                  <button
+                    type="button"
+                    className="quick-analyze-btn"
+                    onClick={() => void analyzeDream()}
+                    disabled={isAnalyzing || isTyping || !hasContent}
+                  >
+                    {isAnalyzing
+                      ? J.analyzingBtn
+                      : currentAnalysis
+                        ? J.quickFlow.reanalyze
+                        : J.analyzeBtn}
+                  </button>
+                  <button
+                    type="button"
+                    className="quick-chat-btn"
+                    onClick={() => void startDirectDreamChat()}
+                    disabled={isAnalyzing || isTyping || !hasContent}
+                  >
+                    {J.quickFlow.chatDirect}
+                  </button>
+                </div>
               </div>
             )}
 

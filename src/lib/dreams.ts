@@ -18,6 +18,7 @@ const listField = z.preprocess((value) => {
 }, z.array(z.string().trim().min(1)).default([]));
 
 export const dreamEntryInputSchema = z.object({
+  agentInteractionId: z.string().uuid().optional(),
   title: z.string().trim().max(120).optional().default(""),
   inputMode: z.enum(["voice", "text"]),
   rawText: z.string().trim().min(1),

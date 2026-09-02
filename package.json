@@ -14,7 +14,9 @@
     "test:e2e": "playwright test",
     "eval:agent": "tsx evals/dream-agent/run.ts",
     "eval:agent:replay": "tsx evals/dream-agent/replay.ts",
-    "eval:agent:review-pack": "tsx evals/dream-agent/prepare-review.ts"
+    "eval:agent:review-pack": "tsx evals/dream-agent/prepare-review.ts",
+    "eval:agent:review-results": "tsx evals/dream-agent/analyze-review.ts",
+    "eval:agent:canary": "tsx evals/dream-agent/analyze-canary.ts"
   },
   "dependencies": {
     "@auth/pg-adapter": "^1.11.3",

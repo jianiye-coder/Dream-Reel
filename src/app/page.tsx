@@ -2,296 +2,179 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import type { PointerEvent } from "react";
-import { useEffect, useRef } from "react";
 import { LangToggle } from "@/components/LangToggle";
 import { useLanguage } from "@/contexts/LanguageContext";
-import type { Translations } from "@/lib/i18n";
 
-const SHOW_PRICING_SECTION = false;
-
-const archiveNodeClassNames = ["node-one", "node-two", "node-three", "node-four"];
-
-const sleepNights = [
-  { rem: 24, light: 34, deep: 22, awake: 12, logged: false },
-  { rem: 34, light: 29, deep: 20, awake: 7, logged: true },
-  { rem: 25, light: 33, deep: 19, awake: 11, logged: false },
-  { rem: 36, light: 31, deep: 18, awake: 6, logged: true },
-  { rem: 22, light: 28, deep: 27, awake: 21, logged: false },
-  { rem: 40, light: 33, deep: 20, awake: 3, logged: true },
-  { rem: 32, light: 35, deep: 18, awake: 5, logged: true },
-];
-
-function PricingSection({ landing }: { landing: Translations["landing"] }) {
-  return (
-    <section className="pricing-stream reveal-dream" aria-labelledby="pricing-title">
-      <div className="pricing-copy">
-        <p>{landing.pricingEyebrow}</p>
-        <h2 id="pricing-title">{landing.pricingTitle}</h2>
-        <span>{landing.pricingBody}</span>
-      </div>
-
-      <div className="pricing-reels">
-        {landing.pricingPlans.map((plan) => (
-          <article
-            key={plan.name}
-            className={`pricing-reel ${plan.name.includes("Plus") ? "pricing-reel-plus" : ""}`}
-          >
-            <div className="pricing-reel-head">
-              <span>{plan.badge}</span>
-              <h3>{plan.name}</h3>
-              <p>
-                <strong>{plan.price}</strong>
-                <small>{plan.cadence}</small>
-              </p>
-            </div>
-
-            <ul>
-              {plan.features.map((feature) => (
-                <li key={feature}>{feature}</li>
-              ))}
-            </ul>
-
-            <Link href="/pricing" className="pricing-cta">
-              {plan.cta}
-            </Link>
-          </article>
-        ))}
-      </div>
-    </section>
-  );
-}
+const morningSteps = {
+  zh: [
+    { n: "01", title: "先留下碎片", copy: "一句话、一个场景或一种感觉都够。文字和语音会自动保存。" },
+    { n: "02", title: "和 Agent 一起回忆", copy: "直接对话，沿着人物、动作和转折，慢慢找回梦的轮廓。" },
+    { n: "03", title: "等你准备好再分析", copy: "提取情绪、地点与重复意象，把梦整理成可回看的记忆。" },
+  ],
+  en: [
+    { n: "01", title: "Catch the fragment", copy: "A sentence, a scene, or a feeling is enough. Text and voice save automatically." },
+    { n: "02", title: "Recall with the Agent", copy: "Talk it through and gently recover people, movement, and turning points." },
+    { n: "03", title: "Analyze when you are ready", copy: "Surface mood, places, and recurring symbols in a memory you can revisit." },
+  ],
+};
 
 export default function LandingPage() {
   const { lang, T } = useLanguage();
   const L = T.landing;
-  const pageRef = useRef<HTMLElement>(null);
-  const navItems = SHOW_PRICING_SECTION
-    ? L.navItems
-    : L.navItems.filter((item) => item.href !== "/pricing");
-  const manifesto =
-    lang === "zh"
-      ? [
-          "梦境不总是从清晰开始。它先是一段失焦的街道、一句醒来后还在耳边的话，再慢慢变成可以被回看、显影和理解的线索。",
-          "Dream Reel 是你的梦境影像档案：记录晨间碎片，读出情绪与重复意象，再把那些说不清的感觉变成一帧可以停留的画面。",
-        ]
-      : [
-          "Dreams rarely begin with clarity. First comes a blurred street, a sentence still ringing after waking, then a trace you can revisit, develop, and understand.",
-          "Dream Reel is a cinematic archive for your inner life: capture morning fragments, surface mood and recurring symbols, and turn the hard-to-name feeling into a frame that stays.",
-        ];
-
-  useEffect(() => {
-    const root = pageRef.current;
-    if (!root) return;
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          entry.target.classList.toggle("is-visible", entry.isIntersecting);
-        });
-      },
-      { rootMargin: "-12% 0px -12% 0px", threshold: 0.18 },
-    );
-
-    root.querySelectorAll(".reveal-dream").forEach((element) => observer.observe(element));
-    return () => observer.disconnect();
-  }, []);
-
-  const handlePointerMove = (event: PointerEvent<HTMLElement>) => {
-    const rect = event.currentTarget.getBoundingClientRect();
-    const x = (event.clientX - rect.left) / rect.width - 0.5;
-    const y = (event.clientY - rect.top) / rect.height - 0.5;
-    event.currentTarget.style.setProperty("--mx", x.toFixed(3));
-    event.currentTarget.style.setProperty("--my", y.toFixed(3));
-  };
+  const steps = morningSteps[lang];
 
   return (
-    <main ref={pageRef} className="dream-landing dream-reel-landing" onPointerMove={handlePointerMove}>
-      <div className="reel-page-bg" aria-hidden />
+    <main className="morning-landing">
+      <nav className="morning-nav" aria-label={lang === "zh" ? "主导航" : "Main navigation"}>
+        <Link href="/" className="morning-brand" aria-label="Dream Reel home">
+          <Image src="/dream-reel-logo.png" width={40} height={40} alt="" aria-hidden />
+          <span>Dream Reel</span>
+        </Link>
+        <div className="morning-nav-links">
+          <Link href="/journal">{T.nav.journal}</Link>
+          <Link href="/archive">{T.nav.archive}</Link>
+          <Link href="/blog/dreams-and-consciousness">{lang === "zh" ? "关于梦" : "About dreams"}</Link>
+        </div>
+        <div className="morning-nav-actions">
+          <LangToggle className="morning-language" />
+          <Link href="/journal" className="morning-nav-cta">{L.heroCta1}</Link>
+        </div>
+      </nav>
 
-      <section className="reel-hero" aria-label="Dream Reel landing">
-        <Image
-          src="/dream-reel-landing-v2.png"
-          alt=""
-          aria-hidden
-          fill
-          priority
-          sizes="100vw"
-          className="reel-hero-image"
-        />
-
-        <div className="reel-atmosphere" aria-hidden>
-          <span className="reel-orbit reel-orbit-one" />
-          <span className="reel-orbit reel-orbit-two" />
-          <span className="reel-star reel-star-one" />
-          <span className="reel-star reel-star-two" />
-          <span className="reel-star reel-star-three" />
-          <span className="reel-figure-glow" />
+      <section className="morning-hero" aria-labelledby="morning-hero-title">
+        <div className="morning-hero-copy">
+          <p className="morning-eyebrow">{lang === "zh" ? "早上使用的 AI 梦境日记与自我反思工具" : "An AI dream journal for morning reflection"}</p>
+          <h1 id="morning-hero-title">{lang === "zh" ? "趁梦还在，先把它留下。" : "Before the dream fades, leave it here."}</h1>
+          <p className="morning-lede">
+            {lang === "zh"
+              ? "快速记录刚醒来的梦，与 AI 一起回忆，并通过温和的提问，把散落的片段变成属于你的长期线索。"
+              : "Capture what you just dreamed, recall it with AI, and use gentle questions to turn fragments into patterns that belong to you."}
+          </p>
+          <div className="morning-hero-actions">
+            <Link href="/journal" className="morning-button morning-button-primary">
+              {lang === "zh" ? "记录刚醒来的梦" : "Record this morning’s dream"}
+            </Link>
+            <Link href="/journal" className="morning-button morning-button-secondary">
+              {lang === "zh" ? "直接与 Agent 对话" : "Chat with the Agent"}
+            </Link>
+          </div>
+          <p className="morning-trust-line">
+            <span aria-hidden>●</span>
+            {lang === "zh" ? "自动保存 · 支持语音 · 由你决定何时分析" : "Autosave · Voice input · You choose when to analyze"}
+          </p>
         </div>
 
-        <nav className="reel-nav" aria-label="Main navigation">
-          <div className="reel-nav-links">
-            {navItems.map((item) => (
-              <Link key={item.label} href={item.href}>
-                {item.label}
-              </Link>
-            ))}
+        <div className="morning-hero-visual" aria-label={lang === "zh" ? "晨间梦境记录示例" : "Morning dream capture example"}>
+          <div className="morning-photo-frame">
+            <Image
+              src="/dream-photo-2.jpg"
+              alt={lang === "zh" ? "清晨醒来后，现实与梦境重叠的画面" : "A waking morning where dream and reality overlap"}
+              fill
+              priority
+              sizes="(max-width: 900px) 92vw, 46vw"
+              className="morning-photo"
+            />
+            <span className="morning-photo-time">06:42</span>
           </div>
-
-          <div className="reel-nav-right">
-            <LangToggle className="reel-lang" />
-          </div>
-        </nav>
-
-        <div className="reel-hero-grid">
-          <div className="reel-title-block">
-            <p>{L.heroKicker}</p>
-            <h1>
-              {lang === "zh" ? (
-                <>Dream <em>Reel</em></>
-              ) : (
-                <>Dream <em>Reel</em></>
-              )}
-            </h1>
-            <span>{L.heroSubtitle}</span>
-          </div>
-
-          <div className="reel-primary-action">
-            <Link href="/journal">{L.heroCta1}</Link>
-          </div>
-
-          <aside className="reel-manifesto" aria-label="Dream Reel introduction">
-            {manifesto.map((paragraph) => (
-              <p key={paragraph}>{paragraph}</p>
-            ))}
-          </aside>
-        </div>
-
-      </section>
-
-      <section className="features-section" aria-label="Features">
-        <div className="features-intro reveal-dream">
-          <p>{L.featuresIntroEyebrow}</p>
-          <h2>{L.featuresIntroTitle}</h2>
-        </div>
-
-        {L.features.map((feature, i) => (
-          <article key={i} className="feature-flow-step reveal-dream">
-            <p className="feature-flow-eyebrow">{feature.eyebrow}</p>
-            <h2 className="feature-flow-title">{feature.title}</h2>
-            <span className="feature-flow-copy">{feature.copy}</span>
+          <article className="morning-capture-card">
+            <div className="morning-capture-topline">
+              <span>{lang === "zh" ? "刚刚醒来" : "Just woke up"}</span>
+              <span>{lang === "zh" ? "已自动保存" : "Autosaved"}</span>
+            </div>
+            <p>{lang === "zh" ? "我坐在一辆车里，窗外像海底，但天已经亮了……" : "I was sitting in a train. Outside felt underwater, but the sun was already up…"}</p>
+            <div className="morning-capture-actions" aria-hidden>
+              <span>{lang === "zh" ? "继续说" : "Keep talking"}</span>
+              <span>{lang === "zh" ? "与 Agent 回忆" : "Recall with Agent"}</span>
+            </div>
           </article>
-        ))}
+        </div>
       </section>
 
-      <section id="gallery" className="dream-archive-space" aria-label="Dream archive experience">
-        <div className="archive-opening reveal-dream">
-          {L.archiveIntroEyebrow ? <p>{L.archiveIntroEyebrow}</p> : null}
-          <h2>{L.archiveIntroTitle}</h2>
-          <span>{L.archiveIntroBody}</span>
+      <section className="morning-process" aria-labelledby="morning-process-title">
+        <div className="morning-section-heading">
+          <p className="morning-eyebrow">{lang === "zh" ? "低负担的晨间流程" : "A low-friction morning ritual"}</p>
+          <h2 id="morning-process-title">{lang === "zh" ? "不必先理解，先不要忘记。" : "You do not need to understand it yet."}</h2>
         </div>
+        <div className="morning-step-grid">
+          {steps.map((step) => (
+            <article key={step.n} className="morning-step-card">
+              <span>{step.n}</span>
+              <h3>{step.title}</h3>
+              <p>{step.copy}</p>
+            </article>
+          ))}
+        </div>
+      </section>
 
-        <div className="archive-network" aria-label="Dream memory network">
-          <svg className="archive-lines" viewBox="0 0 1000 680" preserveAspectRatio="none" aria-hidden>
-            <path d="M120 180 C300 60 470 210 620 160 C760 120 840 220 900 330" />
-            <path d="M150 470 C320 390 390 500 520 420 C680 320 760 440 890 520" />
-            <path d="M260 230 C340 360 470 350 540 460 C610 570 760 560 850 470" />
-          </svg>
+      <section className="morning-studio" aria-labelledby="morning-studio-title">
+        <div className="morning-studio-copy">
+          <p className="morning-eyebrow">{lang === "zh" ? "从碎片到记忆" : "From fragment to memory"}</p>
+          <h2 id="morning-studio-title">{lang === "zh" ? "一场梦，可以有很多种入口。" : "A dream can be entered in more than one way."}</h2>
+          <p>{lang === "zh" ? "先聊天、先分析、先生成画面，或者只存下一句话。Dream Reel 不要求你按固定顺序理解自己。" : "Chat first, analyze first, develop an image, or save one sentence. Dream Reel never forces a single path into your inner life."}</p>
+          <Link href="/journal" className="morning-text-link">{lang === "zh" ? "打开晨间记录 →" : "Open morning capture →"}</Link>
+        </div>
+        <div className="morning-bento">
+          {L.features.slice(0, 4).map((feature, index) => (
+            <article key={feature.title} className={`morning-bento-card morning-bento-${index + 1}`}>
+              <p>{feature.eyebrow}</p>
+              <h3>{feature.title}</h3>
+              <span>{feature.copy}</span>
+            </article>
+          ))}
+        </div>
+      </section>
 
-          {L.archiveNodes.map((node, i) => (
-            <article key={i} className={`archive-node ${archiveNodeClassNames[i]}`}>
-              <p>{node.time}</p>
+      <section className="morning-archive" aria-labelledby="morning-archive-title">
+        <div className="morning-section-heading morning-section-heading-row">
+          <div>
+            <p className="morning-eyebrow">{lang === "zh" ? "慢慢形成的档案" : "An archive that grows slowly"}</p>
+            <h2 id="morning-archive-title">{L.archiveIntroTitle}</h2>
+          </div>
+          <p>{L.archiveIntroBody}</p>
+        </div>
+        <div className="morning-archive-grid">
+          {L.archiveNodes.map((node, index) => (
+            <article key={node.title} className="morning-dream-card">
+              <div><span>{node.time}</span><span>0{index + 1}</span></div>
               <h3>{node.title}</h3>
-              <span>{node.fragment}</span>
+              <p>{node.fragment}</p>
               <strong>{node.signal}</strong>
             </article>
           ))}
-
-          <div className="signal-cloud" aria-label="Dream signals">
-            {L.memorySignals.map((signal, index) => (
-              <span key={index} className={`signal signal-${index + 1}`}>
-                {signal}
-              </span>
-            ))}
-          </div>
         </div>
-
-        <section className="night-soundtrack reveal-dream" aria-labelledby="night-soundtrack-title">
-          <div className="soundtrack-copy">
-            <p>{L.sleepEyebrow}</p>
-            <h2 id="night-soundtrack-title">{L.sleepTitle}</h2>
-            <span>{L.sleepBody}</span>
-          </div>
-
-          <div className="sleep-film-strip" aria-label="Past seven nights sleep stage preview">
-            <div className="sleep-strip-header">
-              <span>{L.sleepStripHeader}</span>
-              <span className="sleep-live"><i /> {L.sleepContext}</span>
-            </div>
-
-            <div className="sleep-stage-board">
-              <div className="stage-labels" aria-hidden>
-                <span>{L.stageAwake}</span>
-                <span>REM</span>
-                <span>{L.stageLight}</span>
-                <span>{L.stageDeep}</span>
-              </div>
-
-              <div className="sleep-bars">
-                {sleepNights.map((night, i) => (
-                  <div className="sleep-night" key={i}>
-                    <div className="dream-log-dot" data-logged={night.logged} aria-hidden />
-                    <div className="sleep-bar" aria-label={`${L.sleepDays[i]} sleep stages`}>
-                      <span className="stage stage-awake" style={{ height: `${night.awake}%` }} />
-                      <span className="stage stage-rem" style={{ height: `${night.rem}%` }} />
-                      <span className="stage stage-light" style={{ height: `${night.light}%` }} />
-                      <span className="stage stage-deep" style={{ height: `${night.deep}%` }} />
-                    </div>
-                    <strong>{L.sleepDays[i]}</strong>
-                  </div>
-                ))}
-              </div>
-
-              <svg className="recall-wave" viewBox="0 0 900 160" preserveAspectRatio="none" aria-hidden>
-                <path d="M20 92 C120 82 170 108 260 96 C360 82 420 66 520 88 C620 112 650 54 760 72 C825 82 850 104 880 92" />
-              </svg>
-            </div>
-
-            <div className="sleep-legend" aria-hidden>
-              <span><i className="legend-rem" /> REM</span>
-              <span><i className="legend-light" /> {L.stageLight}</span>
-              <span><i className="legend-deep" /> {L.stageDeep}</span>
-              <span><i className="legend-awake" /> {L.stageAwake}</span>
-              <span className="legend-logged"><i /> {L.legendLogged}</span>
-            </div>
-          </div>
-
-          <div className="sleep-metrics">
-            {L.sleepMetrics.map((metric, i) => (
-              <article key={i}>
-                <p>{metric.label}</p>
-                <h3>{metric.value}</h3>
-                <span>{metric.note}</span>
-              </article>
-            ))}
-          </div>
-        </section>
-
-        <section className="privacy-reel reveal-dream" aria-labelledby="privacy-title">
-          <div className="privacy-copy">
-            <p>{L.privacyEyebrow}</p>
-            <h2 id="privacy-title">{L.privacyTitle}</h2>
-            <span>{L.privacyBody}</span>
-          </div>
-          <div className="privacy-notes" aria-label={L.privacyEyebrow}>
-            {L.privacyNotes.map((note) => (
-              <span key={note}>{note}</span>
-            ))}
-          </div>
-        </section>
-
-        {SHOW_PRICING_SECTION ? <PricingSection landing={L} /> : null}
       </section>
+
+      <section className="morning-insight" aria-labelledby="morning-insight-title">
+        <div className="morning-insight-copy">
+          <p className="morning-eyebrow">{L.sleepEyebrow}</p>
+          <h2 id="morning-insight-title">{L.sleepTitle}</h2>
+          <p>{L.sleepBody}</p>
+        </div>
+        <div className="morning-metrics">
+          {L.sleepMetrics.map((metric) => (
+            <article key={metric.label}><span>{metric.label}</span><strong>{metric.value}</strong><p>{metric.note}</p></article>
+          ))}
+        </div>
+      </section>
+
+      <section className="morning-privacy" aria-labelledby="morning-privacy-title">
+        <div>
+          <p className="morning-eyebrow">{L.privacyEyebrow}</p>
+          <h2 id="morning-privacy-title">{L.privacyTitle}</h2>
+          <p>{L.privacyBody}</p>
+        </div>
+        <ul>{L.privacyNotes.map((note) => <li key={note}>{note}</li>)}</ul>
+      </section>
+
+      <footer className="morning-footer">
+        <div><Image src="/dream-reel-logo.png" width={36} height={36} alt="" aria-hidden /><span>Dream Reel</span></div>
+        <p>{lang === "zh" ? "在梦消失之前，留住第一帧。" : "Keep the first frame before it fades."}</p>
+        <div>
+          <Link href="/journal">{T.nav.journal}</Link>
+          <Link href="/archive">{T.nav.archive}</Link>
+          <Link href="/blog/dreams-and-consciousness">{lang === "zh" ? "梦与意识" : "Dreams & consciousness"}</Link>
+        </div>
+      </footer>
     </main>
   );
 }

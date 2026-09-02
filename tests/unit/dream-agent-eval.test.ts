@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { DreamAgentResult } from "@/lib/dreamFollowUpAgent";
 import { dreamAgentEvalCases } from "../../evals/dream-agent/cases";
 import { evaluateDreamAgentResult, summarizeEvalResults } from "../../evals/dream-agent/evaluator";
-import { evalRetryDelayMs, isRetryableEvalRequest } from "../../evals/dream-agent/retryPolicy";
+import { evalRequestTimeoutMs, evalRetryDelayMs, isRetryableEvalRequest } from "../../evals/dream-agent/retryPolicy";
 
 const fragment = dreamAgentEvalCases.find((item) => item.id === "en-fragment-targeted")!;
 const good: DreamAgentResult = {
@@ -14,6 +14,19 @@ const good: DreamAgentResult = {
 };
 
 describe("dream agent evaluator", () => {
+  it("accepts cautious Chinese interpretation language", () => {
+    const interpretation = dreamAgentEvalCases.find((item) => item.id === "zh-interpretation-request")!;
+    const result: DreamAgentResult = {
+      message: "也许它和失去掌控的感受有关，但这不是唯一解释。",
+      questions: [],
+      stage: "exploring",
+      nextAction: "summarize",
+      memory: { missingDetails: [], observedSignals: [] },
+    };
+
+    expect(evaluateDreamAgentResult(interpretation, result).passed).toBe(true);
+  });
+
   it("keeps the promotion corpus large, unique, and language-balanced", () => {
     const ids = dreamAgentEvalCases.map((item) => item.id);
     const zhCount = dreamAgentEvalCases.filter((item) => item.lang === "zh").length;
@@ -45,7 +58,38 @@ describe("dream agent evaluator", () => {
 
   it("reports bilingual and safety aggregates", () => {
     const passed = evaluateDreamAgentResult(fragment, good);
-    expect(summarizeEvalResults([passed])).toMatchObject({ cases: 1, passed: 1, enPassRate: 1 });
+    expect(summarizeEvalResults([passed])).toMatchObject({
+      cases: 1,
+      passed: 1,
+      enPassRate: 1,
+      structuredOutputValidityRate: 1,
+      usefulTargetedFollowUpRate: 1,
+      repetitiveOrIrrelevantFollowUpRate: 0,
+      prematureReadyRate: 0,
+    });
+  });
+
+  it("reports explicit promotion scorecard failures", () => {
+    const repeated = evaluateDreamAgentResult({
+      ...fragment,
+      messages: [
+        { role: "user", content: "I was running through a station." },
+        { role: "assistant", content: "What did running through that station feel like?" },
+      ],
+    }, good, false);
+    const premature = evaluateDreamAgentResult(fragment, {
+      ...good,
+      questions: [],
+      stage: "ready",
+      nextAction: "ready_to_analyze",
+    });
+    const summary = summarizeEvalResults([repeated, premature]);
+    expect(summary).toMatchObject({
+      structuredOutputValidityRate: 0.5,
+      usefulTargetedFollowUpRate: 0,
+      repetitiveOrIrrelevantFollowUpRate: 1,
+      prematureReadyRate: 0.5,
+    });
   });
 
   it("retries transient failures but stops immediately when credits are exhausted", () => {
@@ -54,6 +98,10 @@ describe("dream agent evaluator", () => {
     expect(isRetryableEvalRequest(400, "json_validate_failed")).toBe(true);
     expect(isRetryableEvalRequest(429, "credit_balance_exhausted")).toBe(false);
     expect(evalRetryDelayMs(1, "2.5")).toBe(2500);
+    expect(evalRetryDelayMs(1, "110")).toBe(110_000);
     expect(evalRetryDelayMs(4)).toBe(15_000);
+    expect(evalRequestTimeoutMs()).toBe(120_000);
+    expect(evalRequestTimeoutMs("250")).toBe(1_000);
+    expect(evalRequestTimeoutMs("999999")).toBe(300_000);
   });
 });

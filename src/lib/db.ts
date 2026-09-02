@@ -32,7 +32,7 @@ export function getPool(): Pool {
 
 // Bump this whenever you add new migrations. ensureSchema will skip all DDL
 // once this version is recorded in the DB, making cold starts near-instant.
-const SCHEMA_VERSION = 7;
+const SCHEMA_VERSION = 8;
 
 let schemaReady = false;
 
@@ -391,12 +391,53 @@ export async function ensureSchema(): Promise<void> {
         rating TEXT NOT NULL CHECK (rating IN ('up', 'down')),
         reason TEXT CHECK (reason IS NULL OR reason IN ('repetitive', 'irrelevant', 'too_many_questions', 'unsafe', 'other')),
         variant TEXT NOT NULL,
+        policy_variant TEXT NOT NULL DEFAULT 'legacy-v1',
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         UNIQUE(user_id, interaction_id)
       );
     `),
   ]);
+
+  // Operational agent telemetry intentionally excludes dream text and model messages.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS dream_agent_interactions (
+      interaction_id UUID PRIMARY KEY,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      variant TEXT NOT NULL,
+      policy_variant TEXT NOT NULL DEFAULT 'legacy-v1',
+      source TEXT NOT NULL CHECK (source IN ('deterministic', 'model')),
+      provider TEXT NOT NULL CHECK (provider IN ('deterministic', 'openai', 'groq')),
+      stage TEXT NOT NULL CHECK (stage IN ('exploring', 'deepening', 'ready')),
+      next_action TEXT NOT NULL CHECK (next_action IN ('ask_followup', 'summarize', 'ready_to_analyze')),
+      question_count INTEGER NOT NULL CHECK (question_count BETWEEN 0 AND 1),
+      latency_ms INTEGER NOT NULL CHECK (latency_ms >= 0),
+      prompt_tokens INTEGER CHECK (prompt_tokens IS NULL OR prompt_tokens >= 0),
+      completion_tokens INTEGER CHECK (completion_tokens IS NULL OR completion_tokens >= 0),
+      dream_entry_id BIGINT REFERENCES dream_entries(id) ON DELETE SET NULL,
+      journal_saved_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+
+  // Request outcomes contain operational categories only, never dream or model text.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS dream_agent_request_outcomes (
+      request_id UUID PRIMARY KEY,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      policy_variant TEXT NOT NULL,
+      outcome TEXT NOT NULL CHECK (outcome IN (
+        'success', 'configuration_error', 'app_rate_limited', 'quota_exceeded',
+        'timeout', 'provider_rate_limited', 'upstream_error'
+      )),
+      source TEXT NOT NULL CHECK (source IN ('deterministic', 'model', 'none')),
+      provider TEXT NOT NULL CHECK (provider IN ('deterministic', 'openai', 'groq', 'none')),
+      provider_attempts INTEGER NOT NULL CHECK (provider_attempts >= 0),
+      fallback_used BOOLEAN NOT NULL DEFAULT FALSE,
+      latency_ms INTEGER NOT NULL CHECK (latency_ms >= 0),
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
 
   // All ALTER TABLE and CREATE INDEX in parallel (idempotent)
   await Promise.all([
@@ -409,6 +450,8 @@ export async function ensureSchema(): Promise<void> {
     pool.query("ALTER TABLE dream_entries ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id) ON DELETE SET NULL;"),
     pool.query("ALTER TABLE dream_entries ADD COLUMN IF NOT EXISTS title TEXT;"),
     pool.query("ALTER TABLE dream_entries ADD COLUMN IF NOT EXISTS visual_brief TEXT;"),
+    pool.query("ALTER TABLE dream_agent_interactions ADD COLUMN IF NOT EXISTS policy_variant TEXT NOT NULL DEFAULT 'legacy-v1';"),
+    pool.query("ALTER TABLE agent_feedback ADD COLUMN IF NOT EXISTS policy_variant TEXT NOT NULL DEFAULT 'legacy-v1';"),
     pool.query("ALTER TABLE payment_events ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'processed';"),
     pool.query("ALTER TABLE payment_events ADD COLUMN IF NOT EXISTS processed_at TIMESTAMPTZ;"),
     pool.query("CREATE INDEX IF NOT EXISTS idx_dream_entries_captured_at ON dream_entries (captured_at DESC);"),
@@ -420,6 +463,11 @@ export async function ensureSchema(): Promise<void> {
     pool.query("CREATE INDEX IF NOT EXISTS idx_auth_rate_limits_window_start ON auth_rate_limits (window_start);"),
     pool.query("CREATE INDEX IF NOT EXISTS idx_agent_feedback_created_at ON agent_feedback (created_at DESC);"),
     pool.query("CREATE INDEX IF NOT EXISTS idx_agent_feedback_variant ON agent_feedback (variant, rating);"),
+    pool.query("CREATE INDEX IF NOT EXISTS idx_agent_feedback_policy ON agent_feedback (policy_variant, rating);"),
+    pool.query("CREATE INDEX IF NOT EXISTS idx_dream_agent_interactions_created_at ON dream_agent_interactions (created_at DESC);"),
+    pool.query("CREATE INDEX IF NOT EXISTS idx_dream_agent_interactions_variant ON dream_agent_interactions (variant, provider, created_at DESC);"),
+    pool.query("CREATE INDEX IF NOT EXISTS idx_dream_agent_interactions_policy ON dream_agent_interactions (policy_variant, provider, created_at DESC);"),
+    pool.query("CREATE INDEX IF NOT EXISTS idx_dream_agent_request_outcomes_policy ON dream_agent_request_outcomes (policy_variant, outcome, created_at DESC);"),
   ]);
 
   await normalizeUserEmails(pool);

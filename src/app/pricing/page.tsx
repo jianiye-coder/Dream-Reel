@@ -10,36 +10,34 @@ export default function PricingPage() {
   const L = T.landing;
 
   return (
-    <main className="dream-landing" style={{ minHeight: "100svh" }}>
-      <div className="dream-sky" aria-hidden>
-        <span className="moon-glow" />
-        <span className="dream-cloud cloud-one" />
-        <span className="dream-cloud cloud-two" />
-      </div>
-
-      <nav className="landing-nav" aria-label="Main navigation">
-        <Link href="/" className="landing-logo" aria-label="Dream Reel home">
-          <Image src="/dream-reel-logo.png" alt="" aria-hidden width={36} height={36} className="logo-img" />
+    <main className="morning-landing morning-pricing-page">
+      <nav className="morning-nav" aria-label={lang === "zh" ? "主导航" : "Main navigation"}>
+        <Link href="/" className="morning-brand" aria-label="Dream Reel home">
+          <Image src="/dream-reel-logo.png" alt="" aria-hidden width={40} height={40} />
           <span>Dream Reel</span>
         </Link>
-        <div className="landing-nav-actions">
-          <LangToggle className="nav-cta" />
-          <Link href="/journal" className="nav-cta">{L.navCta}</Link>
+        <div className="morning-nav-links">
+          <Link href="/journal">{T.nav.journal}</Link>
+          <Link href="/archive">{T.nav.archive}</Link>
+        </div>
+        <div className="morning-nav-actions">
+          <LangToggle className="morning-language" />
+          <Link href="/journal" className="morning-nav-cta">{L.navCta}</Link>
         </div>
       </nav>
 
-      <section className="pricing-stream" style={{ marginTop: "clamp(4rem, 8vw, 7rem)", marginBottom: "clamp(4rem, 8vw, 7rem)" }}>
-        <div className="pricing-copy">
-          <p>{L.pricingEyebrow}</p>
-          <h2>{L.pricingTitle}</h2>
-          <span>{L.pricingBody}</span>
+      <section className="morning-pricing" aria-labelledby="pricing-title">
+        <div className="morning-pricing-heading">
+          <p className="morning-eyebrow">{L.pricingEyebrow}</p>
+          <h1 id="pricing-title">{L.pricingTitle}</h1>
+          <p>{L.pricingBody}</p>
         </div>
 
-        <div className="pricing-reels">
+        <div className="morning-plan-grid">
           {L.pricingPlans.map((plan, i) => (
-            <article key={plan.name} className={`pricing-reel ${i === 1 ? "pricing-reel-plus" : ""}`}>
-              <div className="pricing-reel-head">
-                <span>{plan.badge}</span>
+            <article key={plan.name} className={`morning-plan ${i === 1 ? "is-featured" : ""}`}>
+              <div className="morning-plan-head">
+                <span className="morning-plan-badge">{plan.badge}</span>
                 <h3>{plan.name}</h3>
                 <p>
                   <strong>{plan.price}</strong>
@@ -51,7 +49,7 @@ export default function PricingPage() {
                   <li key={feature}>{feature}</li>
                 ))}
               </ul>
-              <Link href="/journal" className="pricing-cta">
+              <Link href="/journal" className="morning-button morning-button-primary">
                 {plan.cta}
               </Link>
             </article>

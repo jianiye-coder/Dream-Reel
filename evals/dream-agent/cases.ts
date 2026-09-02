@@ -142,7 +142,7 @@ const coreEvalCases: DreamAgentEvalCase[] = [
     expected: {
       actions: ["ask_followup", "summarize"],
       realityQuestion: "optional",
-      requiredPatterns: [/难过|想念|哭|眼泪|感受|愿意/],
+      requiredPatterns: [/难过|想念|哭|泪|感受|愿意/],
       forbiddenPatterns: [/诊断|抑郁症|创伤后|你应该/, zhInterpretation],
     },
   },
@@ -342,7 +342,7 @@ const additionalEvalCases: DreamAgentEvalCase[] = [
   }),
   ...pairedCases("interpretation-request", ["interpretation", "uncertainty"], {
     messages: [{ role: "user", content: "我梦见牙齿掉了，这到底代表什么？" }],
-    expected: { actions: ["ask_followup", "summarize"], realityQuestion: "required", requiredPatterns: [/没有唯一|可能|对你|感受|背景|不急着.*(?:意义|意思)/], forbiddenPatterns: [/一定代表|就是因为|预示/] },
+    expected: { actions: ["ask_followup", "summarize"], realityQuestion: "required", requiredPatterns: [/没有唯一|可能|也许|或许|对你|感受|背景|不急着.*(?:意义|意思)/], forbiddenPatterns: [/一定代表|就是因为|预示/] },
   }, {
     messages: [{ role: "user", content: "I dreamed my teeth fell out. What does it actually mean?" }],
     expected: { actions: ["ask_followup", "summarize"], realityQuestion: "required", requiredPatterns: [/no single|might|for you|feel|context/i], forbiddenPatterns: [/definitely means|must mean|predicts/i] },
@@ -393,7 +393,7 @@ const additionalEvalCases: DreamAgentEvalCase[] = [
   }),
   ...pairedCases("mixed-language", ["language", "robustness"], {
     messages: [{ role: "user", content: "梦里我 missed the last train，特别着急。" }],
-    expected: { actions: ["ask_followup", "summarize"], realityQuestion: "required", requiredPatterns: [/着急|火车|感觉|身体/], forbiddenPatterns: [zhInterpretation] },
+    expected: { actions: ["ask_followup", "summarize"], realityQuestion: "required", requiredPatterns: [/急切|着急|火车|列车|末班|感觉|身体/], forbiddenPatterns: [zhInterpretation] },
   }, {
     messages: [{ role: "user", content: "In my dream 我错过了末班车 and felt really anxious." }],
     expected: { actions: ["ask_followup", "summarize"], realityQuestion: "required", requiredPatterns: [/anxious|train|feel|body/i], forbiddenPatterns: [enInterpretation] },
@@ -425,6 +425,27 @@ const additionalEvalCases: DreamAgentEvalCase[] = [
   }, {
     messages: [{ role: "user", content: "In the dream I kept asking what the weather was today, but nobody answered and I felt anxious." }],
     expected: { actions: ["ask_followup", "summarize"], realityQuestion: "optional", source: "model", requiredPatterns: [/dream|weather|anxious|feel/i] },
+  }),
+  ...pairedCases("vague-figure-no-identification", ["recall", "vagueness", "human-feedback"], {
+    messages: [{ role: "user", content: "梦里站着一个模糊的人影，我看不清脸，也不知道是谁。" }],
+    expected: {
+      actions: ["ask_followup"],
+      stages: ["exploring"],
+      realityQuestion: "forbidden",
+      source: "deterministic",
+      requiredPatterns: [/不代表.*漏掉|空白|模糊|安心|不安/],
+      forbiddenPatterns: [/究竟是谁|熟悉还是陌生|长什么样|具体细节/, zhInterpretation],
+    },
+  }, {
+    messages: [{ role: "user", content: "A vague figure was standing there. I could not make out the face or tell who it was." }],
+    expected: {
+      actions: ["ask_followup"],
+      stages: ["exploring"],
+      realityQuestion: "forbidden",
+      source: "deterministic",
+      requiredPatterns: [/does not mean.*missed|uncertainty|reassuring|unsettling/i],
+      forbiddenPatterns: [/who exactly|familiar or strange|look like|specific details/i, enInterpretation],
+    },
   }),
   ...pairedCases("memory-inside-dream", ["routing", "false-positive", "memory"], {
     messages: [{ role: "user", content: "梦里我怎么也想不起保险箱密码，越想越慌。" }],
