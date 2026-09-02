@@ -47,6 +47,13 @@ export default function ArchiveShell({
   const [billingError, setBillingError] = useState("");
   const [exporting, setExporting] = useState<"markdown" | "json" | null>(null);
   const [exportError, setExportError] = useState("");
+  const [activeTab, setActiveTab] = useState<"calendar" | "tags" | "recent">(() => {
+    try { return (localStorage.getItem("dream_archive_tab") as "calendar" | "tags" | "recent") ?? "calendar"; }
+    catch { return "calendar"; }
+  });
+  useEffect(() => {
+    try { localStorage.setItem("dream_archive_tab", activeTab); } catch {}
+  }, [activeTab]);
 
   useEffect(() => {
     if (!user) return;
@@ -150,14 +157,6 @@ export default function ArchiveShell({
               >
                 ↓ {A.export.markdown}
               </button>
-              <button
-                type="button"
-                onClick={() => void exportAllDreams("json")}
-                disabled={exporting !== null}
-                className="mist-button-secondary rounded-full px-3 py-2 text-xs font-medium transition hover:bg-white/55 disabled:opacity-50"
-              >
-                ↓ {A.export.json}
-              </button>
             </div>
             {exportError ? <p className="px-2 pt-2 text-xs text-[#b8758f]">{exportError}</p> : null}
           </div>
@@ -177,37 +176,24 @@ export default function ArchiveShell({
           </div>
         ) : null}
 
-        <div className="mist-card mb-8 rounded-[1.8rem] p-5">
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#988cb9]">
-            {A.recap.title}
-          </p>
-          <div className="mt-3 grid grid-cols-2 gap-3 text-xs sm:grid-cols-4">
-            <div>
-              <p className="mist-soft">{A.recap.entries}</p>
-              <p className="mt-1 text-2xl font-semibold text-[#5f5673]">{recap.entryCount}</p>
-            </div>
-            <div>
-              <p className="mist-soft">{A.recap.moods}</p>
-              <p className="mt-1 text-sm text-[#675e7c]">
-                {formatCountItems(recap.topMoods, T.common.noData)}
-              </p>
-            </div>
-            <div>
-              <p className="mist-soft">{A.recap.locations}</p>
-              <p className="mt-1 text-sm text-[#675e7c]">
-                {formatCountItems(recap.topLocations, T.common.noData)}
-              </p>
-            </div>
-            <div>
-              <p className="mist-soft">{A.recap.symbols}</p>
-              <p className="mt-1 text-sm text-[#675e7c]">
-                {formatCountItems(recap.topSymbols, T.common.noData)}
-              </p>
-            </div>
-          </div>
+        {/* Full-page tab bar */}
+        <div className="archive-tabs mb-6">
+          {(["calendar", "tags", "recent"] as const).map((tab) => {
+            const label = tab === "calendar" ? A.grid.tabCalendar : tab === "tags" ? A.grid.tabTags : A.grid.tabRecent;
+            return (
+              <button
+                key={tab}
+                type="button"
+                onClick={() => setActiveTab(tab)}
+                className={`archive-tab ${activeTab === tab ? "archive-tab-active" : ""}`}
+              >
+                {label}
+              </button>
+            );
+          })}
         </div>
 
-        <DreamGrid entries={entries} nextCursor={nextCursor} />
+        <DreamGrid entries={entries} nextCursor={nextCursor} activeTab={activeTab} />
       </main>
     </div>
   );
