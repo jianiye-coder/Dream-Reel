@@ -7241,6 +7241,66 @@ body {
   color: var(--morning-primary) !important;
 }
 
+/* Chat shares the same clear morning surface as quick record. */
+.journal-root .journal-mode-tabs {
+  border: 1px solid #d8c9bf;
+  border-radius: 1rem;
+  background: rgba(255,255,255,.78);
+  padding: .2rem;
+  box-shadow: 0 4px 16px rgba(120,53,15,.06);
+}
+.journal-root .mode-tab {
+  min-height: 40px;
+  color: #6b566f;
+}
+.journal-root .mode-tab:hover { color: #5b3f5f; background: rgba(137,97,145,.1); }
+.journal-root .mode-tab-active {
+  background: var(--morning-primary);
+  color: #fff;
+  box-shadow: none;
+}
+.journal-root .messages-area,
+.journal-root .chips-bar { background: transparent; }
+.journal-root .msg-avatar {
+  background: #fff8ed;
+  border-color: #d8c9bf;
+  color: #7c4d65;
+  font-size: 1.1rem;
+  line-height: 1;
+  box-shadow: 0 3px 10px rgba(120,53,15,.1);
+}
+.journal-root .bubble-ai {
+  background: #f4ecf5;
+  border-color: #d9c7da;
+  color: #352b42;
+  backdrop-filter: none;
+}
+.journal-root .bubble-user {
+  background: #ead9c9;
+  border-color: #d7b99f;
+  color: #34243a;
+  backdrop-filter: none;
+}
+.journal-root .msg-bubble .msg-text {
+  color: inherit;
+  font-size: .95rem;
+  line-height: 1.75;
+}
+.journal-root .input-wrapper {
+  background: transparent;
+  border-top-color: rgba(146,64,14,.14);
+  backdrop-filter: none;
+  padding-bottom: 1.25rem;
+}
+.journal-root .input-form {
+  background: rgba(255,255,255,.94);
+  border-color: #d8c9bf;
+  box-shadow: 0 10px 28px rgba(120,53,15,.1);
+}
+.journal-root .main-input { color: var(--morning-ink); }
+.journal-root .main-input::placeholder { color: #64748b; opacity: 1; }
+.journal-root .dream-date-bar .field-label { color: #5e4b67; }
+
 @media (max-width: 1024px) {
   .morning-nav { grid-template-columns: 1fr auto; }
   .morning-nav-links { display: none; }

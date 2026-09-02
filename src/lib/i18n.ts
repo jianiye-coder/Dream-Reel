@@ -218,7 +218,7 @@ const zh = {
       "今夜的梦，还记得什么吗？\n\n先把最先浮现的片段写下来，不需要完整，不需要逻辑。",
     placeholder: "把还没有散开的梦说给我听。人物、地点、奇怪的句子，都可以。",
     modeLabel: "记录模式",
-    chatMode: "Chat",
+    chatMode: "对话",
     chatModeDesc: "与 AI 一起探索梦境",
     quickMode: "快速记录",
     quickModeDesc: "存下这段梦境",
