@@ -1011,7 +1011,7 @@ export default function JournalPage() {
                 className={`msg-row ${msg.role === "user" ? "msg-row-user" : "msg-row-ai"}`}
                 style={{ animationDelay: `${Math.min(i * 0.04, 0.25)}s` }}
               >
-                {msg.role === "assistant" && <div className="msg-avatar">☾</div>}
+                {msg.role === "assistant" && <div className="msg-avatar"><Image src="/dream-reel-logo.png" alt="" width={22} height={22} className="object-contain" /></div>}
                 <div className={`msg-bubble ${msg.role === "user" ? "bubble-user" : "bubble-ai"}`}>
                   <p className="msg-text">{msg.content}</p>
                   {msg.role === "assistant" && msg.isError && (
@@ -1061,7 +1061,7 @@ export default function JournalPage() {
 
             {isTyping && (
               <div className="msg-row msg-row-ai">
-                <div className="msg-avatar">☾</div>
+                <div className="msg-avatar"><Image src="/dream-reel-logo.png" alt="" width={22} height={22} className="object-contain" /></div>
                 <div className="msg-bubble bubble-ai" style={{ padding: "0.65rem 1rem" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
                     {[0, 1, 2].map((i) => (
