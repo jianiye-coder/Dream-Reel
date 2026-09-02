@@ -33,7 +33,7 @@ export default function LandingPage() {
         <div className="morning-nav-links">
           <Link href="/journal">{T.nav.journal}</Link>
           <Link href="/archive">{T.nav.archive}</Link>
-          <Link href="/blog/dreams-and-consciousness">{lang === "zh" ? "关于梦" : "About dreams"}</Link>
+          <Link href="/blog/dreams-and-consciousness">{lang === "zh" ? "博客" : "Blog"}</Link>
         </div>
         <div className="morning-nav-actions">
           <LangToggle className="morning-language" />

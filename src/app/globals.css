@@ -2128,9 +2128,9 @@ body:has(.dream-landing)::after {
   max-width: 10ch;
   margin: 0;
   font-family: var(--font-serif), system-ui, sans-serif;
-  font-size: clamp(3rem, 5.5vw, 5rem);
-  line-height: 1;
-  letter-spacing: -.05em;
+  font-size: clamp(2.1rem, 3.2vw, 3.1rem);
+  line-height: 1.08;
+  letter-spacing: -.04em;
 }
 .auth-intro > p:last-child {
   max-width: 34rem;
@@ -2191,7 +2191,7 @@ body:has(.dream-landing)::after {
   .auth-header,
   .auth-shell { width: min(100% - 2rem, 1040px); }
   .auth-shell { grid-template-columns: 1fr; gap: 2.5rem; align-content: center; }
-  .auth-intro h1 { max-width: 12ch; font-size: clamp(2.7rem, 12vw, 4rem); }
+  .auth-intro h1 { max-width: 12ch; font-size: clamp(2rem, 8.5vw, 2.7rem); }
   .auth-card { padding: 1.35rem; }
   .morning-pricing { width: min(100% - 2rem, 1100px); }
   .morning-plan-grid { grid-template-columns: 1fr; }
@@ -6901,7 +6901,7 @@ body {
 
 .morning-hero h1 {
   max-width: 11ch;
-  font-size: clamp(2.9rem, 5.2vw, 5.25rem);
+  font-size: clamp(2.35rem, 3.7vw, 3.8rem);
   font-weight: 650;
   letter-spacing: -0.055em;
   line-height: 0.98;
@@ -7152,7 +7152,7 @@ body {
   .morning-nav { min-height: 70px; }
   .morning-nav-cta { display: none; }
   .morning-hero { grid-template-columns: 1fr; min-height: 0; padding: 4.5rem 0 5rem; }
-  .morning-hero h1 { max-width: 9ch; font-size: clamp(2.7rem, 12vw, 4.1rem); }
+  .morning-hero h1 { max-width: 9ch; font-size: clamp(2.2rem, 9vw, 3rem); }
   .morning-hero-visual { min-height: 490px; }
   .morning-photo-frame { left: 0; }
   .morning-capture-card { right: -.4rem; }

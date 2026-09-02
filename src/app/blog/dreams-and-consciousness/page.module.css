@@ -16,8 +16,8 @@
 .article { position: relative; z-index: 1; width: min(72rem, calc(100% - 2rem)); margin: 0 auto; padding-bottom: 7rem; }
 .hero { max-width: 61rem; padding: clamp(4rem, 8vw, 6.5rem) 0 clamp(3rem, 5vw, 4.5rem); }
 .eyebrow, .sectionNumber { color: #92400e; font-size: .72rem; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; }
-.hero h1 { max-width: 10em; margin: 1.25rem 0 1.5rem; font-family: var(--font-serif), sans-serif; font-size: clamp(2.7rem, 6vw, 5.5rem); font-weight: 650; line-height: 1; letter-spacing: -.045em; text-wrap: balance; }
-.dek { max-width: 53rem; color: #334155; font-family: var(--font-serif), sans-serif; font-size: clamp(1.15rem, 2vw, 1.5rem); line-height: 1.72; }
+.hero h1 { max-width: 13em; margin: 1.25rem 0 1.25rem; font-family: var(--font-serif), sans-serif; font-size: clamp(2.2rem, 3.5vw, 3.6rem); font-weight: 650; line-height: 1.1; letter-spacing: -.035em; text-wrap: balance; }
+.dek { max-width: 46rem; color: #334155; font-family: var(--font-serif), sans-serif; font-size: clamp(1rem, 1.25vw, 1.12rem); line-height: 1.8; }
 .meta { margin-top: 2rem; color: #64748b; font-size: .78rem; }
 .toc { display: flex; flex-wrap: wrap; gap: .65rem 1.4rem; padding: 1.5rem 0; border-block: 1px solid #e9ded6; }
 .toc span { width: 100%; color: #64748b; font-size: .68rem; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; }
