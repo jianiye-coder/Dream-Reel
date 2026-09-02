@@ -372,6 +372,9 @@ const zh = {
       weekLabels: ["一", "二", "三", "四", "五", "六", "日"],
       recentEyebrow: "最近的梦境",
       recentDesc: "最近的梦境档案仍保留为时间线，方便快速回看与编辑。",
+      tabCalendar: "日历",
+      tabTags: "人物与地点",
+      tabRecent: "最近的梦",
     },
   },
 
@@ -782,6 +785,9 @@ const en: typeof zh = {
       weekLabels: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
       recentEyebrow: "Recent Files",
       recentDesc: "Your most recent dreams, organized for quick review and editing.",
+      tabCalendar: "Calendar",
+      tabTags: "People & Places",
+      tabRecent: "Recent Dreams",
     },
   },
 

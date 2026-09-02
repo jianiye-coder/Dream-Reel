@@ -1022,6 +1022,14 @@ export default function DreamGrid({
   const [mergingTag, setMergingTag] = useState<MergingTag | null>(null);
   const [tagBusy, setTagBusy] = useState(false);
 
+  const [activeTab, setActiveTab] = useState<"calendar" | "tags" | "recent">(() => {
+    try { return (localStorage.getItem("dream_archive_tab") as "calendar" | "tags" | "recent") ?? "calendar"; }
+    catch { return "calendar"; }
+  });
+  useEffect(() => {
+    try { localStorage.setItem("dream_archive_tab", activeTab); } catch {}
+  }, [activeTab]);
+
   // Keyword aliases — when a keyword is merged into another, store the alias for future normalization
   const [keywordAliases, setKeywordAliasesState] = useState<KeywordAliases>({ people: {}, locations: {} });
 
@@ -1348,6 +1356,28 @@ export default function DreamGrid({
   return (
     <>
       <div className="space-y-6">
+        {/* Tab bar */}
+        <div className="flex gap-2 border-b border-[rgba(176,168,197,0.18)] pb-0">
+          {(["calendar", "tags", "recent"] as const).map((tab) => {
+            const label = tab === "calendar" ? G.tabCalendar : tab === "tags" ? G.tabTags : G.tabRecent;
+            return (
+              <button
+                key={tab}
+                type="button"
+                onClick={() => setActiveTab(tab)}
+                className={`rounded-t-xl px-5 py-2.5 text-sm font-medium transition ${
+                  activeTab === tab
+                    ? "border border-b-0 border-[rgba(176,168,197,0.28)] bg-white/70 text-[#5f5673]"
+                    : "text-[#9b90b4] hover:text-[#706786]"
+                }`}
+              >
+                {label}
+              </button>
+            );
+          })}
+        </div>
+
+        {activeTab === "calendar" && (
         <div className="mist-card rounded-[2rem] p-4 sm:p-6">
           <div className="flex flex-col gap-5 border-b border-[rgba(176,168,197,0.22)] pb-5 sm:flex-row sm:items-end sm:justify-between">
             <div>
@@ -1490,18 +1520,16 @@ export default function DreamGrid({
                           ) : null}
                         </div>
                       </div>
-                    ) : (
-                      <div className="mt-10 rounded-2xl border border-dashed border-[rgba(176,168,197,0.16)] px-3 py-5 text-center text-xs text-[#b0a8c0]">
-                        {G.emptyDay}
-                      </div>
-                    )}
+                    ) : null}
                   </button>
                 );
               })}
             </div>
           </div>
         </div>
+        )}
 
+        {activeTab === "tags" && (
         <div className="mist-card rounded-[2rem] p-4 sm:p-6">
           <div className="flex flex-col gap-3 border-b border-[rgba(176,168,197,0.2)] pb-5 sm:flex-row sm:items-end sm:justify-between">
             <div>
@@ -1876,7 +1904,9 @@ export default function DreamGrid({
             </div>
           ) : null}
         </div>
+        )}
 
+        {activeTab === "recent" && (
         <div className="mist-card rounded-[2rem] p-4 sm:p-6">
           <div className="flex items-center justify-between gap-3">
             <div>
@@ -1911,6 +1941,7 @@ export default function DreamGrid({
             ))}
           </div>
         </div>
+        )}
 
         {nextCursor ? (
           <div className="text-center">
