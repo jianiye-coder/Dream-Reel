@@ -341,6 +341,13 @@ const zh = {
     dbErrorTitle: "暂时无法连接到梦境档案",
     dbErrorHint:
       "数据库连接出现问题，稍后刷新页面重试。如果持续出现，可能是服务器连接数暂时满载，通常几分钟内会自动恢复。",
+    export: {
+      title: "导出全部梦境",
+      markdown: "Markdown 阅读版",
+      json: "JSON 完整备份",
+      exporting: "正在整理档案…",
+      failed: "导出失败，请稍后再试",
+    },
     recap: {
       title: "本周回顾",
       entries: "记录次数",
@@ -417,6 +424,8 @@ const zh = {
     updateFailed: "更新失败",
     analyzeError: "分析失败",
     downloadImage: "↓ 下载图片",
+    exportMarkdown: "导出 Markdown",
+    exportJson: "备份 JSON",
     tagPlaceholder: "输入后按 Enter 或逗号添加",
   },
 };
@@ -742,6 +751,13 @@ const en: typeof zh = {
     dbErrorTitle: "Unable to reach the dream archive right now",
     dbErrorHint:
       "There was a problem connecting to the database. Try refreshing in a moment. If it keeps happening, the server may be temporarily at capacity and should recover within a few minutes.",
+    export: {
+      title: "Export all dreams",
+      markdown: "Readable Markdown",
+      json: "Complete JSON backup",
+      exporting: "Preparing archive…",
+      failed: "Export failed. Please try again.",
+    },
     recap: {
       title: "This Week",
       entries: "Dreams Recorded",
@@ -819,6 +835,8 @@ const en: typeof zh = {
     updateFailed: "Update failed",
     analyzeError: "Analysis failed",
     downloadImage: "↓ Download Image",
+    exportMarkdown: "Export Markdown",
+    exportJson: "Backup JSON",
     tagPlaceholder: "Type then press Enter or comma to add",
   },
 };
