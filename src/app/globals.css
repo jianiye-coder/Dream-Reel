@@ -4899,11 +4899,10 @@ body:has(.mist-page)::after {
   z-index: 10;
   flex: 1;
   overflow-y: auto;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(115, 92, 172, 0.22) transparent;
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }
-.quick-area::-webkit-scrollbar { width: 3px; }
-.quick-area::-webkit-scrollbar-thumb { background: rgba(115, 92, 172, 0.22); border-radius: 2px; }
+.quick-area::-webkit-scrollbar { display: none; }
 
 .quick-inner {
   max-width: 680px;
