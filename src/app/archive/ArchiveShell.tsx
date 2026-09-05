@@ -3,6 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { LangToggle } from "@/components/LangToggle";
 import DreamGrid from "./DreamGrid";
@@ -11,6 +12,11 @@ import { getApiErrorMessage } from "@/lib/apiErrors";
 
 type CountItem = { item: string; count: number };
 type BillingStatus = { plan: "free" | "plus" };
+type ArchiveTab = "calendar" | "tags" | "recent";
+
+function isArchiveTab(value: string | null): value is ArchiveTab {
+  return value === "calendar" || value === "tags" || value === "recent";
+}
 
 interface WeeklyRecapShape {
   weekStart: string;
@@ -43,17 +49,23 @@ export default function ArchiveShell({
   const { lang, T } = useLanguage();
   const { archive: A } = T;
   const B = T.billing;
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [billingStatus, setBillingStatus] = useState<BillingStatus | null>(null);
   const [billingError, setBillingError] = useState("");
   const [exporting, setExporting] = useState<"markdown" | "json" | null>(null);
   const [exportError, setExportError] = useState("");
-  const [activeTab, setActiveTab] = useState<"calendar" | "tags" | "recent">(() => {
-    try { return (localStorage.getItem("dream_archive_tab") as "calendar" | "tags" | "recent") ?? "calendar"; }
-    catch { return "calendar"; }
-  });
-  useEffect(() => {
-    try { localStorage.setItem("dream_archive_tab", activeTab); } catch {}
-  }, [activeTab]);
+  const requestedTab = searchParams.get("tab");
+  const activeTab: ArchiveTab = isArchiveTab(requestedTab) ? requestedTab : "calendar";
+
+  function setActiveTab(tab: ArchiveTab) {
+    const params = new URLSearchParams(searchParams.toString());
+    if (tab === "calendar") params.delete("tab");
+    else params.set("tab", tab);
+    const query = params.toString();
+    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+  }
 
   useEffect(() => {
     if (!user) return;
