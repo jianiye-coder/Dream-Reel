@@ -10,7 +10,6 @@ import DreamGrid from "./DreamGrid";
 import type { DreamEntry } from "@/lib/dreams";
 import { getApiErrorMessage } from "@/lib/apiErrors";
 
-type CountItem = { item: string; count: number };
 type BillingStatus = { plan: "free" | "plus" };
 type ArchiveTab = "calendar" | "tags" | "recent";
 
@@ -18,31 +17,14 @@ function isArchiveTab(value: string | null): value is ArchiveTab {
   return value === "calendar" || value === "tags" || value === "recent";
 }
 
-interface WeeklyRecapShape {
-  weekStart: string;
-  entryCount: number;
-  topMoods: CountItem[];
-  topPeople: CountItem[];
-  topLocations: CountItem[];
-  topSymbols: CountItem[];
-  stressByMood: unknown[];
-}
-
-function formatCountItems(items: CountItem[], noData: string): string {
-  if (items.length === 0) return noData;
-  return items.map((i) => `${i.item} (${i.count})`).join(" · ");
-}
-
 export default function ArchiveShell({
   entries,
   nextCursor,
-  recap,
   dataError,
   user,
 }: {
   entries: DreamEntry[];
   nextCursor: string | null;
-  recap: WeeklyRecapShape;
   dataError: string;
   user: { name?: string | null; email?: string | null; image?: string | null } | null;
 }) {
