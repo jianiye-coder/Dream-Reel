@@ -44,8 +44,9 @@ export default function RootLayout({
         />
       </head>
       <body className="min-h-full flex flex-col">
+        <a className="skip-link" href="#main-content">跳至主要内容</a>
         <SessionProvider>
-          <LanguageProvider>{children}</LanguageProvider>
+          <LanguageProvider><div id="main-content" tabIndex={-1}>{children}</div></LanguageProvider>
         </SessionProvider>
       </body>
     </html>

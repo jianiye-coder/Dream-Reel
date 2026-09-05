@@ -1085,6 +1085,9 @@ export default function JournalPage() {
                 <span className="field-label">{J.sleep.date}</span>
                 <input
                   type="date"
+                  name="dreamDate"
+                  aria-label={J.sleep.date}
+                  autoComplete="off"
                   value={dreamDate}
                   max={getTodayDate()}
                   onChange={(e) => setDreamDate(e.target.value)}
@@ -1093,6 +1096,9 @@ export default function JournalPage() {
                 />
               </div>
               <input
+                name="dreamTitle"
+                aria-label={lang === "zh" ? "梦境标题" : "Dream title"}
+                autoComplete="off"
                 value={quickTitle}
                 onChange={(e) => setQuickTitle(e.target.value, true)}
                 placeholder={isTitleGenerating
@@ -1107,6 +1113,9 @@ export default function JournalPage() {
             <div className={panel === "image" ? "quick-split" : ""}>
               <div className="quick-record-field">
                 <textarea
+                  name="dreamText"
+                  aria-label={J.quickTitle}
+                  autoComplete="off"
                   value={quickText}
                   onChange={(e) => {
                     setQuickText(e.target.value);
@@ -1348,11 +1357,11 @@ export default function JournalPage() {
             <div className="sleep-context-grid">
               <label className="sleep-context-field">
                 <span>{J.sleep.sleepStart}</span>
-                <input type="time" value={sleepStart} onChange={(e) => setSleepStart(e.target.value)} className="dream-input-sm" />
+                <input type="time" name="sleepStart" autoComplete="off" value={sleepStart} onChange={(e) => setSleepStart(e.target.value)} className="dream-input-sm" />
               </label>
               <label className="sleep-context-field">
                 <span>{J.sleep.wakeTime}</span>
-                <input type="time" value={wakeTime} onChange={(e) => setWakeTime(e.target.value)} className="dream-input-sm" />
+                <input type="time" name="wakeTime" autoComplete="off" value={wakeTime} onChange={(e) => setWakeTime(e.target.value)} className="dream-input-sm" />
               </label>
               <fieldset className="sleep-context-field sleep-context-quality">
                 <legend>{J.sleep.quality}</legend>
@@ -1369,11 +1378,11 @@ export default function JournalPage() {
               </label>
               <label className="sleep-context-field">
                 <span>{J.sleep.meal}</span>
-                <input type="text" value={preSleepMeal} onChange={(e) => setPreSleepMeal(e.target.value)} placeholder={J.sleep.mealPlaceholder} className="dream-input-sm" maxLength={500} />
+                <input type="text" name="preSleepMeal" autoComplete="off" value={preSleepMeal} onChange={(e) => setPreSleepMeal(e.target.value)} placeholder={J.sleep.mealPlaceholder} className="dream-input-sm" maxLength={500} />
               </label>
               <label className="sleep-context-field">
                 <span>{J.sleep.activity}</span>
-                <input type="text" value={preSleepActivity} onChange={(e) => setPreSleepActivity(e.target.value)} placeholder={J.sleep.activityPlaceholder} className="dream-input-sm" maxLength={500} />
+                <input type="text" name="preSleepActivity" autoComplete="off" value={preSleepActivity} onChange={(e) => setPreSleepActivity(e.target.value)} placeholder={J.sleep.activityPlaceholder} className="dream-input-sm" maxLength={500} />
               </label>
             </div>
             <div className="sleep-step-footer">
@@ -1426,6 +1435,9 @@ export default function JournalPage() {
               <span className="field-label">{J.sleep.date}</span>
               <input
                 type="date"
+                name="dreamDate"
+                aria-label={J.sleep.date}
+                autoComplete="off"
                 value={dreamDate}
                 max={getTodayDate()}
                 onChange={(e) => setDreamDate(e.target.value)}
@@ -1446,6 +1458,9 @@ export default function JournalPage() {
               <div className="panel-body">
                 <div style={{ display: "flex", gap: "0.5rem" }}>
                   <textarea
+                    name="imagePrompt"
+                    aria-label={J.image.title}
+                    autoComplete="off"
                     value={imagePrompt}
                     onChange={(e) => { setImagePrompt(e.target.value); setImagePromptEdited(true); }}
                     placeholder={J.image.placeholder}
@@ -1504,6 +1519,9 @@ export default function JournalPage() {
             >
               <textarea
                 ref={inputRef}
+                name="dreamMessage"
+                aria-label={J.chatInputLabel}
+                autoComplete="off"
                 value={input}
                 onChange={handleInputChange}
                 onKeyDown={handleKeyDown}
