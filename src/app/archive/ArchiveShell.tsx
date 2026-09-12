@@ -1,14 +1,22 @@
 "use client";
 
 import Image from "next/image";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { LangToggle } from "@/components/LangToggle";
-import DreamGrid from "./DreamGrid";
 import type { DreamEntry } from "@/lib/dreams";
 import { getApiErrorMessage } from "@/lib/apiErrors";
+
+const DreamGrid = dynamic(() => import("./DreamGrid"), {
+  loading: () => (
+    <div className="mist-card mt-6 min-h-80 animate-pulse rounded-[1.8rem] p-6" aria-busy="true" aria-live="polite">
+      <p className="text-sm font-medium text-[#6b6282]">正在加载梦境档案…</p>
+    </div>
+  ),
+});
 
 type BillingStatus = { plan: "free" | "plus" };
 type ArchiveTab = "calendar" | "tags" | "recent";

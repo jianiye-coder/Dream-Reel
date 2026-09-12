@@ -1145,6 +1145,16 @@ type AddingTag = { kind: KeywordArchiveKind; draft: string; selectedIds: Set<num
 type MergingTag = { kind: KeywordArchiveKind; label: string };
 type KeywordAliases = { people: Record<string, string>; locations: Record<string, string> };
 
+const TAG_UPDATE_CONCURRENCY = 4;
+
+async function updateInBatches<T>(items: T[], update: (item: T) => Promise<void>): Promise<void> {
+  for (let index = 0; index < items.length; index += TAG_UPDATE_CONCURRENCY) {
+    const results = await Promise.allSettled(items.slice(index, index + TAG_UPDATE_CONCURRENCY).map(update));
+    const failed = results.find((result) => result.status === "rejected");
+    if (failed?.status === "rejected") throw failed.reason;
+  }
+}
+
 export default function DreamGrid({
   entries,
   nextCursor: initialNextCursor,
@@ -1171,6 +1181,7 @@ export default function DreamGrid({
   const [addingTag, setAddingTag] = useState<AddingTag | null>(null);
   const [mergingTag, setMergingTag] = useState<MergingTag | null>(null);
   const [tagBusy, setTagBusy] = useState(false);
+  const [tagError, setTagError] = useState("");
 
 
   // Keyword aliases — when a keyword is merged into another, store the alias for future normalization
@@ -1356,11 +1367,12 @@ export default function DreamGrid({
     const item = keywordArchives[kind].find((i) => normalizeKeyword(i.label) === normalizeKeyword(oldLabel));
     if (!item) { setEditingTag(null); return; }
     setTagBusy(true);
+    setTagError("");
     try {
-      await Promise.all(item.entries.map((entry) => {
+      await updateInBatches(item.entries, async (entry) => {
         const field = kind === "people" ? entry.people : entry.locations;
-        return patchEntryTag(entry, { [kind]: field.map((t) => normalizeKeyword(t) === normalizeKeyword(oldLabel) ? trimmed : t) });
-      }));
+        await patchEntryTag(entry, { [kind]: field.map((t) => normalizeKeyword(t) === normalizeKeyword(oldLabel) ? trimmed : t) });
+      });
       setLocalEntries((prev) => prev.map((entry) => {
         const field = kind === "people" ? entry.people : entry.locations;
         if (!field.some((t) => normalizeKeyword(t) === normalizeKeyword(oldLabel))) return entry;
@@ -1368,7 +1380,7 @@ export default function DreamGrid({
       }));
       setEditingTag(null);
       if (activeKeyword?.kind === kind && normalizeKeyword(activeKeyword.label) === normalizeKeyword(oldLabel)) setActiveKeyword(null);
-    } catch (e) { console.error(e); } finally { setTagBusy(false); }
+    } catch (e) { console.error(e); setTagError(lang === "zh" ? "部分标签更新失败，请重试。" : "Some tag updates failed. Please try again."); } finally { setTagBusy(false); }
   }
 
   async function handleMergeTag(kind: KeywordArchiveKind, fromLabel: string, intoLabel: string) {
@@ -1380,11 +1392,12 @@ export default function DreamGrid({
       : `Merge "${fromLabel}" (${item.count} dreams) into "${intoLabel}"? This cannot be undone.`;
     if (!window.confirm(msg)) return;
     setTagBusy(true);
+    setTagError("");
     try {
-      await Promise.all(item.entries.map((entry) => {
+      await updateInBatches(item.entries, async (entry) => {
         const field = kind === "people" ? entry.people : entry.locations;
-        return patchEntryTag(entry, { [kind]: field.map((t) => normalizeKeyword(t) === normalizeKeyword(fromLabel) ? intoLabel : t) });
-      }));
+        await patchEntryTag(entry, { [kind]: field.map((t) => normalizeKeyword(t) === normalizeKeyword(fromLabel) ? intoLabel : t) });
+      });
       setLocalEntries((prev) => prev.map((entry) => {
         const field = kind === "people" ? entry.people : entry.locations;
         if (!field.some((t) => normalizeKeyword(t) === normalizeKeyword(fromLabel))) return entry;
@@ -1401,7 +1414,7 @@ export default function DreamGrid({
       }
       setMergingTag(null);
       if (activeKeyword?.kind === kind && normalizeKeyword(activeKeyword.label) === normalizeKeyword(fromLabel)) setActiveKeyword(null);
-    } catch (e) { console.error(e); } finally { setTagBusy(false); }
+    } catch (e) { console.error(e); setTagError(lang === "zh" ? "部分标签更新失败，请重试。" : "Some tag updates failed. Please try again."); } finally { setTagBusy(false); }
   }
 
   async function handleDeleteTag(item: KeywordArchiveItem) {
@@ -1410,18 +1423,19 @@ export default function DreamGrid({
       : `Remove "${item.label}" from ${item.count} dreams?`;
     if (!window.confirm(msg)) return;
     setTagBusy(true);
+    setTagError("");
     try {
-      await Promise.all(item.entries.map((entry) => {
+      await updateInBatches(item.entries, async (entry) => {
         const field = item.kind === "people" ? entry.people : entry.locations;
-        return patchEntryTag(entry, { [item.kind]: field.filter((t) => normalizeKeyword(t) !== normalizeKeyword(item.label)) });
-      }));
+        await patchEntryTag(entry, { [item.kind]: field.filter((t) => normalizeKeyword(t) !== normalizeKeyword(item.label)) });
+      });
       setLocalEntries((prev) => prev.map((entry) => {
         const field = item.kind === "people" ? entry.people : entry.locations;
         if (!field.some((t) => normalizeKeyword(t) === normalizeKeyword(item.label))) return entry;
         return { ...entry, [item.kind]: field.filter((t) => normalizeKeyword(t) !== normalizeKeyword(item.label)) };
       }));
       if (activeKeyword?.kind === item.kind && normalizeKeyword(activeKeyword.label) === normalizeKeyword(item.label)) setActiveKeyword(null);
-    } catch (e) { console.error(e); } finally { setTagBusy(false); }
+    } catch (e) { console.error(e); setTagError(lang === "zh" ? "部分标签更新失败，请重试。" : "Some tag updates failed. Please try again."); } finally { setTagBusy(false); }
   }
 
   async function handleAddTag() {
@@ -1430,12 +1444,13 @@ export default function DreamGrid({
     const { kind, selectedIds } = addingTag;
     const targets = localEntries.filter((e) => selectedIds.has(e.id));
     setTagBusy(true);
+    setTagError("");
     try {
-      await Promise.all(targets.map((entry) => {
+      await updateInBatches(targets, async (entry) => {
         const field = kind === "people" ? entry.people : entry.locations;
-        if (field.some((t) => normalizeKeyword(t) === normalizeKeyword(newLabel))) return Promise.resolve();
-        return patchEntryTag(entry, { [kind]: [...field, newLabel] });
-      }));
+        if (field.some((t) => normalizeKeyword(t) === normalizeKeyword(newLabel))) return;
+        await patchEntryTag(entry, { [kind]: [...field, newLabel] });
+      });
       setLocalEntries((prev) => prev.map((entry) => {
         if (!selectedIds.has(entry.id)) return entry;
         const field = kind === "people" ? entry.people : entry.locations;
@@ -1443,7 +1458,7 @@ export default function DreamGrid({
         return { ...entry, [kind]: [...field, newLabel] };
       }));
       setAddingTag(null);
-    } catch (e) { console.error(e); } finally { setTagBusy(false); }
+    } catch (e) { console.error(e); setTagError(lang === "zh" ? "部分标签更新失败，请重试。" : "Some tag updates failed. Please try again."); } finally { setTagBusy(false); }
   }
 
   function handleSaved(updatedEntry: DreamEntry) {
@@ -1662,6 +1677,7 @@ export default function DreamGrid({
               <p className="mist-muted mt-2 max-w-2xl text-sm leading-7">{keywordLabels.desc}</p>
             </div>
           </div>
+          {tagError ? <p className="mt-4 text-sm font-medium text-[#bb7f94]" role="alert">{tagError}</p> : null}
 
           <div className="mt-5 grid gap-4 lg:grid-cols-2">
             {([
