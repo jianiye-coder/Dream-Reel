@@ -1667,7 +1667,7 @@ export default function DreamGrid({
         )}
 
         {activeTab === "tags" && (
-        <div>
+        <div className="archive-keyword-index">
           <div className="flex flex-col gap-3 border-b border-[rgba(176,168,197,0.2)] pb-5 sm:flex-row sm:items-end sm:justify-between">
             <div>
               <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-[#9a8dbe]">

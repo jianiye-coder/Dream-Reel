@@ -7288,6 +7288,31 @@ body {
   outline-offset: 2px;
 }
 
+/* The tag index contains dense, practical metadata. It needs to read as data,
+   not fade into the warm archive background. */
+.archive-page .archive-keyword-index {
+  color: var(--morning-muted);
+}
+.archive-page .archive-keyword-index :is(p, span, label, button) {
+  color: var(--morning-muted) !important;
+}
+.archive-page .archive-keyword-index h2,
+.archive-page .archive-keyword-index h3 {
+  color: var(--morning-ink) !important;
+}
+.archive-page .archive-keyword-index > div:first-child > div > p:first-child,
+.archive-page .archive-keyword-index [class*="tracking-"] {
+  color: #8a5426 !important;
+  font-weight: 700;
+}
+.archive-page .archive-keyword-index [class*="bg-"] :is(span, button),
+.archive-page .archive-keyword-index span[class*="bg-"] {
+  color: #352b42 !important;
+}
+.archive-page .archive-keyword-index button:hover:not(:disabled) {
+  color: #3b2b1d !important;
+}
+
 /* Chat uses the same calm, readable morning surface as the journal. */
 .journal-root .messages-area,
 .journal-root .chips-bar {
