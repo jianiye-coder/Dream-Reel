@@ -146,16 +146,16 @@ export default function ArchiveShell({
             </h1>
             <p className="mist-muted mt-3 max-w-2xl text-sm leading-7">{A.desc}</p>
           </div>
-          <div className="archive-export-panel shrink-0 rounded-[1.25rem] border border-white/35 bg-white/28 p-2 backdrop-blur-md">
-            <p className="archive-export-label px-2 pb-1.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-[#9185ae]">
+          <div className="archive-export-panel shrink-0">
+            <p className="archive-export-label pb-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-[#9185ae]">
               {exporting ? A.export.exporting : A.export.title}
             </p>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap">
               <button
                 type="button"
                 onClick={() => void exportAllDreams("markdown")}
                 disabled={exporting !== null}
-                className="archive-export-action mist-button-secondary rounded-full px-3 py-2 text-xs font-medium transition hover:bg-white/55 disabled:opacity-50"
+                className="archive-export-action text-xs font-semibold transition disabled:opacity-50"
               >
                 ↓ {A.export.markdown}
               </button>
