@@ -198,6 +198,33 @@ export default function JournalPage() {
   const undoStack = useRef<string[]>([]);
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
 
+  function setJournalMode(nextMode: "chat" | "quick") {
+    setMode(nextMode);
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    if (nextMode === "quick") params.delete("mode");
+    else params.set("mode", "chat");
+    const query = params.toString();
+    window.history.replaceState(window.history.state, "", `${window.location.pathname}${query ? `?${query}` : ""}${window.location.hash}`);
+  }
+
+  function handleModeTabKeyDown(event: React.KeyboardEvent<HTMLButtonElement>) {
+    if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+    event.preventDefault();
+    const nextMode = mode === "quick" ? "chat" : "quick";
+    setJournalMode(nextMode);
+    window.requestAnimationFrame(() => document.getElementById(`journal-tab-${nextMode}`)?.focus());
+  }
+
+  useEffect(() => {
+    const syncModeFromUrl = () => {
+      setMode(new URLSearchParams(window.location.search).get("mode") === "chat" ? "chat" : "quick");
+    };
+    syncModeFromUrl();
+    window.addEventListener("popstate", syncModeFromUrl);
+    return () => window.removeEventListener("popstate", syncModeFromUrl);
+  }, []);
+
   useEffect(() => {
     return () => {
       recognitionRef.current?.stop();
@@ -477,7 +504,7 @@ export default function JournalPage() {
       { id: "welcome", role: "assistant", content: J.welcome },
       userMsg,
     ]);
-    setMode("chat");
+    setJournalMode("chat");
     setPanel("none");
     setStep("dream");
     setIsTyping(true);
@@ -823,7 +850,7 @@ export default function JournalPage() {
         },
       },
     ]);
-    setMode("chat");
+    setJournalMode("chat");
     setPanel("none");
     setStep("dream");
   }
@@ -947,18 +974,26 @@ export default function JournalPage() {
         <div className="journal-mode-tabs" role="tablist">
           <button
             type="button"
+            id="journal-tab-quick"
             role="tab"
             aria-selected={mode === "quick"}
-            onClick={() => setMode("quick")}
+            aria-controls="journal-panel-quick"
+            tabIndex={mode === "quick" ? 0 : -1}
+            onClick={() => setJournalMode("quick")}
+            onKeyDown={handleModeTabKeyDown}
             className={`mode-tab ${mode === "quick" ? "mode-tab-active" : ""}`}
           >
             <span>{J.quickMode}</span>
           </button>
           <button
             type="button"
+            id="journal-tab-chat"
             role="tab"
             aria-selected={mode === "chat"}
-            onClick={() => { setMode("chat"); setStep("dream"); }}
+            aria-controls="journal-panel-chat"
+            tabIndex={mode === "chat" ? 0 : -1}
+            onClick={() => { setJournalMode("chat"); setStep("dream"); }}
+            onKeyDown={handleModeTabKeyDown}
             className={`mode-tab ${mode === "chat" ? "mode-tab-active" : ""}`}
           >
             <span>{J.chatMode}</span>
@@ -1003,7 +1038,7 @@ export default function JournalPage() {
 
       {/* Chat mode — messages */}
       {mode === "chat" && step === "dream" && (
-        <main className="messages-area" ref={messagesAreaRef}>
+        <main id="journal-panel-chat" role="tabpanel" aria-labelledby="journal-tab-chat" className="messages-area" ref={messagesAreaRef}>
           <div className="messages-inner">
             {messages.map((msg, i) => (
               <div
@@ -1078,13 +1113,16 @@ export default function JournalPage() {
 
       {/* Quick record mode */}
       {mode === "quick" && step === "dream" && (
-        <main className="quick-area">
+        <main id="journal-panel-quick" role="tabpanel" aria-labelledby="journal-tab-quick" className="quick-area">
           <div className={`quick-inner${panel === "image" ? " quick-inner-wide" : ""}`}>
             <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
               <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
                 <span className="field-label">{J.sleep.date}</span>
                 <input
                   type="date"
+                  name="dreamDate"
+                  aria-label={J.sleep.date}
+                  autoComplete="off"
                   value={dreamDate}
                   max={getTodayDate()}
                   onChange={(e) => setDreamDate(e.target.value)}
@@ -1093,6 +1131,9 @@ export default function JournalPage() {
                 />
               </div>
               <input
+                name="dreamTitle"
+                aria-label={lang === "zh" ? "梦境标题" : "Dream title"}
+                autoComplete="off"
                 value={quickTitle}
                 onChange={(e) => setQuickTitle(e.target.value, true)}
                 placeholder={isTitleGenerating
@@ -1107,6 +1148,9 @@ export default function JournalPage() {
             <div className={panel === "image" ? "quick-split" : ""}>
               <div className="quick-record-field">
                 <textarea
+                  name="dreamText"
+                  aria-label={J.quickTitle}
+                  autoComplete="off"
                   value={quickText}
                   onChange={(e) => {
                     setQuickText(e.target.value);
@@ -1151,11 +1195,15 @@ export default function JournalPage() {
                       type="button"
                       className="panel-close"
                       onClick={() => setPanel("none")}
+                      aria-label={lang === "zh" ? "关闭图像提示词" : "Close image prompt"}
                     >
                       ✕
                     </button>
                   </div>
                   <textarea
+                    name="imagePrompt"
+                    aria-label={J.image.title}
+                    autoComplete="off"
                     value={imagePrompt}
                     onChange={(e) => { setImagePrompt(e.target.value); setImagePromptEdited(true); }}
                     placeholder={J.image.placeholder}
@@ -1348,11 +1396,11 @@ export default function JournalPage() {
             <div className="sleep-context-grid">
               <label className="sleep-context-field">
                 <span>{J.sleep.sleepStart}</span>
-                <input type="time" value={sleepStart} onChange={(e) => setSleepStart(e.target.value)} className="dream-input-sm" />
+                <input type="time" name="sleepStart" autoComplete="off" value={sleepStart} onChange={(e) => setSleepStart(e.target.value)} className="dream-input-sm" />
               </label>
               <label className="sleep-context-field">
                 <span>{J.sleep.wakeTime}</span>
-                <input type="time" value={wakeTime} onChange={(e) => setWakeTime(e.target.value)} className="dream-input-sm" />
+                <input type="time" name="wakeTime" autoComplete="off" value={wakeTime} onChange={(e) => setWakeTime(e.target.value)} className="dream-input-sm" />
               </label>
               <fieldset className="sleep-context-field sleep-context-quality">
                 <legend>{J.sleep.quality}</legend>
@@ -1369,11 +1417,11 @@ export default function JournalPage() {
               </label>
               <label className="sleep-context-field">
                 <span>{J.sleep.meal}</span>
-                <input type="text" value={preSleepMeal} onChange={(e) => setPreSleepMeal(e.target.value)} placeholder={J.sleep.mealPlaceholder} className="dream-input-sm" maxLength={500} />
+                <input type="text" name="preSleepMeal" autoComplete="off" value={preSleepMeal} onChange={(e) => setPreSleepMeal(e.target.value)} placeholder={J.sleep.mealPlaceholder} className="dream-input-sm" maxLength={500} />
               </label>
               <label className="sleep-context-field">
                 <span>{J.sleep.activity}</span>
-                <input type="text" value={preSleepActivity} onChange={(e) => setPreSleepActivity(e.target.value)} placeholder={J.sleep.activityPlaceholder} className="dream-input-sm" maxLength={500} />
+                <input type="text" name="preSleepActivity" autoComplete="off" value={preSleepActivity} onChange={(e) => setPreSleepActivity(e.target.value)} placeholder={J.sleep.activityPlaceholder} className="dream-input-sm" maxLength={500} />
               </label>
             </div>
             <div className="sleep-step-footer">
@@ -1426,6 +1474,9 @@ export default function JournalPage() {
               <span className="field-label">{J.sleep.date}</span>
               <input
                 type="date"
+                name="dreamDate"
+                aria-label={J.sleep.date}
+                autoComplete="off"
                 value={dreamDate}
                 max={getTodayDate()}
                 onChange={(e) => setDreamDate(e.target.value)}
@@ -1441,11 +1492,14 @@ export default function JournalPage() {
             <div className="panel">
               <div className="panel-header">
                 <span className="panel-title">{J.image.title}</span>
-                <button className="panel-close" onClick={() => setPanel("none")}>✕</button>
+                <button className="panel-close" onClick={() => setPanel("none")} aria-label={lang === "zh" ? "关闭图像提示词" : "Close image prompt"}>✕</button>
               </div>
               <div className="panel-body">
                 <div style={{ display: "flex", gap: "0.5rem" }}>
                   <textarea
+                    name="imagePrompt"
+                    aria-label={J.image.title}
+                    autoComplete="off"
                     value={imagePrompt}
                     onChange={(e) => { setImagePrompt(e.target.value); setImagePromptEdited(true); }}
                     placeholder={J.image.placeholder}
@@ -1504,6 +1558,9 @@ export default function JournalPage() {
             >
               <textarea
                 ref={inputRef}
+                name="dreamMessage"
+                aria-label={J.chatInputLabel}
+                autoComplete="off"
                 value={input}
                 onChange={handleInputChange}
                 onKeyDown={handleKeyDown}

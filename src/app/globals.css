@@ -3527,7 +3527,7 @@ body:has(.dream-landing)::after {
   border: 1px solid rgba(155, 132, 212, 0.18);
   border-radius: 2rem; color: rgba(185, 170, 228, 0.68);
   padding: 0.35rem 0.85rem; font-size: 0.76rem;
-  text-decoration: none; cursor: pointer; transition: all 0.2s;
+  text-decoration: none; cursor: pointer; transition: background-color 0.2s, border-color 0.2s, color 0.2s;
   display: inline-flex; align-items: center; line-height: 1;
 }
 .nav-btn:hover { background: rgba(95, 72, 148, 0.32); color: rgba(210, 198, 245, 0.9); }
@@ -3658,7 +3658,7 @@ body:has(.dream-landing)::after {
   border: 1px solid rgba(155, 135, 212, 0.22);
   border-radius: 2rem; color: rgba(190, 175, 228, 0.7);
   padding: 0.28rem 0.72rem; font-size: 0.75rem;
-  cursor: pointer; transition: all 0.2s; line-height: 1.5;
+  cursor: pointer; transition: background-color 0.2s, border-color 0.2s, color 0.2s, transform 0.2s; line-height: 1.5;
 }
 .chip:hover {
   background: rgba(95, 72, 158, 0.35);
@@ -3724,7 +3724,7 @@ body:has(.dream-landing)::after {
   background: rgba(7, 7, 18, 0.72); width: 100%;
   border: 1px solid rgba(118, 98, 182, 0.24); border-radius: 0.85rem;
   color: rgba(215, 205, 242, 0.88); padding: 0.6rem 0.85rem;
-  font-size: 0.82rem; line-height: 1.65; resize: none; outline: none;
+  font-size: 0.82rem; line-height: 1.65; resize: none;
   transition: border-color 0.2s; font-family: inherit;
   scrollbar-width: thin;
   scrollbar-color: rgba(158, 132, 226, 0.46) rgba(20, 13, 42, 0.44);
@@ -3749,7 +3749,7 @@ body:has(.dream-landing)::after {
   background: rgba(28, 18, 55, 0.78); width: 100%;
   border: 1px solid rgba(118, 98, 182, 0.24); border-radius: 0.7rem;
   color: rgba(215, 205, 242, 0.88); padding: 0.45rem 0.72rem;
-  font-size: 0.8rem; outline: none; transition: border-color 0.2s;
+  font-size: 0.8rem; transition: border-color 0.2s;
   font-family: inherit; color-scheme: dark;
 }
 .dream-input-sm:focus { border-color: rgba(152, 128, 218, 0.42); }
@@ -3759,7 +3759,7 @@ body:has(.dream-landing)::after {
   background: linear-gradient(135deg, rgba(98, 72, 178, 0.58), rgba(65, 86, 165, 0.52));
   border: 1px solid rgba(162, 138, 222, 0.3); border-radius: 0.85rem;
   color: rgba(218, 208, 250, 0.92); padding: 0 0.95rem;
-  font-size: 0.8rem; font-weight: 500; cursor: pointer; transition: all 0.2s; flex-shrink: 0;
+  font-size: 0.8rem; font-weight: 500; cursor: pointer; transition: background 0.2s, border-color 0.2s, color 0.2s; flex-shrink: 0;
 }
 .gen-btn:hover:not(:disabled) {
   background: linear-gradient(135deg, rgba(118, 88, 198, 0.68), rgba(80, 102, 182, 0.62));
@@ -3783,7 +3783,7 @@ body:has(.dream-landing)::after {
   width: 1.65rem; height: 1.65rem; border-radius: 0.48rem;
   background: rgba(55, 40, 105, 0.38); border: 1px solid rgba(135, 115, 198, 0.24);
   color: rgba(185, 170, 228, 0.58); font-size: 0.76rem; font-weight: 500;
-  cursor: pointer; transition: all 0.15s;
+  cursor: pointer; transition: background 0.15s, border-color 0.15s, color 0.15s;
 }
 .quality-btn:hover { background: rgba(78, 58, 138, 0.52); }
 .quality-btn-active {
@@ -3817,7 +3817,7 @@ body:has(.dream-landing)::after {
   background: transparent;
   border: 0; border-radius: 1.2rem;
   color: rgba(220, 212, 242, 0.9); padding: 0.9rem 0.75rem 0.6rem;
-  font-size: 0.875rem; line-height: 1.72; resize: none; outline: none;
+  font-size: 0.875rem; line-height: 1.72; resize: none;
   overflow-y: auto; transition: border-color 0.22s, background 0.22s;
   font-family: inherit;
   scrollbar-width: thin;
@@ -3847,7 +3847,7 @@ body:has(.dream-landing)::after {
   background: linear-gradient(135deg, rgba(108, 78, 192, 0.72), rgba(72, 95, 178, 0.62));
   border: 1px solid rgba(172, 148, 232, 0.38);
   color: rgba(225, 215, 252, 0.95); font-size: 1.05rem;
-  cursor: pointer; transition: all 0.2s;
+  cursor: pointer; transition: background 0.2s, border-color 0.2s, box-shadow 0.2s, transform 0.2s;
   display: flex; align-items: center; justify-content: center;
   box-shadow: 0 0 16px rgba(108, 72, 198, 0.22);
 }
@@ -3944,7 +3944,7 @@ body:has(.dream-landing)::after {
 .tool-btn {
   background: rgba(52, 38, 98, 0.22); border: 1px solid rgba(135, 115, 202, 0.18);
   border-radius: 2rem; color: rgba(170, 155, 218, 0.56);
-  padding: 0.25rem 0.72rem; font-size: 0.73rem; cursor: pointer; transition: all 0.2s;
+  padding: 0.25rem 0.72rem; font-size: 0.73rem; cursor: pointer; transition: background-color 0.2s, border-color 0.2s, color 0.2s;
 }
 .tool-btn:hover:not(:disabled) {
   background: rgba(72, 54, 128, 0.35); color: rgba(198, 185, 238, 0.82);
@@ -3991,7 +3991,7 @@ body:has(.dream-landing)::after {
 .save-btn {
   background: rgba(14, 10, 30, 0.42); border: 1px solid rgba(245, 204, 142, 0.16);
   border-radius: 2rem; color: rgba(226, 210, 184, 0.64);
-  padding: 0.42rem 0.95rem; font-size: 0.73rem; cursor: pointer; transition: all 0.2s;
+  padding: 0.42rem 0.95rem; font-size: 0.73rem; cursor: pointer; transition: background-color 0.2s, border-color 0.2s, color 0.2s;
 }
 .save-btn:hover:not(:disabled) {
   background: rgba(72, 54, 128, 0.35); color: rgba(248, 232, 198, 0.9);
@@ -4757,7 +4757,6 @@ body:has(.mist-page)::after {
   width: 100%;
   height: 3px;
   border-radius: 2px;
-  outline: none;
   cursor: pointer;
   display: block;
   transition: opacity 0.2s;
@@ -4809,9 +4808,6 @@ body:has(.mist-page)::after {
   background: rgba(55, 42, 105, 0.38);
 }
 
-.dream-range:focus-visible {
-  outline: none;
-}
 
 /* ─── Mode switcher ───────────────────────────────────────── */
 
@@ -4838,7 +4834,7 @@ body:has(.mist-page)::after {
   padding: 0.38rem 1rem;
   color: rgba(195, 180, 238, 0.72);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: background-color 0.2s, color 0.2s;
   border: none;
   background: none;
   white-space: nowrap;
@@ -4966,7 +4962,6 @@ body:has(.mist-page)::after {
   font-size: 0.9rem;
   line-height: 1.82;
   resize: none;
-  outline: none;
   font-family: inherit;
 }
 .quick-textarea::placeholder {
@@ -5095,7 +5090,6 @@ body:has(.mist-page)::after {
   font-size: 0.82rem;
   line-height: 1.75;
   resize: none;
-  outline: none;
   font-family: inherit;
   scrollbar-width: thin;
   scrollbar-color: rgba(148, 118, 216, 0.28) transparent;
@@ -5127,7 +5121,7 @@ body:has(.mist-page)::after {
   font-size: 0.77rem;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.22s;
+  transition: background 0.22s, border-color 0.22s, color 0.22s, box-shadow 0.22s;
   box-shadow: 0 0 14px rgba(108, 78, 195, 0.18);
 }
 .quick-analyze-btn:hover:not(:disabled) {
@@ -5154,7 +5148,7 @@ body:has(.mist-page)::after {
   font-size: 0.77rem;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.22s;
+  transition: background-color 0.22s, border-color 0.22s, color 0.22s, box-shadow 0.22s;
 }
 
 .quick-chat-btn:hover:not(:disabled) {
@@ -7215,7 +7209,23 @@ body {
   box-shadow: 0 0 0 3px rgba(162, 120, 210, 0.14) !important;
 }
 .journal-root .quick-textarea:focus,
-.journal-root textarea:focus { outline: none !important; box-shadow: none !important; }
+.journal-root textarea:focus { box-shadow: none !important; }
+
+.skip-link {
+  position: fixed;
+  z-index: 1000;
+  top: .75rem;
+  left: .75rem;
+  padding: .65rem .9rem;
+  border-radius: .5rem;
+  background: var(--morning-ink);
+  color: #fff;
+  font-weight: 700;
+  text-decoration: none;
+  transform: translateY(-180%);
+  transition: transform .2s ease;
+}
+.skip-link:focus-visible { transform: translateY(0); }
 
 .journal-root .voice-input-btn {
   background: rgba(210, 188, 238, 0.28) !important;

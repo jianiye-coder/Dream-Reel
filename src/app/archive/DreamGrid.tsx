@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { DreamEntry } from "@/lib/dreams";
 import { buildDreamImagePrompt } from "@/lib/imagePrompt";
@@ -247,14 +247,72 @@ function toEditForm(entry: DreamEntry): DreamEditForm {
   };
 }
 
+function getFocusableElements(container: HTMLElement): HTMLElement[] {
+  return Array.from(
+    container.querySelectorAll<HTMLElement>(
+      'a[href], button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])',
+    ),
+  ).filter((element) => !element.hasAttribute("hidden"));
+}
+
+function useModalFocus(isOpen: boolean, onClose: () => void, initialFocusRef?: React.RefObject<HTMLElement | null>) {
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const returnFocusRef = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    returnFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const focusFrame = window.requestAnimationFrame(() => {
+      (initialFocusRef?.current ?? dialogRef.current)?.focus();
+    });
+
+    return () => {
+      window.cancelAnimationFrame(focusFrame);
+      returnFocusRef.current?.focus();
+    };
+  }, [initialFocusRef, isOpen]);
+
+  function onKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      onClose();
+      return;
+    }
+
+    if (event.key !== "Tab" || !dialogRef.current) return;
+    const focusable = getFocusableElements(dialogRef.current);
+    if (focusable.length === 0) {
+      event.preventDefault();
+      dialogRef.current.focus();
+      return;
+    }
+
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  }
+
+  return { dialogRef, onKeyDown };
+}
+
 function TagChipInput({
   value,
   onChange,
   placeholder,
+  name,
+  ariaLabel,
 }: {
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;
+  name: string;
+  ariaLabel: string;
 }) {
   const [inputValue, setInputValue] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
@@ -281,10 +339,7 @@ function TagChipInput({
   }
 
   return (
-    <div
-      className="mist-input flex min-h-[2.75rem] cursor-text flex-wrap items-center gap-1.5 rounded-[1rem] px-3 py-2 transition"
-      onClick={() => inputRef.current?.focus()}
-    >
+    <div className="mist-input flex min-h-[2.75rem] flex-wrap items-center gap-1.5 rounded-[1rem] px-3 py-2 transition focus-within:ring-2 focus-within:ring-[#8f82bc]/50">
       {chips.map((chip, i) => (
         <span
           key={`${chip}-${i}`}
@@ -294,7 +349,7 @@ function TagChipInput({
           <button
             type="button"
             onClick={(event) => { event.stopPropagation(); removeChip(i); }}
-            className="flex h-3.5 w-3.5 items-center justify-center rounded-full text-[#b0a0c8] hover:text-[#6b5f80] focus:outline-none"
+            className="flex h-5 w-5 items-center justify-center rounded-full text-[#b0a0c8] hover:text-[#6b5f80] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#6b5f80]"
             aria-label={`删除 ${chip}`}
           >
             ×
@@ -303,12 +358,15 @@ function TagChipInput({
       ))}
       <input
         ref={inputRef}
+        name={name}
+        aria-label={ariaLabel}
+        autoComplete="off"
         value={inputValue}
         onChange={(event) => setInputValue(event.target.value)}
         onKeyDown={handleKeyDown}
         onBlur={() => { if (inputValue.trim()) addChip(inputValue); }}
         placeholder={chips.length === 0 ? placeholder : ""}
-        className="min-w-[80px] flex-1 bg-transparent text-sm text-[#5f5673] outline-none placeholder:text-[#b0a8c0]"
+        className="min-w-[80px] flex-1 bg-transparent text-sm text-[#5f5673] placeholder:text-[#b0a8c0]"
       />
     </div>
   );
@@ -335,6 +393,8 @@ function DreamEditorModal({
   const [autoSaveStatus, setAutoSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const formDirtyRef = useRef(false);
+  const formRevisionRef = useRef(0);
+  const savedRevisionRef = useRef(0);
   const [deleting, setDeleting] = useState(false);
   const [generatingImage, setGeneratingImage] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -343,9 +403,42 @@ function DreamEditorModal({
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [localVisualBrief, setLocalVisualBrief] = useState<string | null>(null);
+  const titleId = useId();
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+
+  const closeEditor = useCallback(async () => {
+    if (!entry || !form || saving) return;
+    if (formRevisionRef.current === savedRevisionRef.current) {
+      onClose();
+      return;
+    }
+
+    if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+    setSaving(true);
+    setAutoSaveStatus("saving");
+    setError("");
+    try {
+      const updatedEntry = await updateEntry(form);
+      formDirtyRef.current = false;
+      savedRevisionRef.current = formRevisionRef.current;
+      onSaved(updatedEntry);
+      onClose();
+    } catch (saveError) {
+      setAutoSaveStatus("error");
+      setError(saveError instanceof Error ? saveError.message : M.updateFailed);
+    } finally {
+      setSaving(false);
+    }
+  // updateEntry is intentionally defined below and only reads the current form state.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [entry, form, onClose, onSaved, saving]);
+
+  const { dialogRef, onKeyDown } = useModalFocus(Boolean(entry && form), () => void closeEditor(), closeButtonRef);
 
   useEffect(() => {
     formDirtyRef.current = false;
+    formRevisionRef.current = 0;
+    savedRevisionRef.current = 0;
     if (!entry) {
       setForm(null);
       setImagePrompt("");
@@ -364,8 +457,20 @@ function DreamEditorModal({
     setAutoSaveStatus("idle");
   }, [entry]);
 
+  useEffect(() => {
+    if (!entry || formRevisionRef.current === savedRevisionRef.current) return;
+    const warnBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (formRevisionRef.current === savedRevisionRef.current) return;
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", warnBeforeUnload);
+    return () => window.removeEventListener("beforeunload", warnBeforeUnload);
+  }, [entry, form]);
+
   function updateForm(patch: Partial<DreamEditForm>) {
     formDirtyRef.current = true;
+    formRevisionRef.current += 1;
     setForm((prev) => prev ? { ...prev, ...patch } : prev);
   }
 
@@ -373,11 +478,16 @@ function DreamEditorModal({
   const triggerAutoSave = useCallback((currentForm: DreamEditForm) => {
     if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
     setAutoSaveStatus("saving");
+    const savingRevision = formRevisionRef.current;
     autoSaveTimerRef.current = setTimeout(() => {
       void (async () => {
         try {
           const updatedEntry = await updateEntry(currentForm);
           onSaved(updatedEntry);
+          if (savingRevision === formRevisionRef.current) {
+            savedRevisionRef.current = savingRevision;
+            formDirtyRef.current = false;
+          }
           setAutoSaveStatus("saved");
           setTimeout(() => setAutoSaveStatus((s) => s === "saved" ? "idle" : s), 2000);
         } catch {
@@ -673,6 +783,8 @@ function DreamEditorModal({
     const answer = followUpAnswers[index]?.trim();
     if (!answer) return;
     const appended = `\n\n${followUpQuestions[index]}\n${answer}`;
+    formDirtyRef.current = true;
+    formRevisionRef.current += 1;
     setForm((current) => {
       if (!current) return current;
       const next = current.rawText.trim() + appended;
@@ -685,23 +797,31 @@ function DreamEditorModal({
     <div
       className="fixed inset-0 z-50 flex items-end justify-center bg-[rgba(232,225,242,0.58)] backdrop-blur-xl sm:items-center"
       onClick={(event) => {
-        if (event.target === event.currentTarget) onClose();
+        if (event.target === event.currentTarget) void closeEditor();
       }}
     >
       <div
-        className="mist-card relative max-h-[94vh] w-full max-w-4xl overflow-y-auto rounded-t-[2rem] p-5 sm:rounded-[2rem] sm:p-6"
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        tabIndex={-1}
+        onKeyDown={onKeyDown}
+        className="mist-card relative max-h-[94vh] w-full max-w-4xl overflow-y-auto overscroll-y-contain rounded-t-[2rem] p-5 sm:rounded-[2rem] sm:p-6"
         onClick={(event) => event.stopPropagation()}
       >
         {/* Modal header — full width, close button always visible */}
         <div className="mb-6 flex items-start justify-between gap-4">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#998db9]">{M.eyebrow}</p>
-            <h2 className="mt-2 text-2xl font-semibold tracking-[-0.03em] text-[#5f5673]">{M.title}</h2>
+            <h2 id={titleId} className="mt-2 text-2xl font-semibold tracking-[-0.03em] text-[#5f5673]">{M.title}</h2>
             <p className="mist-muted mt-2 text-sm leading-7">{M.desc}</p>
           </div>
           <button
+            ref={closeButtonRef}
             type="button"
-            onClick={onClose}
+            onClick={() => void closeEditor()}
+            disabled={saving}
             className="mist-button-secondary shrink-0 flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-medium text-[#6b6282] transition hover:bg-white/55"
           >
             <span aria-hidden>✕</span>
@@ -715,6 +835,8 @@ function DreamEditorModal({
             <label className="grid gap-2">
               <span className="mist-label text-xs font-medium">{M.dreamTitle}</span>
               <input
+                name="dreamTitle"
+                autoComplete="off"
                 value={form.title}
                 onChange={(event) => updateForm({ title: event.target.value })}
                 className={inputCls}
@@ -724,6 +846,8 @@ function DreamEditorModal({
             <label className="grid gap-2">
               <span className="mist-label text-xs font-medium">{M.dreamContent}</span>
               <textarea
+                name="dreamText"
+                autoComplete="off"
                 value={form.rawText}
                 onChange={(event) => updateForm({ rawText: event.target.value, cleanText: event.target.value })}
                 rows={7}
@@ -757,6 +881,9 @@ function DreamEditorModal({
                     <div key={i} className="rounded-[1.2rem] bg-white/30 p-3">
                       <p className="text-sm leading-6 text-[#655c79]">{q}</p>
                       <textarea
+                        name={`followUpAnswer-${i}`}
+                        aria-label={`${q} ${M.answerPlaceholder}`}
+                        autoComplete="off"
                         value={followUpAnswers[i] ?? ""}
                         onChange={(e) => setFollowUpAnswers((prev) => ({ ...prev, [i]: e.target.value }))}
                         placeholder={M.answerPlaceholder}
@@ -783,6 +910,8 @@ function DreamEditorModal({
                 <span className="mist-label text-xs font-medium">{M.date}</span>
                 <input
                   type="date"
+                  name="dreamDate"
+                  autoComplete="off"
                   value={form.dreamDate}
                   onChange={(event) => updateForm({ dreamDate: event.target.value })}
                   className={inputCls}
@@ -791,6 +920,8 @@ function DreamEditorModal({
               <label className="grid gap-1.5">
                 <span className="mist-label text-xs font-medium">{M.mood}</span>
                 <input
+                  name="mood"
+                  autoComplete="off"
                   value={form.mood}
                   onChange={(event) => updateForm({ mood: event.target.value })}
                   className={inputCls}
@@ -800,6 +931,7 @@ function DreamEditorModal({
                 <span className="mist-label text-xs font-medium">{M.stress}</span>
                 <input
                   type="number"
+                  name="stressScore"
                   min={1}
                   max={5}
                   value={form.stressScore}
@@ -810,6 +942,8 @@ function DreamEditorModal({
               <label className="grid gap-1.5">
                 <span className="mist-label text-xs font-medium">{M.tags}</span>
                 <input
+                  name="tags"
+                  autoComplete="off"
                   value={form.tags}
                   onChange={(event) => updateForm({ tags: event.target.value })}
                   className={inputCls}
@@ -821,6 +955,8 @@ function DreamEditorModal({
                   value={form.people}
                   onChange={(value) => updateForm({ people: value })}
                   placeholder={M.tagPlaceholder}
+                  name="people"
+                  ariaLabel={M.people}
                 />
               </div>
               <div className="grid gap-1.5">
@@ -829,11 +965,15 @@ function DreamEditorModal({
                   value={form.locations}
                   onChange={(value) => updateForm({ locations: value })}
                   placeholder={M.tagPlaceholder}
+                  name="locations"
+                  ariaLabel={M.locations}
                 />
               </div>
               <label className="grid gap-1.5 sm:col-span-2">
                 <span className="mist-label text-xs font-medium">{M.symbols}</span>
                 <input
+                  name="symbols"
+                  autoComplete="off"
                   value={form.symbols}
                   onChange={(event) => updateForm({ symbols: event.target.value })}
                   className={inputCls}
@@ -846,11 +986,11 @@ function DreamEditorModal({
               <div className="mt-3 grid gap-3 sm:grid-cols-2">
                 <label className="grid gap-1.5">
                   <span className="mist-label text-xs font-medium">{M.sleepStart}</span>
-                  <input type="time" value={form.sleepStart} onChange={(event) => updateForm({ sleepStart: event.target.value })} className={inputCls} />
+                  <input type="time" name="sleepStart" autoComplete="off" value={form.sleepStart} onChange={(event) => updateForm({ sleepStart: event.target.value })} className={inputCls} />
                 </label>
                 <label className="grid gap-1.5">
                   <span className="mist-label text-xs font-medium">{M.wakeTime}</span>
-                  <input type="time" value={form.wakeTime} onChange={(event) => updateForm({ wakeTime: event.target.value })} className={inputCls} />
+                  <input type="time" name="wakeTime" autoComplete="off" value={form.wakeTime} onChange={(event) => updateForm({ wakeTime: event.target.value })} className={inputCls} />
                 </label>
                 <div className="grid gap-1.5">
                   <span className="mist-label text-xs font-medium">{M.sleepQuality}</span>
@@ -871,15 +1011,17 @@ function DreamEditorModal({
                 </div>
                 <label className="grid gap-1.5">
                   <span className="mist-label text-xs font-medium">{M.meal}</span>
-                  <input value={form.preSleepMeal} onChange={(event) => updateForm({ preSleepMeal: event.target.value })} className={inputCls} />
+                  <input name="preSleepMeal" autoComplete="off" value={form.preSleepMeal} onChange={(event) => updateForm({ preSleepMeal: event.target.value })} className={inputCls} />
                 </label>
                 <label className="grid gap-1.5 sm:col-span-2">
                   <span className="mist-label text-xs font-medium">{M.activity}</span>
-                  <input value={form.preSleepActivity} onChange={(event) => updateForm({ preSleepActivity: event.target.value })} className={inputCls} />
+                  <input name="preSleepActivity" autoComplete="off" value={form.preSleepActivity} onChange={(event) => updateForm({ preSleepActivity: event.target.value })} className={inputCls} />
                 </label>
                 <label className="grid gap-1.5 sm:col-span-2">
                   <span className="mist-label text-xs font-medium">{M.insight}</span>
                   <textarea
+                    name="sleepInsight"
+                    autoComplete="off"
                     rows={4}
                     value={form.sleepInsight}
                     onChange={(event) => updateForm({ sleepInsight: event.target.value })}
@@ -926,6 +1068,8 @@ function DreamEditorModal({
               <label className="mt-4 grid gap-1.5">
                 <span className="mist-label text-xs font-medium">{M.promptLabel}</span>
                 <textarea
+                  name="imagePrompt"
+                  autoComplete="off"
                   rows={7}
                   value={imagePrompt}
                   onChange={(event) => {
@@ -980,14 +1124,14 @@ function DreamEditorModal({
                 >
                   {deleting ? M.deleting : M.deleteBtn}
                 </button>
-                <span className="text-xs text-[#9d90b8]">
+                <span className="text-xs text-[#9d90b8]" aria-live="polite">
                   {autoSaveStatus === "saving" ? (lang === "zh" ? "保存中…" : "Saving…") :
                    autoSaveStatus === "saved" ? (lang === "zh" ? "已保存 ✓" : "Saved ✓") :
                    autoSaveStatus === "error" ? (lang === "zh" ? "保存失败" : "Save failed") : ""}
                 </span>
               </div>
-              {message ? <p className="mt-4 text-sm font-medium text-[#7f9c8b]">{message}</p> : null}
-              {error ? <p className="mt-4 text-sm font-medium text-[#bb7f94]">{error}</p> : null}
+              {message ? <p className="mt-4 text-sm font-medium text-[#7f9c8b]" aria-live="polite">{message}</p> : null}
+              {error ? <p className="mt-4 text-sm font-medium text-[#bb7f94]" role="alert">{error}</p> : null}
             </div>
           </div>
         </div>
@@ -1018,6 +1162,10 @@ export default function DreamGrid({
   const [loadMoreError, setLoadMoreError] = useState("");
   const [selected, setSelected] = useState<DreamEntry | null>(null);
   const [selectedDay, setSelectedDay] = useState<{ label: string; entries: DreamEntry[] } | null>(null);
+  const dayDialogTitleId = useId();
+  const dayCloseButtonRef = useRef<HTMLButtonElement>(null);
+  const closeDayDialog = useCallback(() => setSelectedDay(null), []);
+  const { dialogRef: dayDialogRef, onKeyDown: onDayDialogKeyDown } = useModalFocus(Boolean(selectedDay), closeDayDialog, dayCloseButtonRef);
   const [activeKeyword, setActiveKeyword] = useState<KeywordArchiveItem | null>(null);
   const [editingTag, setEditingTag] = useState<EditingTag | null>(null);
   const [addingTag, setAddingTag] = useState<AddingTag | null>(null);
@@ -1938,11 +2086,17 @@ export default function DreamGrid({
         <div
           className="fixed inset-0 z-50 flex items-end justify-center bg-[rgba(232,225,242,0.58)] backdrop-blur-xl sm:items-center"
           onClick={(event) => {
-            if (event.target === event.currentTarget) setSelectedDay(null);
+            if (event.target === event.currentTarget) closeDayDialog();
           }}
         >
           <div
-            className="mist-card relative max-h-[85vh] w-full max-w-xl overflow-y-auto rounded-t-[2rem] p-5 sm:rounded-[2rem] sm:p-6"
+            ref={dayDialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby={dayDialogTitleId}
+            tabIndex={-1}
+            onKeyDown={onDayDialogKeyDown}
+            className="mist-card relative max-h-[85vh] w-full max-w-xl overflow-y-auto overscroll-y-contain rounded-t-[2rem] p-5 sm:rounded-[2rem] sm:p-6"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="mb-5 flex items-center justify-between">
@@ -1950,13 +2104,15 @@ export default function DreamGrid({
                 <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#998db9]">
                   {selectedDay.entries.length}{lang === "zh" ? " 条梦境" : " dreams"}
                 </p>
-                <h2 className="mt-1 text-xl font-semibold tracking-[-0.02em] text-[#5f5673]">
+                <h2 id={dayDialogTitleId} className="mt-1 text-xl font-semibold tracking-[-0.02em] text-[#5f5673]">
                   {selectedDay.label}
                 </h2>
               </div>
               <button
+                ref={dayCloseButtonRef}
                 type="button"
-                onClick={() => setSelectedDay(null)}
+                onClick={closeDayDialog}
+                aria-label={lang === "zh" ? "关闭日期详情" : "Close date details"}
                 className="mist-button-secondary flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-medium text-[#6b6282] transition hover:bg-white/55"
               >
                 ✕
