@@ -7365,7 +7365,14 @@ body {
 /* Chat uses the same calm, readable morning surface as the journal. */
 .journal-root .messages-area,
 .journal-root .chips-bar {
-  background: transparent;
+  background: #fffdf7;
+}
+.journal-root .msg-bubble {
+  filter: none;
+  box-shadow: none;
+}
+.journal-root .msg-bubble::after {
+  display: none;
 }
 .journal-root .msg-avatar {
   border-color: #d8c9bf;
@@ -7376,21 +7383,50 @@ body {
   box-shadow: 0 3px 10px rgba(120, 53, 15, .1);
 }
 .journal-root .bubble-ai {
-  border-color: #d9c7da;
-  background: #f4ecf5;
-  color: #352b42;
+  border-color: #d8c9bf;
+  background: #fff;
+  color: #1f2937;
   backdrop-filter: none;
 }
 .journal-root .bubble-user {
-  border-color: #d7b99f;
-  background: #ead9c9;
-  color: #34243a;
+  border-color: #cfae99;
+  background: #f4e8dd;
+  color: #2d2630;
   backdrop-filter: none;
 }
 .journal-root .msg-bubble .msg-text {
   color: inherit !important;
-  font-size: .95rem;
+  font-size: 1rem;
+  font-weight: 500;
   line-height: 1.75;
+}
+.journal-root .agent-decision-copy {
+  color: #3f4a5f;
+}
+.journal-root .chip {
+  min-height: 2.25rem;
+  border-color: #cfc0b6;
+  background: #fff;
+  color: #344054;
+  box-shadow: none;
+}
+.journal-root .chip:hover {
+  border-color: #a98a77;
+  background: #fff8f2;
+  color: #2d2630;
+}
+.journal-root .chip-primary,
+.journal-root .chip-primary:hover {
+  border-color: #92400e;
+  background: #92400e;
+  color: #fff;
+}
+.journal-root .chip-static,
+.journal-root .chip-static:hover {
+  border-color: #dfc8ba;
+  background: #f6eee8;
+  color: #5c4a42;
+  opacity: 1;
 }
 .journal-root .input-wrapper {
   border-top: 0;
