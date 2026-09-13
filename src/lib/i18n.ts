@@ -342,8 +342,7 @@ const zh = {
     dbErrorHint:
       "数据库连接出现问题，稍后刷新页面重试。如果持续出现，可能是服务器连接数暂时满载，通常几分钟内会自动恢复。",
     export: {
-      title: "导出全部梦境",
-      markdown: "Markdown 阅读版",
+      markdown: "导出全部梦境（Markdown）",
       json: "JSON 完整备份",
       exporting: "正在整理档案…",
       failed: "导出失败，请稍后再试",
@@ -756,8 +755,7 @@ const en: typeof zh = {
     dbErrorHint:
       "There was a problem connecting to the database. Try refreshing in a moment. If it keeps happening, the server may be temporarily at capacity and should recover within a few minutes.",
     export: {
-      title: "Export all dreams",
-      markdown: "Readable Markdown",
+      markdown: "Export all dreams (Markdown)",
       json: "Complete JSON backup",
       exporting: "Preparing archive…",
       failed: "Export failed. Please try again.",

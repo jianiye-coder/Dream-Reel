@@ -147,9 +147,6 @@ export default function ArchiveShell({
             <p className="mist-muted mt-3 max-w-2xl text-sm leading-7">{A.desc}</p>
           </div>
           <div className="archive-export-panel shrink-0">
-            <p className="archive-export-label pb-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-[#9185ae]">
-              {exporting ? A.export.exporting : A.export.title}
-            </p>
             <div className="flex flex-wrap">
               <button
                 type="button"
@@ -157,7 +154,7 @@ export default function ArchiveShell({
                 disabled={exporting !== null}
                 className="archive-export-action text-xs font-semibold transition disabled:opacity-50"
               >
-                ↓ {A.export.markdown}
+                {exporting ? A.export.exporting : `↓ ${A.export.markdown}`}
               </button>
             </div>
             {exportError ? <p className="px-2 pt-2 text-xs text-[#b8758f]">{exportError}</p> : null}
