@@ -7218,7 +7218,7 @@ body {
 .journal-root .quick-record-field:has(.quick-textarea:focus-visible),
 .journal-root .input-form:has(.main-input:focus-visible) {
   outline: 2px solid rgba(146, 64, 14, 0.55) !important;
-  outline-offset: -3px;
+  outline-offset: 2px;
 }
 
 /* Keep keyboard focus discoverable without wrapping the entire writing surface
