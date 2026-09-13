@@ -7204,29 +7204,16 @@ body {
 
 .journal-root .quick-record-field:has(.quick-textarea:focus) {
   border-color: #d8c9bf !important;
-  background: rgba(255,255,255,.97) !important;
-  box-shadow: 0 12px 42px rgba(120,53,15,.08) !important;
+  background: rgba(255,255,255,.9) !important;
+  box-shadow: 0 6px 18px rgba(120,53,15,.05) !important;
 }
 .journal-root .quick-textarea:focus,
 .journal-root textarea:focus {
   outline: none !important;
   box-shadow: none !important;
 }
-
-/* Keep keyboard focus discoverable while letting the full input surface carry
-   the cue instead of only the inner text control. */
-.journal-root .quick-record-field:has(.quick-textarea:focus-visible),
-.journal-root .input-form:has(.main-input:focus-visible) {
-  outline: 2px solid rgba(146, 64, 14, 0.55) !important;
-  outline-offset: 2px;
-}
-
-/* Keep keyboard focus discoverable without wrapping the entire writing surface
-   in the heavy purple ring that appeared on pointer focus. */
-.journal-root .quick-textarea:focus-visible,
-.journal-root .main-input:focus-visible {
-  outline: 2px solid rgba(146, 64, 14, 0.55) !important;
-  outline-offset: -3px;
+.journal-root :is(input, textarea, select):focus-visible {
+  outline: none !important;
   box-shadow: none !important;
 }
 
