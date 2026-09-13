@@ -7737,6 +7737,73 @@ body {
   transform: none;
 }
 
+/* Journal interactions should acknowledge touch immediately without adding
+   decorative motion. Keep the small press response local to actionable UI. */
+.journal-root :is(
+  .nav-btn,
+  .mode-tab,
+  .quick-analyze-btn,
+  .quick-chat-btn,
+  .chip:not(.chip-static),
+  .send-btn:not(:disabled),
+  .voice-input-btn,
+  .gen-btn:not(:disabled),
+  .quality-btn,
+  .agent-feedback button,
+  .agent-retry-btn
+) {
+  transition: transform .12s ease-out, background-color .18s ease, border-color .18s ease, color .18s ease, box-shadow .18s ease;
+}
+.journal-root :is(
+  .nav-btn,
+  .mode-tab,
+  .quick-analyze-btn,
+  .quick-chat-btn,
+  .chip:not(.chip-static),
+  .send-btn:not(:disabled),
+  .voice-input-btn,
+  .gen-btn:not(:disabled),
+  .quality-btn,
+  .agent-feedback button,
+  .agent-retry-btn
+):active {
+  transform: scale(.97);
+}
+.journal-root {
+  font-optical-sizing: auto;
+}
+.journal-root .journal-nav {
+  padding-top: max(.75rem, env(safe-area-inset-top));
+}
+.journal-root .input-wrapper {
+  padding-bottom: max(1.25rem, env(safe-area-inset-bottom));
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .journal-root .journal-nav,
+  .journal-root .messages-area,
+  .journal-root .chips-bar,
+  .journal-root .input-form {
+    background: #fffdf7 !important;
+    backdrop-filter: none !important;
+  }
+}
+
+@media (prefers-contrast: more) {
+  .journal-root .msg-bubble,
+  .journal-root .input-form,
+  .journal-root .chip,
+  .journal-root .journal-mode-tabs,
+  .journal-root .nav-btn {
+    border-color: #8b6d5a !important;
+  }
+  .journal-root .msg-bubble .msg-text,
+  .journal-root .main-input,
+  .journal-root .agent-decision-copy {
+    color: #172033 !important;
+  }
+}
+
 @media (max-width: 1024px) {
   .morning-nav { grid-template-columns: 1fr auto; }
   .morning-nav-links { display: none; }
