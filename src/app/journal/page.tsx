@@ -57,6 +57,8 @@ interface ChatMessage {
 
 type AgentHistoryMessage = Pick<ChatMessage, "role" | "content" | "questions" | "memory">;
 
+const CHAT_RENDER_WINDOW = 50;
+
 interface AgentReply {
   message?: string;
   questions?: string[];
@@ -95,6 +97,7 @@ export default function JournalPage() {
   const [mode, setMode] = useState<"chat" | "quick">("quick");
   const [chatUnlocked, setChatUnlocked] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [visibleChatMessageCount, setVisibleChatMessageCount] = useState(CHAT_RENDER_WINDOW);
   const [welcomed, setWelcomed] = useState(false);
   const [isTyping, setIsTyping] = useState(false);
   const [input, setInput] = useState("");
@@ -326,6 +329,11 @@ export default function JournalPage() {
     return ai[ai.length - 1] ?? null;
   }, [messages]);
   const agentReadyToAnalyze = latestAgentDecision?.nextAction === "ready_to_analyze";
+  const visibleMessages = useMemo(
+    () => messages.slice(-visibleChatMessageCount),
+    [messages, visibleChatMessageCount],
+  );
+  const hiddenChatMessageCount = Math.max(messages.length - visibleMessages.length, 0);
   const agentDecisionCopy = lang === "zh"
     ? "Agent 判断：这场梦的信息已经足够整理。"
     : "Agent decision: this dream is ready to organize.";
@@ -500,6 +508,7 @@ export default function JournalPage() {
     if (!text || isTyping) return;
 
     const userMsg: ChatMessage = { id: `u-dream-${Date.now()}`, role: "user", content: text };
+    setVisibleChatMessageCount(CHAT_RENDER_WINDOW);
     setMessages([
       { id: "welcome", role: "assistant", content: J.welcome },
       userMsg,
@@ -829,6 +838,7 @@ export default function JournalPage() {
     }
     contextLines.push(realityQuestion);
 
+    setVisibleChatMessageCount(CHAT_RENDER_WINDOW);
     setMessages([
       { id: "welcome", role: "assistant", content: J.welcome },
       { id: `u-dream-${Date.now()}`, role: "user", content: text },
@@ -1040,7 +1050,20 @@ export default function JournalPage() {
       {mode === "chat" && step === "dream" && (
         <main id="journal-panel-chat" role="tabpanel" aria-labelledby="journal-tab-chat" className="messages-area" ref={messagesAreaRef}>
           <div className="messages-inner">
-            {messages.map((msg, i) => (
+            {hiddenChatMessageCount > 0 ? (
+              <div className="mb-4 text-center">
+                <button
+                  type="button"
+                  className="mist-button-secondary rounded-full px-4 py-2 text-sm font-medium"
+                  onClick={() => setVisibleChatMessageCount((count) => Math.min(count + CHAT_RENDER_WINDOW, messages.length))}
+                >
+                  {lang === "zh"
+                    ? `显示更早的 ${Math.min(CHAT_RENDER_WINDOW, hiddenChatMessageCount)} 条消息`
+                    : `Show ${Math.min(CHAT_RENDER_WINDOW, hiddenChatMessageCount)} earlier messages`}
+                </button>
+              </div>
+            ) : null}
+            {visibleMessages.map((msg, i) => (
               <div
                 key={msg.id}
                 className={`msg-row ${msg.role === "user" ? "msg-row-user" : "msg-row-ai"}`}

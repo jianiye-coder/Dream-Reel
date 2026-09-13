@@ -7203,12 +7203,21 @@ body {
 .mist-muted { color: var(--morning-muted) !important; }
 
 .journal-root .quick-record-field:has(.quick-textarea:focus) {
-  border-color: rgba(162, 120, 210, 0.55) !important;
+  border-color: #d8c9bf !important;
   background: rgba(255,255,255,.97) !important;
-  box-shadow: 0 0 0 3px rgba(162, 120, 210, 0.14) !important;
+  box-shadow: 0 12px 42px rgba(120,53,15,.08) !important;
 }
 .journal-root .quick-textarea:focus,
 .journal-root textarea:focus { box-shadow: none !important; }
+
+/* Keep keyboard focus discoverable without wrapping the entire writing surface
+   in the heavy purple ring that appeared on pointer focus. */
+.journal-root .quick-textarea:focus-visible,
+.journal-root .main-input:focus-visible {
+  outline: 2px solid rgba(146, 64, 14, 0.55) !important;
+  outline-offset: -3px;
+  box-shadow: none !important;
+}
 
 .skip-link {
   position: fixed;
@@ -7254,9 +7263,7 @@ body {
 
 /* Keep the archive export control legible against the light morning surface. */
 .archive-page .archive-export-panel {
-  border-color: #d5bca9 !important;
-  background: #fffaf2 !important;
-  box-shadow: 0 8px 22px rgba(120, 53, 15, .07) !important;
+  color: #70452f;
 }
 .archive-page .archive-export-label {
   color: #70452f !important;
@@ -7264,19 +7271,48 @@ body {
 }
 .archive-page .archive-export-action {
   min-height: 40px;
-  border-color: #ae7555 !important;
-  background: #fff !important;
+  border: 0 !important;
+  background: transparent !important;
   color: #8a4526 !important;
   font-weight: 700;
+  text-decoration: underline;
+  text-decoration-color: rgba(138, 69, 38, .38);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 4px;
 }
 .archive-page .archive-export-action:hover:not(:disabled) {
-  border-color: #7a351c !important;
-  background: #fff3e7 !important;
+  background: transparent !important;
   color: #6b2c17 !important;
+  text-decoration-color: currentColor;
 }
 .archive-page .archive-export-action:focus-visible {
-  outline: 3px solid rgba(138, 69, 38, .28);
+  outline: 2px solid rgba(138, 69, 38, .45) !important;
   outline-offset: 2px;
+}
+
+/* The tag index contains dense, practical metadata. It needs to read as data,
+   not fade into the warm archive background. */
+.archive-page .archive-keyword-index {
+  color: var(--morning-muted);
+}
+.archive-page .archive-keyword-index :is(p, span, label, button) {
+  color: var(--morning-muted) !important;
+}
+.archive-page .archive-keyword-index h2,
+.archive-page .archive-keyword-index h3 {
+  color: var(--morning-ink) !important;
+}
+.archive-page .archive-keyword-index > div:first-child > div > p:first-child,
+.archive-page .archive-keyword-index [class*="tracking-"] {
+  color: #8a5426 !important;
+  font-weight: 700;
+}
+.archive-page .archive-keyword-index [class*="bg-"] :is(span, button),
+.archive-page .archive-keyword-index span[class*="bg-"] {
+  color: #352b42 !important;
+}
+.archive-page .archive-keyword-index button:hover:not(:disabled) {
+  color: #3b2b1d !important;
 }
 
 /* Chat uses the same calm, readable morning surface as the journal. */
@@ -7318,6 +7354,10 @@ body {
 .journal-root .input-form {
   border-color: #d8c9bf;
   background: rgba(255, 255, 255, .94);
+  box-shadow: 0 10px 28px rgba(120, 53, 15, .1);
+}
+.journal-root .input-form:focus-within {
+  border-color: #d8c9bf;
   box-shadow: 0 10px 28px rgba(120, 53, 15, .1);
 }
 .journal-root .main-input {

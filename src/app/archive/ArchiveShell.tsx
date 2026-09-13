@@ -1,14 +1,22 @@
 "use client";
 
 import Image from "next/image";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { LangToggle } from "@/components/LangToggle";
-import DreamGrid from "./DreamGrid";
 import type { DreamEntry } from "@/lib/dreams";
 import { getApiErrorMessage } from "@/lib/apiErrors";
+
+const DreamGrid = dynamic(() => import("./DreamGrid"), {
+  loading: () => (
+    <div className="mist-card mt-6 min-h-80 animate-pulse rounded-[1.8rem] p-6" aria-busy="true" aria-live="polite">
+      <p className="text-sm font-medium text-[#6b6282]">正在加载梦境档案…</p>
+    </div>
+  ),
+});
 
 type BillingStatus = { plan: "free" | "plus" };
 type ArchiveTab = "calendar" | "tags" | "recent";
@@ -138,16 +146,16 @@ export default function ArchiveShell({
             </h1>
             <p className="mist-muted mt-3 max-w-2xl text-sm leading-7">{A.desc}</p>
           </div>
-          <div className="archive-export-panel shrink-0 rounded-[1.25rem] border border-white/35 bg-white/28 p-2 backdrop-blur-md">
-            <p className="archive-export-label px-2 pb-1.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-[#9185ae]">
+          <div className="archive-export-panel shrink-0">
+            <p className="archive-export-label pb-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-[#9185ae]">
               {exporting ? A.export.exporting : A.export.title}
             </p>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap">
               <button
                 type="button"
                 onClick={() => void exportAllDreams("markdown")}
                 disabled={exporting !== null}
-                className="archive-export-action mist-button-secondary rounded-full px-3 py-2 text-xs font-medium transition hover:bg-white/55 disabled:opacity-50"
+                className="archive-export-action text-xs font-semibold transition disabled:opacity-50"
               >
                 ↓ {A.export.markdown}
               </button>
