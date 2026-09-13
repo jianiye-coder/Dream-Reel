@@ -7221,6 +7221,15 @@ body {
   outline-offset: -3px;
 }
 
+/* Keep keyboard focus discoverable without wrapping the entire writing surface
+   in the heavy purple ring that appeared on pointer focus. */
+.journal-root .quick-textarea:focus-visible,
+.journal-root .main-input:focus-visible {
+  outline: 2px solid rgba(146, 64, 14, 0.55) !important;
+  outline-offset: -3px;
+  box-shadow: none !important;
+}
+
 .skip-link {
   position: fixed;
   z-index: 1000;
