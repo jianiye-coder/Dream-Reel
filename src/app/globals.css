@@ -7365,7 +7365,7 @@ body {
 /* Chat uses the same calm, readable morning surface as the journal. */
 .journal-root .messages-area,
 .journal-root .chips-bar {
-  background: #fffdf7;
+  background: transparent;
 }
 .journal-root .msg-bubble {
   filter: none;
@@ -7566,6 +7566,27 @@ body {
 .archive-page .archive-month-controls .mist-button-secondary {
   min-height: 40px;
   border-radius: .5rem;
+}
+.archive-page .archive-month-filter select {
+  min-height: 40px;
+  max-width: min(15rem, 52vw);
+  border: 1px solid rgba(120, 83, 48, .22);
+  border-radius: .5rem;
+  background: #fff;
+  color: var(--morning-ink);
+  cursor: pointer;
+  font: inherit;
+  font-size: .9375rem;
+  font-weight: 600;
+  padding: 0 .75rem;
+}
+.archive-page .archive-month-filter select:hover {
+  border-color: rgba(138, 84, 38, .45);
+  background: #fffcf8;
+}
+.archive-page .archive-month-filter select:focus-visible {
+  outline: 2px solid #b7794a;
+  outline-offset: 2px;
 }
 .archive-page .archive-calendar-grid {
   box-shadow: none;
@@ -7842,7 +7863,6 @@ body {
   .archive-page .archive-tabs { gap: 1.25rem; }
   .archive-page .archive-tab { font-size: .8125rem; }
   .archive-page .archive-stat-list { gap: .75rem; }
-  .archive-page .archive-month-controls > div:last-child { display: none; }
   .archive-page .archive-calendar-grid > div:first-child > div { padding: .65rem .1rem; font-size: .5625rem; }
   .archive-page .archive-calendar-count { border: 0; background: transparent !important; font-size: .625rem; }
   .archive-page .archive-recent-list { grid-template-columns: 1fr; gap: .75rem; }

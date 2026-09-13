@@ -1550,9 +1550,20 @@ export default function DreamGrid({
               >
                 {G.prev}
               </button>
-              <div className="rounded-full border border-[rgba(169,157,202,0.2)] bg-[rgba(225,217,243,0.65)] px-4 py-2 text-sm font-medium text-[#756a95]">
-                {formatMonthLabel(visibleMonth, lang)}
-              </div>
+              <label className="archive-month-filter">
+                <span className="sr-only">{G.monthFilter}</span>
+                <select
+                  value={visibleMonth}
+                  onChange={(event) => setActiveMonth(event.target.value)}
+                  aria-label={G.monthFilter}
+                >
+                  {monthKeys.map((monthKey) => (
+                    <option key={monthKey} value={monthKey}>
+                      {formatMonthLabel(monthKey, lang)}
+                    </option>
+                  ))}
+                </select>
+              </label>
               <button
                 type="button"
                 onClick={() => activeIndex < monthKeys.length - 1 && setActiveMonth(monthKeys[activeIndex + 1])}
@@ -1561,23 +1572,6 @@ export default function DreamGrid({
               >
                 {G.next}
               </button>
-            </div>
-
-            <div className="flex flex-wrap gap-2">
-              {monthKeys.slice(0, 8).map((monthKey) => (
-                <button
-                  key={monthKey}
-                  type="button"
-                  onClick={() => setActiveMonth(monthKey)}
-                  className={`rounded-full px-3 py-1.5 text-xs transition ${
-                    monthKey === visibleMonth
-                      ? "bg-[rgba(205,196,229,0.9)] text-[#5f5673]"
-                      : "border border-[rgba(176,168,197,0.22)] bg-white/35 text-[#847a9a] hover:bg-white/55 hover:text-[#665d7a]"
-                  }`}
-                >
-                  {monthKey.replace("-", ".")}
-                </button>
-              ))}
             </div>
           </div>
 
