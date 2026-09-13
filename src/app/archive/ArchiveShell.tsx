@@ -117,21 +117,21 @@ export default function ArchiveShell({
       <div className="mist-orb left-[-8rem] top-[-5rem] h-[20rem] w-[20rem] bg-[#d7c9ea]/80" aria-hidden />
       <div className="mist-orb right-[-4rem] top-[6rem] h-[18rem] w-[18rem] bg-[#bfd2e6]/72" aria-hidden />
 
-      <nav className="relative z-10 flex items-center justify-between px-6 py-5 sm:px-10">
-        <Link href="/" className="landing-logo">
+      <nav className="site-header relative z-10 flex items-center justify-between px-6 py-5 sm:px-10">
+        <Link href="/" className="landing-logo site-brand">
           <Image src="/dream-reel-logo.png" alt="" aria-hidden width={36} height={36} className="logo-img" />
           <span>Dream Reel</span>
         </Link>
-        <div className="flex items-center gap-2">
-          <LangToggle className="mist-button-secondary rounded-full px-3 py-1.5 text-xs font-medium transition hover:bg-white/48" />
-          <Link href="/pricing" className="archive-nav-link mist-button-secondary rounded-full px-3 py-1.5 text-xs font-medium transition hover:bg-white/48">
+        <div className="site-nav-actions flex items-center gap-2">
+          <LangToggle className="site-language mist-button-secondary rounded-full px-3 py-1.5 text-xs font-medium transition hover:bg-white/48" />
+          <Link href="/pricing" className="site-nav-link archive-nav-link mist-button-secondary rounded-full px-3 py-1.5 text-xs font-medium transition hover:bg-white/48">
             {lang === "zh" ? "订阅" : "Pricing"}
           </Link>
-          <Link href="/journal" className="archive-record-link mist-button-secondary rounded-full px-3 py-1.5 text-xs font-medium transition hover:bg-white/48">
+          <Link href="/journal" className="site-primary-action archive-record-link mist-button-secondary rounded-full px-3 py-1.5 text-xs font-medium transition hover:bg-white/48">
             {A.recordBtn}
           </Link>
           {user && (
-            <Link href="/account" className="archive-nav-link mist-button-secondary rounded-full px-3 py-1.5 text-xs font-medium transition hover:bg-white/48">
+            <Link href="/account" className="site-nav-link archive-nav-link mist-button-secondary rounded-full px-3 py-1.5 text-xs font-medium transition hover:bg-white/48">
               {lang === "zh" ? "账号" : "Account"}
             </Link>
           )}

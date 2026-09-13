@@ -997,8 +997,8 @@ export default function JournalPage() {
       <div className="dream-orb orb-3" aria-hidden />
 
       {/* Nav */}
-      <nav className="journal-nav">
-        <Link href="/" className="landing-logo">
+      <nav className="journal-nav site-header">
+        <Link href="/" className="landing-logo site-brand">
           <Image src="/dream-reel-logo.png" alt="" aria-hidden width={36} height={36} className="logo-img" />
           <span>Dream Reel</span>
         </Link>
@@ -1032,7 +1032,7 @@ export default function JournalPage() {
           </button>
         </div>
 
-        <div className="nav-actions">
+        <div className="nav-actions site-nav-actions">
           {billingStatus && !billingStatus.isUnlimited && (
             billingStatus.plan === "plus" ? (
               <span className="billing-pill" title={`${B.analysisLeft.replace("{count}", String(billingStatus.remaining.analysis))} · ${B.imagesLeft.replace("{count}", String(billingStatus.remaining.imageGenerations))}`}>
@@ -1050,9 +1050,9 @@ export default function JournalPage() {
               </button>
             )
           )}
-          <LangToggle className="nav-btn" />
-          <Link href="/archive" className="nav-btn">{T.nav.archive}</Link>
-          <Link href="/account" className="nav-btn">{lang === "zh" ? "账号" : "Account"}</Link>
+          <LangToggle className="nav-btn site-language" />
+          <Link href="/archive" className="nav-btn site-nav-link">{T.nav.archive}</Link>
+          <Link href="/account" className="nav-btn site-nav-link">{lang === "zh" ? "账号" : "Account"}</Link>
           {hasContent && (
             <Link href="/archive" className="nav-btn journal-exit-btn" title={lang === "zh" ? "内容已保存，退出记录" : "Content saved — exit"}>
               ✕

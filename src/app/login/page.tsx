@@ -71,12 +71,12 @@ function LoginForm() {
 
   return (
     <main className="auth-page">
-      <header className="auth-header">
-        <Link href="/" className="morning-brand">
+      <header className="auth-header site-header">
+        <Link href="/" className="morning-brand site-brand">
           <Image src="/dream-reel-logo.png" width={40} height={40} alt="" aria-hidden />
           <span>Dream Reel</span>
         </Link>
-        <LangToggle className="morning-language" />
+        <LangToggle className="morning-language site-language" />
       </header>
 
       <section className="auth-shell" aria-labelledby="auth-title">

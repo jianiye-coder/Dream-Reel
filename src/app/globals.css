@@ -7787,6 +7787,107 @@ body {
   padding-bottom: max(1.25rem, env(safe-area-inset-bottom));
 }
 
+/* Shared product navigation: one quiet, consistent system across app surfaces. */
+.site-header {
+  min-height: 6.5rem;
+  padding-right: clamp(2rem, 4vw, 4rem) !important;
+  padding-left: clamp(2rem, 4vw, 4rem) !important;
+  border-bottom: 1px solid rgba(120, 83, 48, .18) !important;
+  background: rgba(255, 253, 245, .9) !important;
+  backdrop-filter: blur(14px);
+}
+.morning-nav.site-header {
+  width: auto;
+  margin: 0;
+}
+.auth-header.site-header {
+  width: auto;
+  margin: 0;
+}
+.site-brand {
+  gap: .75rem !important;
+  color: var(--morning-ink) !important;
+  font-family: var(--font-geist-sans), "PingFang SC", "Hiragino Sans GB", sans-serif !important;
+  font-size: .9rem !important;
+  font-weight: 750 !important;
+  letter-spacing: .16em !important;
+  line-height: 1;
+  text-transform: uppercase;
+  text-shadow: none !important;
+}
+.site-brand img,
+.site-brand .logo-img {
+  width: 2.25rem !important;
+  height: 2.25rem !important;
+  border-radius: 0 !important;
+  filter: none !important;
+}
+.site-nav-links,
+.site-nav-actions {
+  gap: clamp(1rem, 1.8vw, 1.65rem) !important;
+}
+.site-nav-links a,
+.site-nav-link,
+.journal-root .site-nav-link {
+  min-height: 44px;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  color: #3f4a5f !important;
+  font-size: .875rem !important;
+  font-weight: 650 !important;
+  line-height: 1;
+  text-decoration: none;
+}
+.site-nav-links a,
+.site-nav-link {
+  display: inline-flex;
+  align-items: center;
+}
+.site-nav-links a:hover,
+.site-nav-link:hover,
+.journal-root .site-nav-link:hover {
+  color: var(--morning-primary) !important;
+}
+.site-language {
+  box-sizing: border-box;
+  min-width: 44px !important;
+  min-height: 44px !important;
+  padding: 0 .75rem !important;
+  border: 1px solid #d9c8bc !important;
+  border-radius: 999px !important;
+  background: transparent !important;
+  color: #71452d !important;
+  font-size: .8125rem !important;
+  font-weight: 700 !important;
+  letter-spacing: .02em;
+}
+.site-language:hover {
+  border-color: #b98c70 !important;
+  background: rgba(255, 255, 255, .64) !important;
+  color: var(--morning-primary) !important;
+}
+.site-primary-action {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 1rem !important;
+  border: 1px solid var(--morning-primary) !important;
+  border-radius: .65rem !important;
+  background: var(--morning-primary) !important;
+  color: #fff !important;
+  font-size: .875rem !important;
+  font-weight: 700 !important;
+  line-height: 1;
+  text-decoration: none;
+}
+.site-primary-action:hover {
+  background: var(--morning-primary-hover) !important;
+  color: #fff !important;
+}
+
 @media (prefers-reduced-transparency: reduce) {
   .journal-root .journal-nav,
   .journal-root .messages-area,
@@ -7820,6 +7921,18 @@ body {
 }
 
 @media (max-width: 760px) {
+  .site-header {
+    min-height: 4.75rem;
+    padding-right: 1rem !important;
+    padding-left: 1rem !important;
+  }
+  .site-brand { font-size: .8125rem !important; }
+  .site-brand img,
+  .site-brand .logo-img {
+    width: 2rem !important;
+    height: 2rem !important;
+  }
+  .site-nav-actions { gap: .75rem !important; }
   .morning-nav,
   .morning-hero,
   .morning-process,
