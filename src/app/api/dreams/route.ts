@@ -4,8 +4,11 @@ import {
   createDreamEntry,
   deleteDreamEntry,
   dreamEntryInputSchema,
+  dreamEntryTagsPatchSchema,
   dreamEntryUpdateSchema,
+  getDreamEntry,
   listDreamEntriesPage,
+  patchDreamEntryTags,
   updateDreamEntry,
 } from "@/lib/dreams";
 import { auth } from "@/auth";
@@ -29,6 +32,22 @@ export async function GET(request: NextRequest) {
     const userId = parseUserId((session as { user?: { id?: string } } | null)?.user?.id);
     if (!userId) {
       return NextResponse.json({ error: "请先登录" }, { status: 401 });
+    }
+    const idParam = request.nextUrl.searchParams.get("id");
+    if (idParam) {
+      const id = Number(idParam);
+      if (!Number.isInteger(id) || id <= 0) {
+        return NextResponse.json({ error: API_ERROR_CODES.invalidRequest }, { status: 400 });
+      }
+      const entry = await getDreamEntry(userId, id);
+      if (!entry) {
+        return NextResponse.json({ error: API_ERROR_CODES.notFound }, { status: 404 });
+      }
+      return NextResponse.json({ entry }, {
+        headers: {
+          "Server-Timing": `archive-detail;dur=${(performance.now() - startedAt).toFixed(1)}`,
+        },
+      });
     }
     const limit = Number(request.nextUrl.searchParams.get("limit") ?? "50");
     const cursor = request.nextUrl.searchParams.get("cursor");
@@ -86,6 +105,28 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ entry }, { status: 201 });
   } catch (error) {
     console.error("POST /api/dreams failed", error);
+    return NextResponse.json({ error: API_ERROR_CODES.internalError }, { status: 500 });
+  }
+}
+
+export async function PATCH(request: NextRequest) {
+  try {
+    const session = await auth() as { user?: { id?: string } } | null;
+    const userId = parseUserId(session?.user?.id);
+    if (!userId) {
+      return NextResponse.json({ error: API_ERROR_CODES.unauthorized }, { status: 401 });
+    }
+    const json = await request.json() as unknown;
+    const parsed = dreamEntryTagsPatchSchema.safeParse(json);
+
+    if (!parsed.success) {
+      return NextResponse.json({ error: API_ERROR_CODES.invalidRequest, details: parsed.error.flatten() }, { status: 400 });
+    }
+
+    const entry = await patchDreamEntryTags(parsed.data, userId);
+    return NextResponse.json({ entry });
+  } catch (error) {
+    console.error("PATCH /api/dreams failed", error);
     return NextResponse.json({ error: API_ERROR_CODES.internalError }, { status: 500 });
   }
 }

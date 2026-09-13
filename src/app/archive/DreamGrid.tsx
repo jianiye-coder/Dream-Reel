@@ -1171,6 +1171,7 @@ export default function DreamGrid({
   const [loadingMore, setLoadingMore] = useState(false);
   const [loadMoreError, setLoadMoreError] = useState("");
   const [selected, setSelected] = useState<DreamEntry | null>(null);
+  const [openingEntryId, setOpeningEntryId] = useState<number | null>(null);
   const [selectedDay, setSelectedDay] = useState<{ label: string; entries: DreamEntry[] } | null>(null);
   const dayDialogTitleId = useId();
   const dayCloseButtonRef = useRef<HTMLButtonElement>(null);
@@ -1180,6 +1181,7 @@ export default function DreamGrid({
   const [editingTag, setEditingTag] = useState<EditingTag | null>(null);
   const [addingTag, setAddingTag] = useState<AddingTag | null>(null);
   const [mergingTag, setMergingTag] = useState<MergingTag | null>(null);
+  const [tagActionMenu, setTagActionMenu] = useState<string | null>(null);
   const [tagBusy, setTagBusy] = useState(false);
   const [tagError, setTagError] = useState("");
 
@@ -1331,31 +1333,30 @@ export default function DreamGrid({
 
   async function patchEntryTag(entry: DreamEntry, patch: { people?: string[]; locations?: string[] }) {
     const res = await fetch("/api/dreams", {
-      method: "PUT",
+      method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         id: entry.id,
-        inputMode: entry.inputMode,
-        rawText: entry.rawText,
-        cleanText: entry.cleanText || entry.rawText,
-        mood: entry.mood,
-        stressScore: entry.stressScore,
-        tags: entry.tags,
-        people: patch.people ?? entry.people,
-        locations: patch.locations ?? entry.locations,
-        symbols: entry.symbols,
-        imageUrl: entry.imageUrl,
-        assetStatus: entry.assetStatus,
-        sleepStart: entry.sleepStart,
-        wakeTime: entry.wakeTime,
-        sleepQuality: entry.sleepQuality,
-        preSleepMeal: entry.preSleepMeal,
-        preSleepActivity: entry.preSleepActivity,
-        sleepInsight: entry.sleepInsight,
-        title: entry.title,
+        ...patch,
       }),
     });
     if (!res.ok) throw new Error("Update failed");
+  }
+
+  async function openEntry(entry: DreamEntry) {
+    setSelected(entry);
+    setOpeningEntryId(entry.id);
+    try {
+      const response = await fetch(`/api/dreams?id=${entry.id}`, { cache: "no-store" });
+      const payload = (await response.json()) as { entry?: DreamEntry; error?: string };
+      if (!response.ok || !payload.entry) throw new Error(payload.error || "Could not load dream");
+      setSelected((current) => (current?.id === entry.id ? payload.entry! : current));
+      setLocalEntries((current) => current.map((item) => (item.id === payload.entry!.id ? payload.entry! : item)));
+    } catch (error) {
+      setLoadMoreError(error instanceof Error ? error.message : "Could not load dream");
+    } finally {
+      setOpeningEntryId((current) => (current === entry.id ? null : current));
+    }
   }
 
   async function handleRenameTag(kind: KeywordArchiveKind, oldLabel: string, newLabel: string) {
@@ -1515,7 +1516,7 @@ export default function DreamGrid({
     <>
       <div className="space-y-6">
         {activeTab === "calendar" && (
-        <div>
+        <div className="archive-calendar-view">
           <div className="flex flex-col gap-5 border-b border-[rgba(176,168,197,0.22)] pb-5 sm:flex-row sm:items-end sm:justify-between">
             <div>
               <p className="text-[10px] font-semibold uppercase tracking-[0.3em] text-[#9a8dbe]">{G.eyebrow}</p>
@@ -1523,23 +1524,23 @@ export default function DreamGrid({
               <p className="mist-muted mt-2 max-w-2xl text-sm leading-7">{G.desc}</p>
             </div>
 
-            <div className="grid grid-cols-3 gap-3 text-xs sm:min-w-[280px]">
-              <div className="rounded-2xl border border-[rgba(176,168,197,0.22)] bg-white/42 px-4 py-3">
+            <div className="archive-stat-list grid grid-cols-3 gap-4 text-xs sm:min-w-[280px]">
+              <div className="archive-stat px-1 py-1">
                 <p className="mist-soft">{G.total}</p>
                 <p className="mt-1 text-2xl font-semibold text-[#5f5673]">{localEntries.length}</p>
               </div>
-              <div className="rounded-2xl border border-[rgba(176,168,197,0.22)] bg-white/42 px-4 py-3">
+              <div className="archive-stat px-1 py-1">
                 <p className="mist-soft">{G.dreamDays}</p>
                 <p className="mt-1 text-2xl font-semibold text-[#5f5673]">{totalDays}</p>
               </div>
-              <div className="rounded-2xl border border-[rgba(176,168,197,0.22)] bg-white/42 px-4 py-3">
+              <div className="archive-stat px-1 py-1">
                 <p className="mist-soft">{G.months}</p>
                 <p className="mt-1 text-2xl font-semibold text-[#5f5673]">{monthKeys.length}</p>
               </div>
             </div>
           </div>
 
-          <div className="mt-5 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="archive-month-controls mt-5 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-2">
               <button
                 type="button"
@@ -1580,7 +1581,7 @@ export default function DreamGrid({
             </div>
           </div>
 
-          <div className="mt-6 overflow-hidden rounded-[1.75rem] border border-[rgba(176,168,197,0.22)] bg-[rgba(255,255,255,0.42)]">
+          <div className="archive-calendar-grid mt-6 overflow-hidden rounded-[0.75rem] border border-[rgba(176,168,197,0.22)] bg-white">
             <div className="grid grid-cols-7 border-b border-[rgba(176,168,197,0.2)]">
               {G.weekLabels.map((label) => (
                 <div key={label} className="px-3 py-3 text-center text-[11px] font-semibold tracking-[0.18em] text-[#9b90ba]">
@@ -1589,13 +1590,13 @@ export default function DreamGrid({
               ))}
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-7">
+            <div className="grid grid-cols-7">
               {calendarCells.map((cell) => {
                 if (!cell.date) {
                   return (
                     <div
                       key={cell.key}
-                      className="hidden min-h-[110px] border-b border-r border-[rgba(176,168,197,0.14)] bg-white/12 sm:block"
+                      className="min-h-14 border-b border-r border-[rgba(176,168,197,0.14)] bg-[#fcfaf8] sm:min-h-[110px]"
                     />
                   );
                 }
@@ -1608,15 +1609,16 @@ export default function DreamGrid({
                   <button
                     key={cell.key}
                     type="button"
+                    disabled={lead ? openingEntryId === lead.id : false}
                     onClick={() => {
                       if (!lead) return;
                       if (cell.entries.length > 1) {
                         setSelectedDay({ label: dayLabel, entries: cell.entries });
                       } else {
-                        setSelected(lead);
+                        void openEntry(lead);
                       }
                     }}
-                    className={`group min-h-[110px] border-b border-[rgba(176,168,197,0.14)] p-2 text-left transition sm:border-r sm:border-r-[rgba(176,168,197,0.14)] ${
+                    className={`archive-calendar-cell group min-h-14 border-b border-r border-[rgba(176,168,197,0.14)] p-1.5 text-left transition sm:min-h-[110px] sm:p-2 ${
                       cell.entries.length > 0
                         ? "bg-[linear-gradient(180deg,rgba(255,255,255,0.34),rgba(245,241,251,0.55))] hover:bg-white/65"
                         : "bg-transparent hover:bg-white/30"
@@ -1624,21 +1626,21 @@ export default function DreamGrid({
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div
-                        className={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-semibold ${
+                        className={`flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-semibold sm:h-7 sm:w-7 sm:text-xs ${
                           cell.isToday ? "bg-[rgba(205,196,229,0.9)] text-[#5f5673]" : "bg-white/52 text-[#7f7694]"
                         }`}
                       >
                         {cell.date.getDate()}
                       </div>
                       {cell.entries.length > 0 ? (
-                        <span className="rounded-full border border-[rgba(176,168,197,0.18)] bg-white/45 px-2 py-1 text-[10px] text-[#847b98]">
+                        <span className="archive-calendar-count rounded-full border border-[rgba(176,168,197,0.18)] bg-white/45 px-1.5 py-0.5 text-[10px] text-[#847b98] sm:px-2 sm:py-1">
                           {cell.entries.length}{G.countSuffix}
                         </span>
                       ) : null}
                     </div>
 
                     {lead ? (
-                      <div className={`mt-2 rounded-xl bg-gradient-to-br p-2 ${moodAccent(lead.mood)}`}>
+                      <div className={`archive-calendar-entry mt-2 hidden rounded-md p-2 sm:block ${moodAccent(lead.mood)}`}>
                         <p className="text-[10px] font-medium">{lead.mood || G.noMood}</p>
                         <p className="mt-0.5 line-clamp-1 text-xs font-semibold opacity-90">
                           {dreamDisplayTitle(lead)}
@@ -1684,7 +1686,7 @@ export default function DreamGrid({
               { title: keywordLabels.people, items: keywordArchives.people, empty: keywordLabels.emptyPeople, kind: "people" as KeywordArchiveKind },
               { title: keywordLabels.locations, items: keywordArchives.locations, empty: keywordLabels.emptyLocations, kind: "locations" as KeywordArchiveKind },
             ]).map((archive) => (
-              <section key={archive.title} className="rounded-[1.6rem] border border-[rgba(176,168,197,0.2)] bg-white/32 p-4">
+              <section key={archive.title} className="archive-keyword-section rounded-lg border border-[rgba(176,168,197,0.2)] bg-white p-4">
                 {/* Section header */}
                 <div className="flex items-center justify-between gap-3">
                   <h3 className="text-sm font-semibold text-[#665d7d]">{archive.title}</h3>
@@ -1775,7 +1777,7 @@ export default function DreamGrid({
                       return (
                         <div
                           key={`${item.kind}-${item.label}`}
-                          className={`group rounded-[1.25rem] border p-3 transition ${
+                          className={`archive-keyword-card group rounded-lg border p-3 transition ${
                             isActive
                               ? "border-[rgba(143,130,188,0.42)] bg-white/62"
                               : "border-[rgba(176,168,197,0.16)] bg-white/34 hover:bg-white/54"
@@ -1821,37 +1823,33 @@ export default function DreamGrid({
                                   {keywordLabels.appears} {item.count} {keywordLabels.dreams}
                                 </p>
                               </button>
-                              <div className="flex shrink-0 items-center gap-1">
+                              <div className="relative flex shrink-0 items-center gap-1">
                                 <span className="rounded-full bg-[rgba(205,196,229,0.68)] px-2.5 py-1 text-xs font-semibold text-[#655b7e]">
                                   {item.count}
                                 </span>
                                 <button
                                   type="button"
-                                  title={lang === "zh" ? "重命名" : "Rename"}
-                                  onClick={() => { setEditingTag({ kind: item.kind, label: item.label, draft: item.label }); setMergingTag(null); }}
+                                  aria-label={lang === "zh" ? `管理标签 ${item.label}` : `Manage ${item.label}`}
+                                  aria-expanded={tagActionMenu === `${item.kind}-${item.label}`}
+                                  onClick={() => setTagActionMenu((current) => current === `${item.kind}-${item.label}` ? null : `${item.kind}-${item.label}`)}
                                   disabled={tagBusy}
-                                  className="flex h-7 w-7 items-center justify-center rounded-full text-[#9a8dbe] opacity-0 transition hover:bg-white/60 hover:text-[#5f5673] group-hover:opacity-100 disabled:cursor-not-allowed"
+                                  className="archive-tag-menu-trigger flex h-9 w-9 items-center justify-center rounded-md text-lg text-[#6b627f] transition disabled:cursor-not-allowed"
                                 >
-                                  ✎
+                                  <span aria-hidden>⋯</span>
                                 </button>
-                                <button
-                                  type="button"
-                                  title={lang === "zh" ? "合并到…" : "Merge into…"}
-                                  onClick={() => { setMergingTag(mergingTag && normalizeKeyword(mergingTag.label) === normalizeKeyword(item.label) ? null : { kind: item.kind, label: item.label }); setEditingTag(null); }}
-                                  disabled={tagBusy || archive.items.length < 2}
-                                  className={`flex h-7 w-7 items-center justify-center rounded-full text-[10px] opacity-0 transition group-hover:opacity-100 disabled:cursor-not-allowed ${mergingTag && normalizeKeyword(mergingTag.label) === normalizeKeyword(item.label) ? "bg-[rgba(143,130,188,0.28)] text-[#5f5673]" : "text-[#9a8dbe] hover:bg-white/60 hover:text-[#5f5673]"}`}
-                                >
-                                  ⇒
-                                </button>
-                                <button
-                                  type="button"
-                                  title={lang === "zh" ? "删除" : "Delete"}
-                                  onClick={() => void handleDeleteTag(item)}
-                                  disabled={tagBusy}
-                                  className="flex h-7 w-7 items-center justify-center rounded-full text-[#c58aa0] opacity-0 transition hover:bg-[#f5e6ed]/70 hover:text-[#9a4060] group-hover:opacity-100 disabled:cursor-not-allowed"
-                                >
-                                  ×
-                                </button>
+                                {tagActionMenu === `${item.kind}-${item.label}` ? (
+                                  <div className="archive-tag-action-menu absolute right-0 top-10 z-10 w-28 rounded-md border bg-white p-1 shadow-sm">
+                                    <button type="button" onClick={() => { setEditingTag({ kind: item.kind, label: item.label, draft: item.label }); setMergingTag(null); setTagActionMenu(null); }} disabled={tagBusy}>
+                                      {lang === "zh" ? "重命名" : "Rename"}
+                                    </button>
+                                    <button type="button" onClick={() => { setMergingTag(mergingTag && normalizeKeyword(mergingTag.label) === normalizeKeyword(item.label) ? null : { kind: item.kind, label: item.label }); setEditingTag(null); setTagActionMenu(null); }} disabled={tagBusy || archive.items.length < 2}>
+                                      {lang === "zh" ? "合并到…" : "Merge into…"}
+                                    </button>
+                                    <button type="button" onClick={() => { setTagActionMenu(null); void handleDeleteTag(item); }} disabled={tagBusy} className="archive-tag-action-danger">
+                                      {lang === "zh" ? "删除" : "Delete"}
+                                    </button>
+                                  </div>
+                                ) : null}
                               </div>
                             </div>
                           )}
@@ -2018,7 +2016,8 @@ export default function DreamGrid({
                   <button
                     key={entry.id}
                     type="button"
-                    onClick={() => setSelected(entry)}
+                    onClick={() => void openEntry(entry)}
+                    disabled={openingEntryId === entry.id}
                     className="rounded-2xl border border-[rgba(176,168,197,0.18)] bg-white/42 p-4 text-left transition hover:bg-white/58"
                   >
                     <div className="mist-soft flex flex-wrap items-center gap-2 text-xs">
@@ -2045,7 +2044,7 @@ export default function DreamGrid({
         )}
 
         {activeTab === "recent" && (
-        <div>
+        <div className="archive-recent-view">
           <div className="flex items-center justify-between gap-3">
             <div>
               <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-[#9a8dbe]">{G.recentEyebrow}</p>
@@ -2053,26 +2052,25 @@ export default function DreamGrid({
             </div>
           </div>
 
-          <div className="film-drawer">
-            {localEntries.slice(0, 12).map((entry, i) => (
+          <div className="archive-recent-list">
+            {localEntries.map((entry) => (
               <button
                 key={entry.id}
                 type="button"
-                onClick={() => setSelected(entry)}
-                className="film-slide"
-                style={{ "--film-i": i } as React.CSSProperties}
+                onClick={() => void openEntry(entry)}
+                disabled={openingEntryId === entry.id}
+                className="archive-recent-entry"
               >
-                <div className="film-slide-inner">
-                  <div className={`film-slide-image bg-gradient-to-br ${moodGradient(entry.mood)}`}>
+                <div className="archive-recent-entry-inner">
+                  <div className={`archive-recent-image ${moodGradient(entry.mood)}`}>
                     {entry.thumbnailUrl || entry.imageUrl ? (
                       <Image src={entry.thumbnailUrl || entry.imageUrl!} alt="dream" width={320} height={420} unoptimized className="h-full w-full object-cover" />
                     ) : null}
-                    <div className="film-slide-grain" aria-hidden />
                   </div>
-                  <div className="film-slide-caption">
-                    <span className="film-slide-mood">{entry.mood || (lang === "zh" ? "无情绪" : "No mood")}</span>
-                    <p className="film-slide-title">{dreamDisplayTitle(entry)}</p>
-                    <p className="film-slide-date">{formatDateTime(entry.capturedAt, lang)}</p>
+                  <div className="archive-recent-copy">
+                    <span className="archive-recent-mood">{entry.mood || (lang === "zh" ? "无情绪" : "No mood")}</span>
+                    <p className="archive-recent-title">{dreamDisplayTitle(entry)}</p>
+                    <p className="archive-recent-date">{formatDateTime(entry.capturedAt, lang)}</p>
                   </div>
                 </div>
               </button>
@@ -2140,7 +2138,8 @@ export default function DreamGrid({
                 <button
                   key={entry.id}
                   type="button"
-                  onClick={() => { setSelectedDay(null); setSelected(entry); }}
+                  onClick={() => { setSelectedDay(null); void openEntry(entry); }}
+                  disabled={openingEntryId === entry.id}
                   className={`w-full rounded-[1.5rem] bg-gradient-to-br p-4 text-left transition hover:brightness-95 ${moodGradient(entry.mood)}`}
                 >
                   <div className="flex items-center justify-between gap-2">

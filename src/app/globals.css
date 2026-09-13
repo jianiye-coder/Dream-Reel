@@ -7208,15 +7208,17 @@ body {
   box-shadow: 0 12px 42px rgba(120,53,15,.08) !important;
 }
 .journal-root .quick-textarea:focus,
-.journal-root textarea:focus { box-shadow: none !important; }
+.journal-root textarea:focus {
+  outline: none !important;
+  box-shadow: none !important;
+}
 
-/* Keep keyboard focus discoverable without wrapping the entire writing surface
-   in the heavy purple ring that appeared on pointer focus. */
-.journal-root .quick-textarea:focus-visible,
-.journal-root .main-input:focus-visible {
+/* Keep keyboard focus discoverable while letting the full input surface carry
+   the cue instead of only the inner text control. */
+.journal-root .quick-record-field:has(.quick-textarea:focus-visible),
+.journal-root .input-form:has(.main-input:focus-visible) {
   outline: 2px solid rgba(146, 64, 14, 0.55) !important;
   outline-offset: -3px;
-  box-shadow: none !important;
 }
 
 .skip-link {
@@ -7315,6 +7317,42 @@ body {
   color: #3b2b1d !important;
 }
 
+/* Calendar and recent archive panes sit on the light morning surface, so their
+   operational text should read as data rather than pale decoration. */
+.archive-page .archive-calendar-view,
+.archive-page .archive-recent-view {
+  --archive-pane-ink: #241f2f;
+  --archive-pane-body: #3f4a5f;
+  --archive-pane-warm: #8a5426;
+  --archive-pane-tag: #352b42;
+}
+.archive-page .archive-calendar-view :is(h2, h3, h4),
+.archive-page .archive-recent-view :is(h2, h3, h4),
+.archive-page .archive-recent-view .film-slide-title {
+  color: var(--archive-pane-ink) !important;
+}
+.archive-page .archive-calendar-view :is(.mist-muted, .mist-soft, p, span),
+.archive-page .archive-recent-view :is(.mist-muted, .mist-soft, p, span) {
+  color: var(--archive-pane-body) !important;
+}
+.archive-page .archive-calendar-view [class*="tracking-"],
+.archive-page .archive-calendar-view .film-slide-mood,
+.archive-page .archive-recent-view [class*="tracking-"],
+.archive-page .archive-recent-view .film-slide-mood {
+  color: var(--archive-pane-warm) !important;
+}
+.archive-page .archive-calendar-view [class*="rounded-full"],
+.archive-page .archive-calendar-view [class*="rounded-xl"] :is(p, span),
+.archive-page .archive-recent-view [class*="rounded-full"] {
+  color: var(--archive-pane-tag) !important;
+}
+.archive-page .archive-recent-view .film-slide-caption {
+  background: rgba(255, 255, 255, 0.92) !important;
+}
+.archive-page .archive-recent-view .film-slide-date {
+  color: var(--archive-pane-body) !important;
+}
+
 /* Chat uses the same calm, readable morning surface as the journal. */
 .journal-root .messages-area,
 .journal-root .chips-bar {
@@ -7359,6 +7397,9 @@ body {
 .journal-root .input-form:focus-within {
   border-color: #d8c9bf;
   box-shadow: 0 10px 28px rgba(120, 53, 15, .1);
+}
+.journal-root .input-form:has(.main-input:focus-visible) {
+  box-shadow: 0 10px 28px rgba(120, 53, 15, .1) !important;
 }
 .journal-root .main-input {
   background: transparent !important;
@@ -7406,6 +7447,251 @@ body {
   color: #7c4d65 !important;
 }
 
+/* Archive refinement: one paper surface, restrained borders, and information-led
+   hierarchy. The older film treatment remains available to other pages, but the
+   archive is intentionally calm and practical. */
+.archive-page {
+  background: var(--morning-bg) !important;
+}
+.archive-page .mist-orb {
+  display: none !important;
+}
+.archive-page main {
+  max-width: 72rem;
+}
+.archive-page .archive-page-heading {
+  margin-top: 1.25rem;
+  padding-bottom: 1.5rem;
+  border-bottom: 1px solid rgba(120, 83, 48, .18);
+}
+.archive-page .archive-page-heading h1 {
+  color: var(--morning-ink) !important;
+  font-size: clamp(1.8rem, 4vw, 2.25rem);
+  letter-spacing: 0;
+}
+.archive-page .archive-page-heading > div:first-child > p {
+  color: #3f4a5f !important;
+}
+.archive-page .archive-nav-link {
+  border: 0 !important;
+  background: transparent !important;
+  color: #3f4a5f !important;
+}
+.archive-page .archive-record-link {
+  border-radius: .5rem !important;
+  border-color: var(--morning-primary) !important;
+  background: var(--morning-primary) !important;
+  color: #fff !important;
+}
+.archive-page .archive-record-link:hover {
+  background: var(--morning-primary-hover) !important;
+}
+.archive-page .archive-tabs {
+  gap: 1.5rem;
+  border-bottom-color: rgba(120, 83, 48, .18);
+}
+.archive-page .archive-tab {
+  min-height: 44px;
+  padding: .65rem 0;
+  color: #5c6472;
+  font-size: .875rem;
+}
+.archive-page .archive-tab:hover {
+  color: var(--morning-ink);
+}
+.archive-page .archive-tab-active {
+  color: var(--morning-ink);
+}
+.archive-page .archive-tab-active::after {
+  right: 0;
+  left: 0;
+  height: 2px;
+  background: #8a5426;
+}
+.archive-page .archive-stat p:first-child {
+  color: #8a5426 !important;
+  font-size: .6875rem;
+  font-weight: 700;
+}
+.archive-page .archive-stat p:last-child {
+  color: var(--morning-ink) !important;
+  font-size: 1.5rem;
+  font-variant-numeric: tabular-nums;
+}
+.archive-page .archive-month-controls .mist-button-secondary {
+  min-height: 40px;
+  border-radius: .5rem;
+}
+.archive-page .archive-calendar-grid {
+  box-shadow: none;
+}
+.archive-page .archive-calendar-grid > div:first-child {
+  background: #f8f3f0;
+}
+.archive-page .archive-calendar-grid > div:first-child > div {
+  color: #8a5426 !important;
+  letter-spacing: .08em;
+}
+.archive-page .archive-calendar-cell {
+  background: #fff !important;
+}
+.archive-page .archive-calendar-cell:hover:not(:disabled) {
+  background: #fcf7f1 !important;
+}
+.archive-page .archive-calendar-entry {
+  background: #f6ece3 !important;
+}
+.archive-page .archive-calendar-entry :is(p, span) {
+  color: #352b42 !important;
+}
+.archive-page .archive-calendar-count {
+  color: #3f4a5f !important;
+}
+.archive-page .archive-keyword-section,
+.archive-page .archive-keyword-card {
+  box-shadow: none;
+}
+.archive-page .archive-keyword-section {
+  border-color: rgba(120, 83, 48, .2) !important;
+}
+.archive-page .archive-keyword-card {
+  border-color: rgba(120, 83, 48, .14) !important;
+  background: #fff !important;
+}
+.archive-page .archive-keyword-card:hover {
+  background: #fcf7f1 !important;
+}
+.archive-page .archive-tag-menu-trigger:hover,
+.archive-page .archive-tag-menu-trigger:focus-visible {
+  background: #f4e9de !important;
+  color: #352b42 !important;
+}
+.archive-page .archive-tag-action-menu {
+  border-color: rgba(120, 83, 48, .18);
+  box-shadow: 0 8px 20px rgba(72, 47, 27, .12);
+}
+.archive-page .archive-tag-action-menu button {
+  display: block;
+  width: 100%;
+  min-height: 36px;
+  padding: 0 .5rem;
+  border-radius: .25rem;
+  color: #3f4a5f;
+  font-size: .75rem;
+  text-align: left;
+}
+.archive-page .archive-tag-action-menu button:hover:not(:disabled),
+.archive-page .archive-tag-action-menu button:focus-visible {
+  background: #f8f3f0;
+}
+.archive-page .archive-tag-action-menu .archive-tag-action-danger {
+  color: #9a4058;
+}
+.archive-page .archive-recent-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+  gap: 1rem;
+  margin-top: 1.5rem;
+}
+.archive-page .archive-recent-entry {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid rgba(120, 83, 48, .18);
+  border-radius: .625rem;
+  background: #fff;
+  color: inherit;
+  text-align: left;
+  transition: border-color .18s ease, background-color .18s ease, box-shadow .18s ease;
+}
+.archive-page .archive-recent-entry:hover:not(:disabled) {
+  border-color: rgba(138, 84, 38, .45);
+  background: #fffcf8;
+  box-shadow: 0 8px 20px rgba(72, 47, 27, .08);
+}
+.archive-page .archive-recent-entry-inner {
+  display: grid;
+  grid-template-columns: 5.5rem minmax(0, 1fr);
+  min-height: 6.5rem;
+}
+.archive-page .archive-recent-image {
+  position: relative;
+  overflow: hidden;
+  background-color: #f4e9de;
+}
+.archive-page .archive-recent-copy {
+  min-width: 0;
+  padding: .875rem;
+}
+.archive-page .archive-recent-view .archive-recent-mood {
+  display: block;
+  color: #8a5426 !important;
+  font-size: .6875rem;
+  font-weight: 700;
+  letter-spacing: .06em;
+}
+.archive-page .archive-recent-view .archive-recent-title {
+  overflow: hidden;
+  margin-top: .25rem;
+  color: var(--morning-ink) !important;
+  font-size: .9375rem;
+  font-weight: 650;
+  line-height: 1.45;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.archive-page .archive-recent-view .archive-recent-date {
+  margin-top: .35rem;
+  color: #3f4a5f !important;
+  font-size: .75rem;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The journal input is a quiet writing surface. It should not compete with the
+   words or grow visually heavier when the user focuses it. */
+.journal-root .quick-inner {
+  max-width: 760px;
+  gap: 1rem;
+}
+.journal-root .quick-record-field {
+  min-height: 18rem;
+  border-radius: .75rem;
+  box-shadow: 0 6px 18px rgba(120, 53, 15, .05) !important;
+}
+.journal-root .quick-textarea {
+  min-height: 18rem;
+  padding: 1.25rem 4rem 1.25rem 1.25rem;
+  font-size: 1rem;
+  line-height: 1.75;
+}
+.journal-root .quick-textarea::placeholder {
+  color: #64748b !important;
+  font-family: inherit;
+  font-style: normal;
+}
+.journal-root .input-form {
+  border-radius: .75rem;
+  box-shadow: 0 6px 18px rgba(120, 53, 15, .05) !important;
+}
+.journal-root .input-form:focus-within,
+.journal-root .input-form:has(.main-input:focus-visible) {
+  box-shadow: 0 6px 18px rgba(120, 53, 15, .05) !important;
+}
+.journal-root .main-input {
+  padding: .8rem .75rem .65rem;
+  font-size: 1rem;
+}
+.journal-root .send-btn {
+  background: var(--morning-primary) !important;
+  border-color: var(--morning-primary) !important;
+  box-shadow: none !important;
+}
+.journal-root .send-btn:hover:not(:disabled) {
+  background: var(--morning-primary-hover) !important;
+  border-color: var(--morning-primary-hover) !important;
+  box-shadow: none !important;
+  transform: none;
+}
+
 @media (max-width: 1024px) {
   .morning-nav { grid-template-columns: 1fr auto; }
   .morning-nav-links { display: none; }
@@ -7440,6 +7726,14 @@ body {
   .morning-privacy { padding: 5rem 0; }
   .morning-footer { grid-template-columns: 1fr; gap: 1rem; align-content: center; padding: 2rem 0; }
   .morning-footer > div:last-child { justify-content: flex-start; flex-wrap: wrap; }
+  .archive-page main { padding-right: 1rem; padding-left: 1rem; }
+  .archive-page .archive-tabs { gap: 1.25rem; }
+  .archive-page .archive-tab { font-size: .8125rem; }
+  .archive-page .archive-stat-list { gap: .75rem; }
+  .archive-page .archive-month-controls > div:last-child { display: none; }
+  .archive-page .archive-calendar-grid > div:first-child > div { padding: .65rem .1rem; font-size: .5625rem; }
+  .archive-page .archive-calendar-count { border: 0; background: transparent !important; font-size: .625rem; }
+  .archive-page .archive-recent-list { grid-template-columns: 1fr; gap: .75rem; }
 }
 
 @media (max-width: 520px) {
