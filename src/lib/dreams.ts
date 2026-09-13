@@ -50,6 +50,16 @@ export const dreamEntryUpdateSchema = dreamEntryInputSchema.extend({
 
 export type DreamEntryUpdateInput = z.infer<typeof dreamEntryUpdateSchema>;
 
+export const dreamEntryTagsPatchSchema = z.object({
+  id: z.number().int().positive(),
+  people: listField.optional(),
+  locations: listField.optional(),
+}).refine((value) => value.people !== undefined || value.locations !== undefined, {
+  message: "At least one tag field is required",
+});
+
+export type DreamEntryTagsPatchInput = z.infer<typeof dreamEntryTagsPatchSchema>;
+
 export type DreamEntry = {
   id: number;
   title: string;
@@ -66,6 +76,7 @@ export type DreamEntry = {
   symbols: string[];
   imageUrl: string | null;
   thumbnailUrl: string | null;
+  imageUrlOmitted?: boolean;
   assetStatus: string | null;
   // Sleep tracking
   sleepStart: string | null;
@@ -88,6 +99,40 @@ type StressByMood = {
   avgStress: number;
 };
 
+const ARCHIVE_LIST_SELECT = `
+  SELECT
+    id,
+    title,
+    created_at,
+    captured_at,
+    input_mode,
+    raw_text,
+    clean_text,
+    mood,
+    stress_score,
+    tags,
+    people,
+    locations,
+    symbols,
+    CASE
+      WHEN image_url LIKE 'data:image/%' THEN NULL
+      ELSE image_url
+    END AS image_url,
+    CASE
+      WHEN image_url LIKE 'data:image/%' THEN TRUE
+      ELSE FALSE
+    END AS image_url_omitted,
+    asset_status,
+    sleep_start,
+    wake_time,
+    sleep_quality,
+    pre_sleep_meal,
+    pre_sleep_activity,
+    sleep_insight,
+    NULL AS visual_brief
+  FROM dream_entries
+`;
+
 export type WeeklyRecap = {
   weekStart: string;
   entryCount: number;
@@ -98,9 +143,17 @@ export type WeeklyRecap = {
   stressByMood: StressByMood[];
 };
 
-function mapDreamRow(row: Record<string, unknown>): DreamEntry {
+function isDataImageUrl(value: string | null): boolean {
+  return Boolean(value?.startsWith("data:image/"));
+}
+
+function mapDreamRow(row: Record<string, unknown>, options: { lightweight?: boolean } = {}): DreamEntry {
   const rawText = String(row.raw_text);
   const cleanText = String(row.clean_text);
+  const imageUrl = row.image_url == null ? null : String(row.image_url);
+  const shouldOmitImageUrl = Boolean(
+    options.lightweight && (isDataImageUrl(imageUrl) || row.image_url_omitted === true),
+  );
 
   return {
     id: Number(row.id),
@@ -116,8 +169,9 @@ function mapDreamRow(row: Record<string, unknown>): DreamEntry {
     people: Array.isArray(row.people) ? (row.people as string[]) : [],
     locations: Array.isArray(row.locations) ? (row.locations as string[]) : [],
     symbols: Array.isArray(row.symbols) ? (row.symbols as string[]) : [],
-    imageUrl: row.image_url == null ? null : String(row.image_url),
-    thumbnailUrl: getThumbnailUrl(row.image_url == null ? null : String(row.image_url)),
+    imageUrl: shouldOmitImageUrl ? null : imageUrl,
+    thumbnailUrl: shouldOmitImageUrl ? null : getThumbnailUrl(imageUrl),
+    imageUrlOmitted: shouldOmitImageUrl || undefined,
     assetStatus: row.asset_status == null ? null : String(row.asset_status),
     sleepStart: row.sleep_start == null ? null : String(row.sleep_start),
     wakeTime: row.wake_time == null ? null : String(row.wake_time),
@@ -125,7 +179,7 @@ function mapDreamRow(row: Record<string, unknown>): DreamEntry {
     preSleepMeal: row.pre_sleep_meal == null ? null : String(row.pre_sleep_meal),
     preSleepActivity: row.pre_sleep_activity == null ? null : String(row.pre_sleep_activity),
     sleepInsight: row.sleep_insight == null ? null : String(row.sleep_insight),
-    visualBrief: row.visual_brief == null ? null : String(row.visual_brief),
+    visualBrief: options.lightweight || row.visual_brief == null ? null : String(row.visual_brief),
   };
 }
 
@@ -174,7 +228,7 @@ export async function listDreamEntriesPage(
   const result = cursor
     ? await pool.query(
         `
-          SELECT * FROM dream_entries
+          ${ARCHIVE_LIST_SELECT}
           WHERE user_id = $1
             AND (captured_at, id) < ($2::timestamptz, $3::bigint)
           ORDER BY captured_at DESC, id DESC
@@ -184,14 +238,14 @@ export async function listDreamEntriesPage(
       )
     : await pool.query(
         `
-          SELECT * FROM dream_entries
+          ${ARCHIVE_LIST_SELECT}
           WHERE user_id = $1
           ORDER BY captured_at DESC, id DESC
           LIMIT $2
         `,
         [userId, limit + 1],
       );
-  const mapped = result.rows.map((row) => mapDreamRow(row as Record<string, unknown>));
+  const mapped = result.rows.map((row) => mapDreamRow(row as Record<string, unknown>, { lightweight: true }));
   const entries = mapped.slice(0, limit);
   return {
     entries,
@@ -199,6 +253,18 @@ export async function listDreamEntriesPage(
       ? encodeDreamCursor(entries[entries.length - 1])
       : null,
   };
+}
+
+export async function getDreamEntry(userId: number, id: number): Promise<DreamEntry | null> {
+  await ensureSchema();
+  const pool = getPool();
+  const result = await pool.query(
+    `SELECT * FROM dream_entries WHERE id = $1 AND user_id = $2 LIMIT 1;`,
+    [id, userId],
+  );
+
+  const row = result.rows[0];
+  return row ? mapDreamRow(row as Record<string, unknown>) : null;
 }
 
 export async function createDreamEntry(input: DreamEntryInput, userId: number): Promise<DreamEntry> {
@@ -334,6 +400,27 @@ export async function updateDreamEntry(input: DreamEntryUpdateInput, userId: num
   }
 
   return mapDreamRow(result.rows[0] as Record<string, unknown>);
+}
+
+export async function patchDreamEntryTags(input: DreamEntryTagsPatchInput, userId: number): Promise<DreamEntry> {
+  await ensureSchema();
+  const pool = getPool();
+  const result = await pool.query(
+    `
+      UPDATE dream_entries
+      SET
+        people = COALESCE($3::text[], people),
+        locations = COALESCE($4::text[], locations)
+      WHERE id = $1
+        AND user_id = $2
+      RETURNING *;
+    `,
+    [input.id, userId, input.people ?? null, input.locations ?? null],
+  );
+
+  const row = result.rows[0];
+  if (!row) throw new Error("未找到要更新的梦境记录。");
+  return mapDreamRow(row as Record<string, unknown>);
 }
 
 export async function deleteDreamEntry(id: number, userId: number): Promise<void> {

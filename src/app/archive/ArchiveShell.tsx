@@ -124,14 +124,14 @@ export default function ArchiveShell({
         </Link>
         <div className="flex items-center gap-2">
           <LangToggle className="mist-button-secondary rounded-full px-3 py-1.5 text-xs font-medium transition hover:bg-white/48" />
-          <Link href="/pricing" className="mist-button-secondary rounded-full px-3 py-1.5 text-xs font-medium transition hover:bg-white/48">
+          <Link href="/pricing" className="archive-nav-link mist-button-secondary rounded-full px-3 py-1.5 text-xs font-medium transition hover:bg-white/48">
             {lang === "zh" ? "订阅" : "Pricing"}
           </Link>
-          <Link href="/journal" className="mist-button-secondary rounded-full px-3 py-1.5 text-xs font-medium transition hover:bg-white/48">
+          <Link href="/journal" className="archive-record-link mist-button-secondary rounded-full px-3 py-1.5 text-xs font-medium transition hover:bg-white/48">
             {A.recordBtn}
           </Link>
           {user && (
-            <Link href="/account" className="mist-button-secondary rounded-full px-3 py-1.5 text-xs font-medium transition hover:bg-white/48">
+            <Link href="/account" className="archive-nav-link mist-button-secondary rounded-full px-3 py-1.5 text-xs font-medium transition hover:bg-white/48">
               {lang === "zh" ? "账号" : "Account"}
             </Link>
           )}
@@ -139,7 +139,7 @@ export default function ArchiveShell({
       </nav>
 
       <main className="relative z-10 mx-auto w-full max-w-5xl px-4 pb-20 pt-2 sm:px-8">
-        <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="archive-page-heading mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <h1 className="text-3xl font-semibold tracking-[-0.03em] text-[#5d5471]">
               {A.title}

@@ -216,7 +216,7 @@ const zh = {
   journal: {
     welcome:
       "今夜的梦，还记得什么吗？\n\n先把最先浮现的片段写下来，不需要完整，不需要逻辑。",
-    placeholder: "把还没有散开的梦说给我听。人物、地点、奇怪的句子，都可以。",
+    placeholder: "写下还记得的片段…",
     modeLabel: "记录模式",
     chatMode: "对话",
     chatModeDesc: "与 AI 一起探索梦境",
@@ -224,7 +224,7 @@ const zh = {
     quickModeDesc: "存下这段梦境",
     quickEyebrow: "Dream Intake",
     quickTitle: "记录正在消散的梦",
-    quickPlaceholder: "从第一帧开始：一个房间、一个人、一句话、一个来不及解释的感觉。",
+    quickPlaceholder: "从第一幕开始写起…",
     chatInputLabel: "继续追问这场梦",
     analyzeBtn: "分析梦境",
     analyzingBtn: "分析中…",
@@ -629,7 +629,7 @@ const en: typeof zh = {
   journal: {
     welcome:
       "What do you remember from last night?\n\nWrite down the first fragments — no order needed, no logic required.",
-    placeholder: "Tell me the dream before it thins out: the person, the place, the strange sentence.",
+    placeholder: "Write the part you still remember…",
     modeLabel: "Record mode",
     chatMode: "Chat",
     chatModeDesc: "Explore with AI",
@@ -637,7 +637,7 @@ const en: typeof zh = {
     quickModeDesc: "Archive a dream memory",
     quickEyebrow: "Dream Intake",
     quickTitle: "Record the dream while it is fading",
-    quickPlaceholder: "Begin with the first frame: a room, a person, a sentence, a feeling that arrived without explanation.",
+    quickPlaceholder: "Begin with the first frame…",
     chatInputLabel: "Continue exploring this dream",
     analyzeBtn: "Analyze Dream",
     analyzingBtn: "Analyzing…",
