@@ -7989,6 +7989,47 @@ body {
   color: #fff !important;
 }
 
+/* Feature overview reads as an editorial index, not a tinted card within a card. */
+.morning-studio {
+  display: block;
+  padding: clamp(5rem, 8vw, 7rem) 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+.morning-studio-copy {
+  max-width: 44rem;
+  margin-bottom: clamp(3rem, 5vw, 4.5rem);
+}
+.morning-bento {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-auto-rows: auto;
+  overflow: visible;
+  border: 0;
+  border-top: 1px solid var(--morning-border);
+  border-radius: 0;
+  background: transparent;
+}
+.morning-bento-card {
+  min-height: 18rem;
+  padding: 1.5rem 1.5rem 1.5rem 0;
+}
+.morning-bento-card + .morning-bento-card {
+  padding-left: 1.5rem;
+  border-left: 1px solid var(--morning-border);
+}
+.morning-bento-card:nth-child(odd),
+.morning-bento-card:nth-child(n + 3) {
+  border-top: 0;
+  border-right: 0;
+}
+.morning-bento-card h3 {
+  margin-top: 2.4rem;
+}
+.morning-bento-1 {
+  background: transparent;
+}
+
 /* Archive editing belongs to the same daylight surface as the rest of the app. */
 body:has(.archive-editor-overlay)::before,
 body:has(.archive-editor-overlay)::after {
@@ -8111,6 +8152,13 @@ body:has(.archive-editor-overlay)::after {
 }
 
 @media (max-width: 1024px) {
+  .morning-bento { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .morning-bento-card:nth-child(odd) { border-right: 1px solid var(--morning-border); }
+  .morning-bento-card:nth-child(even) { border-left: 0; }
+  .morning-bento-card:nth-child(n + 3) {
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--morning-border);
+  }
   .morning-nav { grid-template-columns: 1fr auto; }
   .morning-nav-links { display: none; }
   .morning-hero { grid-template-columns: 1fr 1fr; gap: 2.5rem; }
@@ -8175,7 +8223,11 @@ body:has(.archive-editor-overlay)::after {
   .morning-bento,
   .morning-archive-grid { grid-template-columns: 1fr; }
   .morning-bento-card:nth-child(odd) { border-right: 0; }
-  .morning-bento-card + .morning-bento-card { border-top: 1px solid rgba(180, 155, 130, 0.28); }
+  .morning-bento-card + .morning-bento-card {
+    padding-left: 0;
+    border-top: 1px solid rgba(180, 155, 130, 0.28);
+    border-left: 0;
+  }
   .morning-bento-1 { grid-row: auto; }
   .morning-section-heading h2,
   .morning-studio h2,
