@@ -795,7 +795,7 @@ function DreamEditorModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-[rgba(232,225,242,0.58)] backdrop-blur-xl sm:items-center"
+      className="archive-editor-overlay fixed inset-0 z-50 flex items-end justify-center bg-[rgba(232,225,242,0.58)] backdrop-blur-xl sm:items-center"
       onClick={(event) => {
         if (event.target === event.currentTarget) void closeEditor();
       }}
@@ -807,13 +807,13 @@ function DreamEditorModal({
         aria-labelledby={titleId}
         tabIndex={-1}
         onKeyDown={onKeyDown}
-        className="mist-card relative max-h-[94vh] w-full max-w-4xl overflow-y-auto overscroll-y-contain rounded-t-[2rem] p-5 sm:rounded-[2rem] sm:p-6"
+        className="archive-editor-dialog mist-card relative max-h-[94vh] w-full max-w-4xl overflow-y-auto overscroll-y-contain rounded-t-[2rem] p-5 sm:rounded-[2rem] sm:p-6"
         onClick={(event) => event.stopPropagation()}
       >
         {/* Modal header — full width, close button always visible */}
         <div className="mb-6 flex items-start justify-between gap-4">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#998db9]">{M.eyebrow}</p>
+            <p className="archive-editor-eyebrow text-xs font-semibold uppercase tracking-[0.22em] text-[#998db9]">{M.eyebrow}</p>
             <h2 id={titleId} className="mt-2 text-2xl font-semibold tracking-[-0.03em] text-[#5f5673]">{M.title}</h2>
             <p className="mist-muted mt-2 text-sm leading-7">{M.desc}</p>
           </div>
@@ -982,7 +982,7 @@ function DreamEditorModal({
             </div>
 
             <div className="mist-card rounded-[1.6rem] p-4">
-              <p className="text-sm font-medium text-[#8f82bc]">{M.sleepTitle}</p>
+              <p className="archive-editor-section-title text-sm font-medium text-[#8f82bc]">{M.sleepTitle}</p>
               <div className="mt-3 grid gap-3 sm:grid-cols-2">
                 <label className="grid gap-1.5">
                   <span className="mist-label text-xs font-medium">{M.sleepStart}</span>
@@ -1034,7 +1034,7 @@ function DreamEditorModal({
 
           <div className="space-y-5">
             <div className="mist-card rounded-[1.8rem] p-4">
-              <p className="text-sm font-medium text-[#8f82bc]">{M.imageTitle}</p>
+              <p className="archive-editor-section-title text-sm font-medium text-[#8f82bc]">{M.imageTitle}</p>
               <p className="mist-soft mt-1 text-xs">{M.imageHint}</p>
 
               <div className={`group relative mt-4 overflow-hidden rounded-[1.5rem] bg-gradient-to-br ${moodGradient(form.mood)}`}>

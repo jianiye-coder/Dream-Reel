@@ -7989,6 +7989,88 @@ body {
   color: #fff !important;
 }
 
+/* Archive editing belongs to the same daylight surface as the rest of the app. */
+body:has(.archive-editor-overlay)::before,
+body:has(.archive-editor-overlay)::after {
+  display: none;
+}
+.archive-editor-overlay {
+  background: rgba(56, 44, 34, .2) !important;
+  backdrop-filter: blur(5px) !important;
+}
+.archive-editor-dialog {
+  border: 1px solid var(--morning-border) !important;
+  border-radius: .875rem !important;
+  background: #fffdf7 !important;
+  box-shadow: 0 24px 70px rgba(72, 47, 27, .16) !important;
+  color: var(--morning-ink) !important;
+}
+.archive-editor-dialog .archive-editor-eyebrow {
+  color: #8a5426 !important;
+}
+.archive-editor-dialog .mist-muted,
+.archive-editor-dialog .mist-soft {
+  color: var(--morning-muted) !important;
+}
+.archive-editor-dialog .mist-label {
+  color: #5c6472 !important;
+  font-weight: 650;
+}
+.archive-editor-dialog .mist-card {
+  border: 1px solid var(--morning-border) !important;
+  border-radius: .75rem !important;
+  background: #fff !important;
+  box-shadow: none !important;
+}
+.archive-editor-dialog .archive-editor-section-title {
+  color: #8a5426 !important;
+}
+.archive-editor-dialog .mist-input {
+  border-color: #d8c9bf !important;
+  border-radius: .65rem !important;
+  background: #fff !important;
+  color: var(--morning-ink) !important;
+  box-shadow: none !important;
+}
+.archive-editor-dialog .mist-input:focus {
+  border-color: #c59c83 !important;
+  box-shadow: none !important;
+}
+.archive-editor-dialog .mist-input:focus-visible {
+  outline: 2px solid #b98c70 !important;
+  outline-offset: 2px;
+  box-shadow: 0 0 0 3px rgba(185, 140, 112, .14) !important;
+}
+.archive-editor-dialog .mist-button,
+.archive-editor-dialog .mist-button-secondary {
+  min-height: 44px;
+  border-radius: .65rem !important;
+  box-shadow: none !important;
+}
+.archive-editor-dialog .mist-button {
+  border-color: var(--morning-primary) !important;
+  background: var(--morning-primary) !important;
+  color: #fff !important;
+}
+.archive-editor-dialog .mist-button:hover:not(:disabled) {
+  background: var(--morning-primary-hover) !important;
+}
+.archive-editor-dialog .mist-button-secondary {
+  border-color: #d8c9bf !important;
+  background: #fff !important;
+  color: var(--morning-primary) !important;
+}
+.archive-editor-dialog .mist-button-secondary:hover:not(:disabled) {
+  border-color: #c59c83 !important;
+  background: #fff8f2 !important;
+}
+.archive-editor-dialog .rounded-\[1\.2rem\],
+.archive-editor-dialog .rounded-\[1\.4rem\],
+.archive-editor-dialog .rounded-\[1\.6rem\],
+.archive-editor-dialog .rounded-\[1\.8rem\] {
+  border-radius: .75rem !important;
+}
+
 @media (prefers-reduced-transparency: reduce) {
   .journal-root .journal-nav,
   .journal-root .messages-area,
