@@ -44,7 +44,9 @@ export default function LandingPage() {
       <section className="morning-hero" aria-labelledby="morning-hero-title">
         <div className="morning-hero-copy">
           <p className="morning-eyebrow">{lang === "zh" ? "AI 梦境日记与自我反思工具" : "An AI dream journal for morning reflection"}</p>
-          <h1 id="morning-hero-title">{lang === "zh" ? "趁梦还在，先把它留下。" : "Before the dream fades, leave it here."}</h1>
+          <h1 id="morning-hero-title">
+            {lang === "zh" ? <>趁梦还在，<br />先把它留下。</> : "Before the dream fades, leave it here."}
+          </h1>
           <p className="morning-lede">
             {lang === "zh"
               ? "快速记录刚醒来的梦，与 AI 一起回忆，并通过温和的提问，把散落的片段变成属于你的长期线索。"
