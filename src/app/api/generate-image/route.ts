@@ -13,6 +13,8 @@ export const maxDuration = 180;
 
 const OPENAI_IMAGE_MODEL = "gpt-image-2";
 const OPENAI_IMAGE_TIMEOUT_MS = 170_000;
+const OPENAI_IMAGES_URL = "https://api.openai.com/v1/images/generations";
+const FLATKEY_IMAGES_URL = "https://router.flatkey.ai/v1/images/generations";
 
 const payloadSchema = z.object({
   prompt: z.string().trim().min(1).max(2000),
@@ -51,6 +53,24 @@ function buildFinalImagePrompt(
   return parts.join("\n");
 }
 
+function getImageProvider() {
+  if (process.env.FLATKEY_API_KEY) {
+    return {
+      apiKey: process.env.FLATKEY_API_KEY,
+      url: FLATKEY_IMAGES_URL,
+    };
+  }
+
+  if (process.env.OPENAI_API_KEY) {
+    return {
+      apiKey: process.env.OPENAI_API_KEY,
+      url: OPENAI_IMAGES_URL,
+    };
+  }
+
+  return null;
+}
+
 export async function POST(request: NextRequest) {
   const session = await auth() as { user?: { id?: string } } | null;
   if (!session?.user?.id) {
@@ -73,8 +93,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: API_ERROR_CODES.invalidRequest }, { status: 400 });
     }
 
-    const apiKey = process.env.OPENAI_API_KEY;
-    if (!apiKey) {
+    const imageProvider = getImageProvider();
+    if (!imageProvider) {
       return NextResponse.json(
         { error: API_ERROR_CODES.configurationError },
         { status: 500 },
@@ -102,10 +122,10 @@ export async function POST(request: NextRequest) {
     let upstreamResponse: Response;
 
     try {
-      upstreamResponse = await fetch("https://api.openai.com/v1/images/generations", {
+      upstreamResponse = await fetch(imageProvider.url, {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${apiKey}`,
+          Authorization: `Bearer ${imageProvider.apiKey}`,
           "Content-Type": "application/json",
         },
         signal: controller.signal,
