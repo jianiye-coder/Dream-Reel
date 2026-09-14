@@ -21,6 +21,7 @@ function LoginForm() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [inputModality, setInputModality] = useState<"keyboard" | "pointer">("keyboard");
 
   const isRegister = tab === "register";
 
@@ -116,7 +117,15 @@ function LoginForm() {
           ))}
         </div>
 
-        <form onSubmit={(e) => void handleSubmit(e)} className="auth-form">
+        <form
+          onSubmit={(e) => void handleSubmit(e)}
+          onPointerDown={() => setInputModality("pointer")}
+          onKeyDown={(event) => {
+            if (event.key === "Tab") setInputModality("keyboard");
+          }}
+          className="auth-form"
+          data-input-modality={inputModality}
+        >
           {isRegister && (
             <label className="auth-field">
               <span>{L.name}</span>

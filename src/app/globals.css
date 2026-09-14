@@ -7745,6 +7745,75 @@ body {
   transform: none;
 }
 
+/* Pointer focus stays quiet; keyboard focus remains a subtle warm boundary. */
+.auth-page :is(input, textarea, select):focus:not(:focus-visible),
+.journal-root :is(input, textarea, select):focus:not(:focus-visible) {
+  outline: none !important;
+  box-shadow: none !important;
+}
+.auth-page :is(input, textarea, select):focus-visible,
+.journal-root :is(input, textarea, select):focus-visible {
+  outline: 2px solid #b98c70 !important;
+  outline-offset: 2px;
+  box-shadow: 0 0 0 3px rgba(185, 140, 112, .16) !important;
+}
+.auth-page input:-webkit-autofill,
+.auth-page input:-webkit-autofill:hover,
+.auth-page input:-webkit-autofill:focus {
+  -webkit-text-fill-color: var(--morning-ink);
+  -webkit-box-shadow: 0 0 0 1000px #fff inset !important;
+  box-shadow: 0 0 0 1000px #fff inset !important;
+  transition: background-color 9999s ease-out 0s;
+}
+.auth-form[data-input-modality="pointer"] :is(input, textarea, select):focus {
+  outline: none !important;
+  box-shadow: none !important;
+}
+.auth-form[data-input-modality="pointer"] input:-webkit-autofill:focus {
+  -webkit-box-shadow: 0 0 0 1000px #fff inset !important;
+  box-shadow: 0 0 0 1000px #fff inset !important;
+}
+
+/* The date belongs to the journal heading, not inside a secondary control. */
+.journal-root .field-label {
+  color: var(--morning-muted) !important;
+  font-size: .8125rem;
+  font-weight: 650;
+  letter-spacing: .02em;
+}
+.journal-root .dream-date-input {
+  min-height: 44px;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  color: var(--morning-ink) !important;
+  font-size: 1rem;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  color-scheme: light;
+}
+.journal-root .dream-date-input:focus:not(:focus-visible) {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+/* The dreamer's replies remain distinct; the Agent reads as open prose. */
+.journal-root .bubble-ai {
+  padding: .2rem 0 .4rem;
+  border: 0 !important;
+  border-radius: 0;
+  background: transparent !important;
+  color: #1f2937;
+  box-shadow: none !important;
+}
+.journal-root .bubble-ai.msg-typing {
+  padding: .45rem 0;
+}
+.journal-root .bubble-ai .agent-feedback {
+  margin-left: 0;
+}
+
 /* Journal interactions should acknowledge touch immediately without adding
    decorative motion. Keep the small press response local to actionable UI. */
 .journal-root :is(

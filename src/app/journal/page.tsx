@@ -1142,7 +1142,7 @@ export default function JournalPage() {
             {isTyping && (
               <div className="msg-row msg-row-ai">
                 <div className="msg-avatar" aria-hidden>☾</div>
-                <div className="msg-bubble bubble-ai" style={{ padding: "0.65rem 1rem" }}>
+                <div className="msg-bubble bubble-ai msg-typing">
                   <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
                     {[0, 1, 2].map((i) => (
                       <span key={i} className="dream-dot" style={{ animationDelay: `${i * 0.18}s` }} />
@@ -1171,7 +1171,7 @@ export default function JournalPage() {
                   value={dreamDate}
                   max={getTodayDate()}
                   onChange={(e) => setDreamDate(e.target.value)}
-                  className="dream-input-sm"
+                  className="dream-input-sm dream-date-input"
                   style={{ width: "auto" }}
                 />
               </div>
