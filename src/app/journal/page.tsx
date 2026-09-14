@@ -1184,7 +1184,7 @@ export default function JournalPage() {
                 placeholder={isTitleGenerating
                   ? (lang === "zh" ? "标题生成中…" : "Generating title…")
                   : (lang === "zh" ? "梦境标题（写完后自动填充）" : "Title (auto-fills after you write)")}
-                className="dream-input-sm dream-date-input"
+                className="dream-input-sm"
                 style={{ flex: 1, minWidth: "10rem", opacity: isTitleGenerating && !quickTitle ? 0.55 : 1 }}
               />
             </div>
@@ -1534,7 +1534,7 @@ export default function JournalPage() {
                 value={dreamDate}
                 max={getTodayDate()}
                 onChange={(e) => setDreamDate(e.target.value)}
-                className="dream-input-sm"
+                className="dream-input-sm dream-date-input"
                 style={{ width: "auto" }}
               />
             </div>
