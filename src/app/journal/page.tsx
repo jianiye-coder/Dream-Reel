@@ -1700,7 +1700,7 @@ export default function JournalPage() {
             <p>{lang === "zh" ? "梦境显影室" : "Dream Developing Room"}</p>
             <h2>{isGeneratingImage
               ? (lang === "zh" ? "梦境正在慢慢浮现。" : "The dream is slowly appearing.")
-              : (lang === "zh" ? "梦境已经显影。" : "The dream has surfaced.")
+              : (lang === "zh" ? "梦境已经显影" : "The dream has surfaced")
             }</h2>
           </div>
 
