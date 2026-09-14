@@ -7798,6 +7798,38 @@ body {
   box-shadow: none !important;
 }
 
+/* Chat keeps one quiet writing surface instead of an inner focused capsule. */
+.journal-root .input-form:focus-within,
+.journal-root .input-form:has(.main-input:focus-visible) {
+  border-color: #d8c9bf !important;
+  box-shadow: 0 6px 18px rgba(120, 53, 15, .05) !important;
+}
+.journal-root .main-input:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
+}
+.journal-root .input-form > .voice-input-btn {
+  width: 2.75rem;
+  height: 2.75rem;
+  border: 0 !important;
+  border-radius: .5rem;
+  background: transparent !important;
+  color: #7c4d65 !important;
+  box-shadow: none !important;
+}
+.journal-root .input-form > .voice-input-btn:hover {
+  background: rgba(124, 77, 101, .08) !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+  transform: none;
+}
+.journal-root .input-form > .voice-input-btn.voice-input-btn-active {
+  background: transparent !important;
+  border-color: transparent !important;
+  color: var(--morning-primary) !important;
+  box-shadow: none !important;
+}
+
 /* The dreamer's replies remain distinct; the Agent reads as open prose. */
 .journal-root .bubble-ai {
   padding: .2rem 0 .4rem;
