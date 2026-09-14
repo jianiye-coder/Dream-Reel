@@ -8465,3 +8465,15 @@ body:has(.archive-editor-overlay)::after {
   color: #475569;
   opacity: 1;
 }
+
+/* Keep the shared header above the legacy decorative film overlay while
+   remaining below dialogs, so the product name stays readable. */
+.site-header {
+  position: relative;
+  z-index: 902;
+}
+
+.site-header .site-brand {
+  color: #0f172a !important;
+  opacity: 1;
+}
