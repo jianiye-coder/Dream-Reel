@@ -83,7 +83,9 @@ function LoginForm() {
       <section className="auth-shell" aria-labelledby="auth-title">
         <div className="auth-intro">
           <p className="morning-eyebrow">{lang === "zh" ? "你的晨间梦境档案" : "Your morning dream archive"}</p>
-          <h1>{lang === "zh" ? "醒来后，从这里继续。" : "Continue from here when you wake."}</h1>
+          <h1>
+            {lang === "zh" ? <>醒来后，<br />从这里继续。</> : "Continue from here when you wake."}
+          </h1>
           <p>{lang === "zh" ? "安全地保存梦境，与 Agent 一起回忆，并观察只属于你的长期线索。" : "Keep dreams safely, recall them with the Agent, and notice patterns that belong only to you."}</p>
         </div>
 
