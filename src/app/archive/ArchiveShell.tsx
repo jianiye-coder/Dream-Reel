@@ -44,7 +44,7 @@ export default function ArchiveShell({
   const searchParams = useSearchParams();
   const [billingStatus, setBillingStatus] = useState<BillingStatus | null>(null);
   const [billingError, setBillingError] = useState("");
-  const [exporting, setExporting] = useState<"markdown" | "json" | null>(null);
+  const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState("");
   const requestedTab = searchParams.get("tab");
   const activeTab: ArchiveTab = isArchiveTab(requestedTab) ? requestedTab : "calendar";
@@ -87,11 +87,11 @@ export default function ArchiveShell({
     }
   }
 
-  async function exportAllDreams(format: "markdown" | "json") {
-    setExporting(format);
+  async function exportAllDreams() {
+    setExporting(true);
     setExportError("");
     try {
-      const response = await fetch(`/api/dreams/export?format=${format}&lang=${lang}`, {
+      const response = await fetch(`/api/dreams/export?format=markdown&lang=${lang}`, {
         cache: "no-store",
       });
       if (!response.ok) throw new Error(A.export.failed);
@@ -100,7 +100,7 @@ export default function ArchiveShell({
       const href = URL.createObjectURL(blob);
       const anchor = document.createElement("a");
       anchor.href = href;
-      anchor.download = `dream-reel-export-${new Date().toISOString().slice(0, 10)}.${format === "json" ? "json" : "md"}`;
+      anchor.download = `dream-reel-export-${new Date().toISOString().slice(0, 10)}.md`;
       document.body.appendChild(anchor);
       anchor.click();
       anchor.remove();
@@ -108,7 +108,7 @@ export default function ArchiveShell({
     } catch {
       setExportError(A.export.failed);
     } finally {
-      setExporting(null);
+      setExporting(false);
     }
   }
 
@@ -150,8 +150,8 @@ export default function ArchiveShell({
             <div className="flex flex-wrap">
               <button
                 type="button"
-                onClick={() => void exportAllDreams("markdown")}
-                disabled={exporting !== null}
+                onClick={() => void exportAllDreams()}
+                disabled={exporting}
                 className="archive-export-action text-xs font-semibold transition disabled:opacity-50"
               >
                 {exporting ? A.export.exporting : `↓ ${A.export.markdown}`}
