@@ -7204,29 +7204,16 @@ body {
 
 .journal-root .quick-record-field:has(.quick-textarea:focus) {
   border-color: #d8c9bf !important;
-  background: rgba(255,255,255,.97) !important;
-  box-shadow: 0 12px 42px rgba(120,53,15,.08) !important;
+  background: rgba(255,255,255,.9) !important;
+  box-shadow: 0 6px 18px rgba(120,53,15,.05) !important;
 }
 .journal-root .quick-textarea:focus,
 .journal-root textarea:focus {
   outline: none !important;
   box-shadow: none !important;
 }
-
-/* Keep keyboard focus discoverable while letting the full input surface carry
-   the cue instead of only the inner text control. */
-.journal-root .quick-record-field:has(.quick-textarea:focus-visible),
-.journal-root .input-form:has(.main-input:focus-visible) {
-  outline: 2px solid rgba(146, 64, 14, 0.55) !important;
-  outline-offset: -3px;
-}
-
-/* Keep keyboard focus discoverable without wrapping the entire writing surface
-   in the heavy purple ring that appeared on pointer focus. */
-.journal-root .quick-textarea:focus-visible,
-.journal-root .main-input:focus-visible {
-  outline: 2px solid rgba(146, 64, 14, 0.55) !important;
-  outline-offset: -3px;
+.journal-root :is(input, textarea, select):focus-visible {
+  outline: none !important;
   box-shadow: none !important;
 }
 
@@ -7367,6 +7354,13 @@ body {
 .journal-root .chips-bar {
   background: transparent;
 }
+.journal-root .msg-bubble {
+  filter: none;
+  box-shadow: none;
+}
+.journal-root .msg-bubble::after {
+  display: none;
+}
 .journal-root .msg-avatar {
   border-color: #d8c9bf;
   background: #fff8ed;
@@ -7376,21 +7370,50 @@ body {
   box-shadow: 0 3px 10px rgba(120, 53, 15, .1);
 }
 .journal-root .bubble-ai {
-  border-color: #d9c7da;
-  background: #f4ecf5;
-  color: #352b42;
+  border-color: #d8c9bf;
+  background: #fff;
+  color: #1f2937;
   backdrop-filter: none;
 }
 .journal-root .bubble-user {
-  border-color: #d7b99f;
-  background: #ead9c9;
-  color: #34243a;
+  border-color: #cfae99;
+  background: #f4e8dd;
+  color: #2d2630;
   backdrop-filter: none;
 }
 .journal-root .msg-bubble .msg-text {
   color: inherit !important;
-  font-size: .95rem;
+  font-size: 1rem;
+  font-weight: 500;
   line-height: 1.75;
+}
+.journal-root .agent-decision-copy {
+  color: #3f4a5f;
+}
+.journal-root .chip {
+  min-height: 2.25rem;
+  border-color: #cfc0b6;
+  background: #fff;
+  color: #344054;
+  box-shadow: none;
+}
+.journal-root .chip:hover {
+  border-color: #a98a77;
+  background: #fff8f2;
+  color: #2d2630;
+}
+.journal-root .chip-primary,
+.journal-root .chip-primary:hover {
+  border-color: #92400e;
+  background: #92400e;
+  color: #fff;
+}
+.journal-root .chip-static,
+.journal-root .chip-static:hover {
+  border-color: #dfc8ba;
+  background: #f6eee8;
+  color: #5c4a42;
+  opacity: 1;
 }
 .journal-root .input-wrapper {
   border-top: 0;
@@ -7530,6 +7553,27 @@ body {
 .archive-page .archive-month-controls .mist-button-secondary {
   min-height: 40px;
   border-radius: .5rem;
+}
+.archive-page .archive-month-filter select {
+  min-height: 40px;
+  max-width: min(15rem, 52vw);
+  border: 1px solid rgba(120, 83, 48, .22);
+  border-radius: .5rem;
+  background: #fff;
+  color: var(--morning-ink);
+  cursor: pointer;
+  font: inherit;
+  font-size: .9375rem;
+  font-weight: 600;
+  padding: 0 .75rem;
+}
+.archive-page .archive-month-filter select:hover {
+  border-color: rgba(138, 84, 38, .45);
+  background: #fffcf8;
+}
+.archive-page .archive-month-filter select:focus-visible {
+  outline: 2px solid #b7794a;
+  outline-offset: 2px;
 }
 .archive-page .archive-calendar-grid {
   box-shadow: none;
@@ -7701,7 +7745,420 @@ body {
   transform: none;
 }
 
+/* Pointer focus stays quiet; keyboard focus remains a subtle warm boundary. */
+.auth-page :is(input, textarea, select):focus:not(:focus-visible),
+.journal-root :is(input, textarea, select):focus:not(:focus-visible) {
+  outline: none !important;
+  box-shadow: none !important;
+}
+.auth-page :is(input, textarea, select):focus-visible,
+.journal-root :is(input, textarea, select):focus-visible {
+  outline: 2px solid #b98c70 !important;
+  outline-offset: 2px;
+  box-shadow: 0 0 0 3px rgba(185, 140, 112, .16) !important;
+}
+.auth-page input:-webkit-autofill,
+.auth-page input:-webkit-autofill:hover,
+.auth-page input:-webkit-autofill:focus {
+  -webkit-text-fill-color: var(--morning-ink);
+  -webkit-box-shadow: 0 0 0 1000px #fff inset !important;
+  box-shadow: 0 0 0 1000px #fff inset !important;
+  transition: background-color 9999s ease-out 0s;
+}
+.auth-form[data-input-modality="pointer"] :is(input, textarea, select):focus {
+  outline: none !important;
+  box-shadow: none !important;
+}
+.auth-form[data-input-modality="pointer"] input:-webkit-autofill:focus {
+  -webkit-box-shadow: 0 0 0 1000px #fff inset !important;
+  box-shadow: 0 0 0 1000px #fff inset !important;
+}
+
+/* The date belongs to the journal heading, not inside a secondary control. */
+.journal-root .field-label {
+  color: var(--morning-muted) !important;
+  font-size: .8125rem;
+  font-weight: 650;
+  letter-spacing: .02em;
+}
+.journal-root .dream-date-input {
+  min-height: 44px;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  color: var(--morning-ink) !important;
+  font-size: 1rem;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  color-scheme: light;
+}
+.journal-root .dream-date-input:focus:not(:focus-visible) {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+/* Chat keeps one quiet writing surface instead of an inner focused capsule. */
+.journal-root .input-form:focus-within,
+.journal-root .input-form:has(.main-input:focus-visible) {
+  border-color: #d8c9bf !important;
+  box-shadow: 0 6px 18px rgba(120, 53, 15, .05) !important;
+}
+.journal-root .main-input:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
+}
+.journal-root .input-form > .voice-input-btn {
+  width: 2.75rem;
+  height: 2.75rem;
+  border: 0 !important;
+  border-radius: .5rem;
+  background: transparent !important;
+  color: #7c4d65 !important;
+  box-shadow: none !important;
+}
+.journal-root .input-form > .voice-input-btn:hover {
+  background: rgba(124, 77, 101, .08) !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+  transform: none;
+}
+.journal-root .input-form > .voice-input-btn.voice-input-btn-active {
+  background: transparent !important;
+  border-color: transparent !important;
+  color: var(--morning-primary) !important;
+  box-shadow: none !important;
+}
+
+/* The dreamer's replies remain distinct; the Agent reads as open prose. */
+.journal-root .bubble-ai {
+  padding: .2rem 0 .4rem;
+  border: 0 !important;
+  border-radius: 0;
+  background: transparent !important;
+  color: #1f2937;
+  box-shadow: none !important;
+}
+.journal-root .bubble-ai.msg-typing {
+  padding: .45rem 0;
+}
+.journal-root .bubble-ai .agent-feedback {
+  margin-left: 0;
+}
+
+/* Journal interactions should acknowledge touch immediately without adding
+   decorative motion. Keep the small press response local to actionable UI. */
+.journal-root :is(
+  .nav-btn,
+  .mode-tab,
+  .quick-analyze-btn,
+  .quick-chat-btn,
+  .chip:not(.chip-static),
+  .send-btn:not(:disabled),
+  .voice-input-btn,
+  .gen-btn:not(:disabled),
+  .quality-btn,
+  .agent-feedback button,
+  .agent-retry-btn
+) {
+  transition: transform .12s ease-out, background-color .18s ease, border-color .18s ease, color .18s ease, box-shadow .18s ease;
+}
+.journal-root :is(
+  .nav-btn,
+  .mode-tab,
+  .quick-analyze-btn,
+  .quick-chat-btn,
+  .chip:not(.chip-static),
+  .send-btn:not(:disabled),
+  .voice-input-btn,
+  .gen-btn:not(:disabled),
+  .quality-btn,
+  .agent-feedback button,
+  .agent-retry-btn
+):active {
+  transform: scale(.97);
+}
+.journal-root {
+  font-optical-sizing: auto;
+}
+.journal-root .journal-nav {
+  padding-top: max(.75rem, env(safe-area-inset-top));
+}
+.journal-root .input-wrapper {
+  padding-bottom: max(1.25rem, env(safe-area-inset-bottom));
+}
+
+/* Shared product navigation: one quiet, consistent system across app surfaces. */
+.site-header {
+  min-height: 6.5rem;
+  padding-right: clamp(2rem, 4vw, 4rem) !important;
+  padding-left: clamp(2rem, 4vw, 4rem) !important;
+  border-bottom: 1px solid rgba(120, 83, 48, .18) !important;
+  background: rgba(255, 253, 245, .9) !important;
+  backdrop-filter: blur(14px);
+}
+.morning-nav.site-header {
+  width: auto;
+  margin: 0;
+}
+.auth-header.site-header {
+  width: auto;
+  margin: 0;
+}
+.site-brand {
+  gap: .75rem !important;
+  color: var(--morning-ink) !important;
+  font-family: var(--font-geist-sans), "PingFang SC", "Hiragino Sans GB", sans-serif !important;
+  font-size: .9rem !important;
+  font-weight: 750 !important;
+  letter-spacing: .16em !important;
+  line-height: 1;
+  text-transform: uppercase;
+  text-shadow: none !important;
+}
+.site-brand img,
+.site-brand .logo-img {
+  width: 2.25rem !important;
+  height: 2.25rem !important;
+  border-radius: 0 !important;
+  filter: none !important;
+}
+.site-nav-links,
+.site-nav-actions {
+  gap: clamp(1rem, 1.8vw, 1.65rem) !important;
+}
+.site-nav-links a,
+.site-nav-link,
+.journal-root .site-nav-link {
+  min-height: 44px;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  color: #3f4a5f !important;
+  font-size: .875rem !important;
+  font-weight: 650 !important;
+  line-height: 1;
+  text-decoration: none;
+}
+.site-nav-links a,
+.site-nav-link {
+  display: inline-flex;
+  align-items: center;
+}
+.site-nav-links a:hover,
+.site-nav-link:hover,
+.journal-root .site-nav-link:hover {
+  color: var(--morning-primary) !important;
+}
+.site-language {
+  box-sizing: border-box;
+  min-width: 44px !important;
+  min-height: 44px !important;
+  padding: 0 .75rem !important;
+  border: 1px solid #d9c8bc !important;
+  border-radius: 999px !important;
+  background: transparent !important;
+  color: #71452d !important;
+  font-size: .8125rem !important;
+  font-weight: 700 !important;
+  letter-spacing: .02em;
+}
+.site-language:hover {
+  border-color: #b98c70 !important;
+  background: rgba(255, 255, 255, .64) !important;
+  color: var(--morning-primary) !important;
+}
+.site-primary-action {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 1rem !important;
+  border: 1px solid var(--morning-primary) !important;
+  border-radius: .65rem !important;
+  background: var(--morning-primary) !important;
+  color: #fff !important;
+  font-size: .875rem !important;
+  font-weight: 700 !important;
+  line-height: 1;
+  text-decoration: none;
+}
+.site-primary-action:hover {
+  background: var(--morning-primary-hover) !important;
+  color: #fff !important;
+}
+
+/* Feature overview reads as an editorial index, not a tinted card within a card. */
+.morning-studio {
+  display: block;
+  padding: clamp(5rem, 8vw, 7rem) 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+.morning-studio-copy {
+  max-width: 44rem;
+  margin-bottom: clamp(3rem, 5vw, 4.5rem);
+}
+.morning-bento {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-auto-rows: auto;
+  overflow: visible;
+  border: 0;
+  border-top: 1px solid var(--morning-border);
+  border-radius: 0;
+  background: transparent;
+}
+.morning-bento-card {
+  min-height: 18rem;
+  padding: 1.5rem 1.5rem 1.5rem 0;
+}
+.morning-bento-card + .morning-bento-card {
+  padding-left: 1.5rem;
+  border-left: 1px solid var(--morning-border);
+}
+.morning-bento-card:nth-child(odd),
+.morning-bento-card:nth-child(n + 3) {
+  border-top: 0;
+  border-right: 0;
+}
+.morning-bento-card h3 {
+  margin-top: 2.4rem;
+}
+.morning-bento-1 {
+  background: transparent;
+}
+
+/* Archive editing belongs to the same daylight surface as the rest of the app. */
+body:has(.archive-editor-overlay)::before,
+body:has(.archive-editor-overlay)::after {
+  display: none;
+}
+.archive-editor-overlay {
+  background: rgba(56, 44, 34, .2) !important;
+  backdrop-filter: blur(5px) !important;
+}
+.archive-editor-dialog {
+  border: 1px solid var(--morning-border) !important;
+  border-radius: .875rem !important;
+  background: #fffdf7 !important;
+  box-shadow: 0 24px 70px rgba(72, 47, 27, .16) !important;
+  color: var(--morning-ink) !important;
+}
+.archive-editor-dialog .archive-editor-eyebrow {
+  color: #8a5426 !important;
+}
+.archive-editor-dialog .archive-editor-title {
+  color: var(--morning-ink) !important;
+}
+.archive-editor-dialog .mist-muted,
+.archive-editor-dialog .mist-soft {
+  color: var(--morning-muted) !important;
+}
+.archive-editor-dialog .mist-label {
+  color: #5c6472 !important;
+  font-weight: 650;
+}
+.archive-editor-dialog .mist-card {
+  border: 1px solid var(--morning-border) !important;
+  border-radius: .75rem !important;
+  background: #fff !important;
+  box-shadow: none !important;
+}
+.archive-editor-dialog .archive-editor-section-title {
+  color: #8a5426 !important;
+}
+.archive-editor-dialog .archive-editor-empty-image {
+  color: #5c6472 !important;
+}
+.archive-editor-dialog .mist-input {
+  border-color: #d8c9bf !important;
+  border-radius: .65rem !important;
+  background: #fff !important;
+  color: var(--morning-ink) !important;
+  box-shadow: none !important;
+}
+.archive-editor-dialog .mist-input:focus {
+  border-color: #c59c83 !important;
+  box-shadow: none !important;
+}
+.archive-editor-dialog .mist-input:focus-visible {
+  outline: 2px solid #b98c70 !important;
+  outline-offset: 2px;
+  box-shadow: 0 0 0 3px rgba(185, 140, 112, .14) !important;
+}
+.archive-editor-dialog .archive-tag-chip-input:focus-within {
+  border-color: #b98c70 !important;
+  box-shadow: 0 0 0 3px rgba(185, 140, 112, .5) !important;
+}
+.archive-editor-dialog .archive-tag-chip-input input:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
+}
+.archive-editor-dialog .mist-button,
+.archive-editor-dialog .mist-button-secondary {
+  min-height: 44px;
+  border-radius: .65rem !important;
+  box-shadow: none !important;
+}
+.archive-editor-dialog .mist-button {
+  border-color: var(--morning-primary) !important;
+  background: var(--morning-primary) !important;
+  color: #fff !important;
+}
+.archive-editor-dialog .mist-button:hover:not(:disabled) {
+  background: var(--morning-primary-hover) !important;
+}
+.archive-editor-dialog .mist-button-secondary {
+  border-color: #d8c9bf !important;
+  background: #fff !important;
+  color: var(--morning-primary) !important;
+}
+.archive-editor-dialog .mist-button-secondary:hover:not(:disabled) {
+  border-color: #c59c83 !important;
+  background: #fff8f2 !important;
+}
+.archive-editor-dialog .rounded-\[1\.2rem\],
+.archive-editor-dialog .rounded-\[1\.4rem\],
+.archive-editor-dialog .rounded-\[1\.6rem\],
+.archive-editor-dialog .rounded-\[1\.8rem\] {
+  border-radius: .75rem !important;
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .journal-root .journal-nav,
+  .journal-root .messages-area,
+  .journal-root .chips-bar,
+  .journal-root .input-form {
+    background: #fffdf7 !important;
+    backdrop-filter: none !important;
+  }
+}
+
+@media (prefers-contrast: more) {
+  .journal-root .msg-bubble,
+  .journal-root .input-form,
+  .journal-root .chip,
+  .journal-root .journal-mode-tabs,
+  .journal-root .nav-btn {
+    border-color: #8b6d5a !important;
+  }
+  .journal-root .msg-bubble .msg-text,
+  .journal-root .main-input,
+  .journal-root .agent-decision-copy {
+    color: #172033 !important;
+  }
+}
+
 @media (max-width: 1024px) {
+  .morning-bento { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .morning-bento-card:nth-child(odd) { border-right: 1px solid var(--morning-border); }
+  .morning-bento-card:nth-child(even) { border-left: 0; }
+  .morning-bento-card:nth-child(n + 3) {
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--morning-border);
+  }
   .morning-nav { grid-template-columns: 1fr auto; }
   .morning-nav-links { display: none; }
   .morning-hero { grid-template-columns: 1fr 1fr; gap: 2.5rem; }
@@ -7709,6 +8166,18 @@ body {
 }
 
 @media (max-width: 760px) {
+  .site-header {
+    min-height: 4.75rem;
+    padding-right: 1rem !important;
+    padding-left: 1rem !important;
+  }
+  .site-brand { font-size: .8125rem !important; }
+  .site-brand img,
+  .site-brand .logo-img {
+    width: 2rem !important;
+    height: 2rem !important;
+  }
+  .site-nav-actions { gap: .75rem !important; }
   .morning-nav,
   .morning-hero,
   .morning-process,
@@ -7739,7 +8208,6 @@ body {
   .archive-page .archive-tabs { gap: 1.25rem; }
   .archive-page .archive-tab { font-size: .8125rem; }
   .archive-page .archive-stat-list { gap: .75rem; }
-  .archive-page .archive-month-controls > div:last-child { display: none; }
   .archive-page .archive-calendar-grid > div:first-child > div { padding: .65rem .1rem; font-size: .5625rem; }
   .archive-page .archive-calendar-count { border: 0; background: transparent !important; font-size: .625rem; }
   .archive-page .archive-recent-list { grid-template-columns: 1fr; gap: .75rem; }
@@ -7755,7 +8223,11 @@ body {
   .morning-bento,
   .morning-archive-grid { grid-template-columns: 1fr; }
   .morning-bento-card:nth-child(odd) { border-right: 0; }
-  .morning-bento-card + .morning-bento-card { border-top: 1px solid rgba(180, 155, 130, 0.28); }
+  .morning-bento-card + .morning-bento-card {
+    padding-left: 0;
+    border-top: 1px solid rgba(180, 155, 130, 0.28);
+    border-left: 0;
+  }
   .morning-bento-1 { grid-row: auto; }
   .morning-section-heading h2,
   .morning-studio h2,

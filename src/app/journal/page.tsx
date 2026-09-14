@@ -53,6 +53,7 @@ interface ChatMessage {
   isError?: boolean;
   retryText?: string;
   retryUserId?: string;
+  isCommand?: boolean;
 }
 
 type AgentHistoryMessage = Pick<ChatMessage, "role" | "content" | "questions" | "memory">;
@@ -86,6 +87,13 @@ type BillingStatus = {
   isUnlimited?: boolean;
   remaining: { dreamEntries: number; analysis: number; imageGenerations: number };
 };
+
+function isImageGenerationRequest(text: string): boolean {
+  const request = text.trim();
+  if (!request) return false;
+  return /(?:帮我|请|想要|要|给我|可以).{0,8}(?:生成|生|画|做).{0,4}(?:图|图像|图片|画面)|(?:生成|生|画).{0,2}(?:一张|个)?(?:图|图像|图片)|生图/i.test(request)
+    || /(?:generate|make|create|draw).{0,20}(?:image|picture|art|illustration)|(?:image|picture).{0,12}(?:please|now)/i.test(request);
+}
 
 export default function JournalPage() {
   const { lang, T } = useLanguage();
@@ -298,7 +306,7 @@ export default function JournalPage() {
     if (imagePromptEdited) return;
     const text =
       mode === "chat"
-        ? messages.filter((m) => m.role === "user").map((m) => m.content).join(" ")
+        ? messages.filter((m) => m.role === "user" && !m.isCommand).map((m) => m.content).join(" ")
         : quickText;
     if (!text.trim()) return;
     // If analysis produced a comprehensive image prompt, show it directly
@@ -341,10 +349,13 @@ export default function JournalPage() {
     if (isAnalyzing) return J.analyzingBtn;
     return lang === "zh" ? "整理这场梦" : "Organize this dream";
   })();
+  const imageGenerationStartingCopy = lang === "zh"
+    ? "好，我现在用刚才的梦境内容开始生成图像。"
+    : "Okay, I’m starting an image from the dream you just shared.";
 
   const activeDreamText =
     mode === "chat"
-      ? messages.filter((m) => m.role === "user").map((m) => m.content).join("\n\n")
+      ? messages.filter((m) => m.role === "user" && !m.isCommand).map((m) => m.content).join("\n\n")
       : quickText;
   const hasContent = activeDreamText.trim().length > 0;
   const rawFragments = activeDreamText
@@ -463,10 +474,21 @@ export default function JournalPage() {
 
     undoStack.current.push(input);
 
-    const userMsg: ChatMessage = { id: `u-${Date.now()}`, role: "user", content: text };
+    const imageRequest = isImageGenerationRequest(text) && hasContent;
+    const userMsg: ChatMessage = { id: `u-${Date.now()}`, role: "user", content: text, isCommand: imageRequest };
     setMessages((prev) => [...prev, userMsg]);
     setInput("");
     if (inputRef.current) inputRef.current.style.height = "auto";
+
+    if (imageRequest) {
+      setMessages((prev) => [
+        ...prev,
+        { id: `a-image-request-${Date.now()}`, role: "assistant", content: imageGenerationStartingCopy, questions: [] },
+      ]);
+      void generateImage();
+      return;
+    }
+
     setIsTyping(true);
 
     try {
@@ -676,7 +698,7 @@ export default function JournalPage() {
 
   function getDreamText() {
     return mode === "chat"
-      ? messages.filter((m) => m.role === "user").map((m) => m.content).join("\n\n")
+      ? messages.filter((m) => m.role === "user" && !m.isCommand).map((m) => m.content).join("\n\n")
       : quickText;
   }
 
@@ -975,8 +997,8 @@ export default function JournalPage() {
       <div className="dream-orb orb-3" aria-hidden />
 
       {/* Nav */}
-      <nav className="journal-nav">
-        <Link href="/" className="landing-logo">
+      <nav className="journal-nav site-header">
+        <Link href="/" className="landing-logo site-brand">
           <Image src="/dream-reel-logo.png" alt="" aria-hidden width={36} height={36} className="logo-img" />
           <span>Dream Reel</span>
         </Link>
@@ -1010,7 +1032,7 @@ export default function JournalPage() {
           </button>
         </div>
 
-        <div className="nav-actions">
+        <div className="nav-actions site-nav-actions">
           {billingStatus && !billingStatus.isUnlimited && (
             billingStatus.plan === "plus" ? (
               <span className="billing-pill" title={`${B.analysisLeft.replace("{count}", String(billingStatus.remaining.analysis))} · ${B.imagesLeft.replace("{count}", String(billingStatus.remaining.imageGenerations))}`}>
@@ -1028,9 +1050,9 @@ export default function JournalPage() {
               </button>
             )
           )}
-          <LangToggle className="nav-btn" />
-          <Link href="/archive" className="nav-btn">{T.nav.archive}</Link>
-          <Link href="/account" className="nav-btn">{lang === "zh" ? "账号" : "Account"}</Link>
+          <LangToggle className="nav-btn site-language" />
+          <Link href="/archive" className="nav-btn site-nav-link">{T.nav.archive}</Link>
+          <Link href="/account" className="nav-btn site-nav-link">{lang === "zh" ? "账号" : "Account"}</Link>
           {hasContent && (
             <Link href="/archive" className="nav-btn journal-exit-btn" title={lang === "zh" ? "内容已保存，退出记录" : "Content saved — exit"}>
               ✕
@@ -1120,7 +1142,7 @@ export default function JournalPage() {
             {isTyping && (
               <div className="msg-row msg-row-ai">
                 <div className="msg-avatar" aria-hidden>☾</div>
-                <div className="msg-bubble bubble-ai" style={{ padding: "0.65rem 1rem" }}>
+                <div className="msg-bubble bubble-ai msg-typing">
                   <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
                     {[0, 1, 2].map((i) => (
                       <span key={i} className="dream-dot" style={{ animationDelay: `${i * 0.18}s` }} />
@@ -1149,7 +1171,7 @@ export default function JournalPage() {
                   value={dreamDate}
                   max={getTodayDate()}
                   onChange={(e) => setDreamDate(e.target.value)}
-                  className="dream-input-sm"
+                  className="dream-input-sm dream-date-input"
                   style={{ width: "auto" }}
                 />
               </div>
@@ -1463,8 +1485,17 @@ export default function JournalPage() {
             <span className="agent-decision-copy">
               {agentDecisionCopy}
             </span>
-            <button className="chip chip-primary" onClick={() => void analyzeDream()}>
+            <button type="button" className="chip chip-primary" onClick={() => void analyzeDream()} disabled={isAnalyzing}>
               {organizeDreamLabel}
+            </button>
+            <button
+              type="button"
+              className="chip"
+              onClick={() => void generateImage()}
+              disabled={isGeneratingImage || !hasContent}
+              aria-busy={isGeneratingImage}
+            >
+              {isGeneratingImage ? J.image.genLoading : J.quickFlow.generateImage}
             </button>
             {latestAgentDecision.memory?.observedSignals?.slice(0, 3).map((signal) => (
               <span key={signal} className="chip chip-static">
@@ -1503,7 +1534,7 @@ export default function JournalPage() {
                 value={dreamDate}
                 max={getTodayDate()}
                 onChange={(e) => setDreamDate(e.target.value)}
-                className="dream-input-sm"
+                className="dream-input-sm dream-date-input"
                 style={{ width: "auto" }}
               />
             </div>

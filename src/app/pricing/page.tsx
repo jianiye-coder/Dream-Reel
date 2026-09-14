@@ -11,18 +11,18 @@ export default function PricingPage() {
 
   return (
     <main className="morning-landing morning-pricing-page">
-      <nav className="morning-nav" aria-label={lang === "zh" ? "主导航" : "Main navigation"}>
-        <Link href="/" className="morning-brand" aria-label="Dream Reel home">
+      <nav className="morning-nav site-header" aria-label={lang === "zh" ? "主导航" : "Main navigation"}>
+        <Link href="/" className="morning-brand site-brand" aria-label="Dream Reel home">
           <Image src="/dream-reel-logo.png" alt="" aria-hidden width={40} height={40} />
           <span>Dream Reel</span>
         </Link>
-        <div className="morning-nav-links">
+        <div className="morning-nav-links site-nav-links">
           <Link href="/journal">{T.nav.journal}</Link>
           <Link href="/archive">{T.nav.archive}</Link>
         </div>
-        <div className="morning-nav-actions">
-          <LangToggle className="morning-language" />
-          <Link href="/journal" className="morning-nav-cta">{L.navCta}</Link>
+        <div className="morning-nav-actions site-nav-actions">
+          <LangToggle className="morning-language site-language" />
+          <Link href="/journal" className="morning-nav-cta site-primary-action">{L.navCta}</Link>
         </div>
       </nav>
 

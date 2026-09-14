@@ -339,7 +339,7 @@ function TagChipInput({
   }
 
   return (
-    <div className="mist-input flex min-h-[2.75rem] flex-wrap items-center gap-1.5 rounded-[1rem] px-3 py-2 transition focus-within:ring-2 focus-within:ring-[#8f82bc]/50">
+    <div className="archive-tag-chip-input mist-input flex min-h-[2.75rem] flex-wrap items-center gap-1.5 rounded-[1rem] px-3 py-2 transition">
       {chips.map((chip, i) => (
         <span
           key={`${chip}-${i}`}
@@ -795,7 +795,7 @@ function DreamEditorModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-[rgba(232,225,242,0.58)] backdrop-blur-xl sm:items-center"
+      className="archive-editor-overlay fixed inset-0 z-50 flex items-end justify-center bg-[rgba(232,225,242,0.58)] backdrop-blur-xl sm:items-center"
       onClick={(event) => {
         if (event.target === event.currentTarget) void closeEditor();
       }}
@@ -807,14 +807,14 @@ function DreamEditorModal({
         aria-labelledby={titleId}
         tabIndex={-1}
         onKeyDown={onKeyDown}
-        className="mist-card relative max-h-[94vh] w-full max-w-4xl overflow-y-auto overscroll-y-contain rounded-t-[2rem] p-5 sm:rounded-[2rem] sm:p-6"
+        className="archive-editor-dialog mist-card relative max-h-[94vh] w-full max-w-4xl overflow-y-auto overscroll-y-contain rounded-t-[2rem] p-5 sm:rounded-[2rem] sm:p-6"
         onClick={(event) => event.stopPropagation()}
       >
         {/* Modal header — full width, close button always visible */}
         <div className="mb-6 flex items-start justify-between gap-4">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#998db9]">{M.eyebrow}</p>
-            <h2 id={titleId} className="mt-2 text-2xl font-semibold tracking-[-0.03em] text-[#5f5673]">{M.title}</h2>
+            <p className="archive-editor-eyebrow text-xs font-semibold uppercase tracking-[0.22em] text-[#998db9]">{M.eyebrow}</p>
+            <h2 id={titleId} className="archive-editor-title mt-2 text-2xl font-semibold tracking-[-0.03em] text-[#5f5673]">{M.title}</h2>
             <p className="mist-muted mt-2 text-sm leading-7">{M.desc}</p>
           </div>
           <button
@@ -982,7 +982,7 @@ function DreamEditorModal({
             </div>
 
             <div className="mist-card rounded-[1.6rem] p-4">
-              <p className="text-sm font-medium text-[#8f82bc]">{M.sleepTitle}</p>
+              <p className="archive-editor-section-title text-sm font-medium text-[#8f82bc]">{M.sleepTitle}</p>
               <div className="mt-3 grid gap-3 sm:grid-cols-2">
                 <label className="grid gap-1.5">
                   <span className="mist-label text-xs font-medium">{M.sleepStart}</span>
@@ -1034,10 +1034,10 @@ function DreamEditorModal({
 
           <div className="space-y-5">
             <div className="mist-card rounded-[1.8rem] p-4">
-              <p className="text-sm font-medium text-[#8f82bc]">{M.imageTitle}</p>
+              <p className="archive-editor-section-title text-sm font-medium text-[#8f82bc]">{M.imageTitle}</p>
               <p className="mist-soft mt-1 text-xs">{M.imageHint}</p>
 
-              <div className={`group relative mt-4 overflow-hidden rounded-[1.5rem] bg-gradient-to-br ${moodGradient(form.mood)}`}>
+              <div className={`group relative mt-4 overflow-hidden rounded-[1.5rem] bg-gradient-to-br ${form.imageUrl ? moodGradient(form.mood) : "from-[#f8f3f0] via-[#fffdf7] to-[#f2e8de]"}`}>
                 {form.imageUrl ? (
                   <>
                     <Image
@@ -1059,7 +1059,7 @@ function DreamEditorModal({
                     </a>
                   </>
                 ) : (
-                  <div className="flex h-[18rem] items-center justify-center text-sm text-[#766f8e]">
+                  <div className="archive-editor-empty-image flex h-[18rem] items-center justify-center text-sm text-[#766f8e]">
                     {M.noImage}
                   </div>
                 )}
@@ -1108,13 +1108,6 @@ function DreamEditorModal({
                   className="mist-button-secondary rounded-full px-4 py-2.5 text-sm font-medium text-[#756a90] transition hover:bg-white/55"
                 >
                   ↓ {M.exportMarkdown}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => exportCurrentDream("json")}
-                  className="mist-button-secondary rounded-full px-4 py-2.5 text-sm font-medium text-[#756a90] transition hover:bg-white/55"
-                >
-                  ↓ {M.exportJson}
                 </button>
                 <button
                   type="button"
@@ -1550,9 +1543,20 @@ export default function DreamGrid({
               >
                 {G.prev}
               </button>
-              <div className="rounded-full border border-[rgba(169,157,202,0.2)] bg-[rgba(225,217,243,0.65)] px-4 py-2 text-sm font-medium text-[#756a95]">
-                {formatMonthLabel(visibleMonth, lang)}
-              </div>
+              <label className="archive-month-filter">
+                <span className="sr-only">{G.monthFilter}</span>
+                <select
+                  value={visibleMonth}
+                  onChange={(event) => setActiveMonth(event.target.value)}
+                  aria-label={G.monthFilter}
+                >
+                  {monthKeys.map((monthKey) => (
+                    <option key={monthKey} value={monthKey}>
+                      {formatMonthLabel(monthKey, lang)}
+                    </option>
+                  ))}
+                </select>
+              </label>
               <button
                 type="button"
                 onClick={() => activeIndex < monthKeys.length - 1 && setActiveMonth(monthKeys[activeIndex + 1])}
@@ -1561,23 +1565,6 @@ export default function DreamGrid({
               >
                 {G.next}
               </button>
-            </div>
-
-            <div className="flex flex-wrap gap-2">
-              {monthKeys.slice(0, 8).map((monthKey) => (
-                <button
-                  key={monthKey}
-                  type="button"
-                  onClick={() => setActiveMonth(monthKey)}
-                  className={`rounded-full px-3 py-1.5 text-xs transition ${
-                    monthKey === visibleMonth
-                      ? "bg-[rgba(205,196,229,0.9)] text-[#5f5673]"
-                      : "border border-[rgba(176,168,197,0.22)] bg-white/35 text-[#847a9a] hover:bg-white/55 hover:text-[#665d7a]"
-                  }`}
-                >
-                  {monthKey.replace("-", ".")}
-                </button>
-              ))}
             </div>
           </div>
 

@@ -44,7 +44,7 @@ export default function ArchiveShell({
   const searchParams = useSearchParams();
   const [billingStatus, setBillingStatus] = useState<BillingStatus | null>(null);
   const [billingError, setBillingError] = useState("");
-  const [exporting, setExporting] = useState<"markdown" | "json" | null>(null);
+  const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState("");
   const requestedTab = searchParams.get("tab");
   const activeTab: ArchiveTab = isArchiveTab(requestedTab) ? requestedTab : "calendar";
@@ -87,11 +87,11 @@ export default function ArchiveShell({
     }
   }
 
-  async function exportAllDreams(format: "markdown" | "json") {
-    setExporting(format);
+  async function exportAllDreams() {
+    setExporting(true);
     setExportError("");
     try {
-      const response = await fetch(`/api/dreams/export?format=${format}&lang=${lang}`, {
+      const response = await fetch(`/api/dreams/export?format=markdown&lang=${lang}`, {
         cache: "no-store",
       });
       if (!response.ok) throw new Error(A.export.failed);
@@ -100,7 +100,7 @@ export default function ArchiveShell({
       const href = URL.createObjectURL(blob);
       const anchor = document.createElement("a");
       anchor.href = href;
-      anchor.download = `dream-reel-export-${new Date().toISOString().slice(0, 10)}.${format === "json" ? "json" : "md"}`;
+      anchor.download = `dream-reel-export-${new Date().toISOString().slice(0, 10)}.md`;
       document.body.appendChild(anchor);
       anchor.click();
       anchor.remove();
@@ -108,7 +108,7 @@ export default function ArchiveShell({
     } catch {
       setExportError(A.export.failed);
     } finally {
-      setExporting(null);
+      setExporting(false);
     }
   }
 
@@ -117,21 +117,21 @@ export default function ArchiveShell({
       <div className="mist-orb left-[-8rem] top-[-5rem] h-[20rem] w-[20rem] bg-[#d7c9ea]/80" aria-hidden />
       <div className="mist-orb right-[-4rem] top-[6rem] h-[18rem] w-[18rem] bg-[#bfd2e6]/72" aria-hidden />
 
-      <nav className="relative z-10 flex items-center justify-between px-6 py-5 sm:px-10">
-        <Link href="/" className="landing-logo">
+      <nav className="site-header relative z-10 flex items-center justify-between px-6 py-5 sm:px-10">
+        <Link href="/" className="landing-logo site-brand">
           <Image src="/dream-reel-logo.png" alt="" aria-hidden width={36} height={36} className="logo-img" />
           <span>Dream Reel</span>
         </Link>
-        <div className="flex items-center gap-2">
-          <LangToggle className="mist-button-secondary rounded-full px-3 py-1.5 text-xs font-medium transition hover:bg-white/48" />
-          <Link href="/pricing" className="archive-nav-link mist-button-secondary rounded-full px-3 py-1.5 text-xs font-medium transition hover:bg-white/48">
+        <div className="site-nav-actions flex items-center gap-2">
+          <LangToggle className="site-language mist-button-secondary rounded-full px-3 py-1.5 text-xs font-medium transition hover:bg-white/48" />
+          <Link href="/pricing" className="site-nav-link archive-nav-link mist-button-secondary rounded-full px-3 py-1.5 text-xs font-medium transition hover:bg-white/48">
             {lang === "zh" ? "订阅" : "Pricing"}
           </Link>
-          <Link href="/journal" className="archive-record-link mist-button-secondary rounded-full px-3 py-1.5 text-xs font-medium transition hover:bg-white/48">
+          <Link href="/journal" className="site-primary-action archive-record-link mist-button-secondary rounded-full px-3 py-1.5 text-xs font-medium transition hover:bg-white/48">
             {A.recordBtn}
           </Link>
           {user && (
-            <Link href="/account" className="archive-nav-link mist-button-secondary rounded-full px-3 py-1.5 text-xs font-medium transition hover:bg-white/48">
+            <Link href="/account" className="site-nav-link archive-nav-link mist-button-secondary rounded-full px-3 py-1.5 text-xs font-medium transition hover:bg-white/48">
               {lang === "zh" ? "账号" : "Account"}
             </Link>
           )}
@@ -147,17 +147,14 @@ export default function ArchiveShell({
             <p className="mist-muted mt-3 max-w-2xl text-sm leading-7">{A.desc}</p>
           </div>
           <div className="archive-export-panel shrink-0">
-            <p className="archive-export-label pb-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-[#9185ae]">
-              {exporting ? A.export.exporting : A.export.title}
-            </p>
             <div className="flex flex-wrap">
               <button
                 type="button"
-                onClick={() => void exportAllDreams("markdown")}
-                disabled={exporting !== null}
+                onClick={() => void exportAllDreams()}
+                disabled={exporting}
                 className="archive-export-action text-xs font-semibold transition disabled:opacity-50"
               >
-                ↓ {A.export.markdown}
+                {exporting ? A.export.exporting : `↓ ${A.export.markdown}`}
               </button>
             </div>
             {exportError ? <p className="px-2 pt-2 text-xs text-[#b8758f]">{exportError}</p> : null}

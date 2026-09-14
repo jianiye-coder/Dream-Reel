@@ -21,6 +21,7 @@ function LoginForm() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [inputModality, setInputModality] = useState<"keyboard" | "pointer">("keyboard");
 
   const isRegister = tab === "register";
 
@@ -71,18 +72,20 @@ function LoginForm() {
 
   return (
     <main className="auth-page">
-      <header className="auth-header">
-        <Link href="/" className="morning-brand">
+      <header className="auth-header site-header">
+        <Link href="/" className="morning-brand site-brand">
           <Image src="/dream-reel-logo.png" width={40} height={40} alt="" aria-hidden />
           <span>Dream Reel</span>
         </Link>
-        <LangToggle className="morning-language" />
+        <LangToggle className="morning-language site-language" />
       </header>
 
       <section className="auth-shell" aria-labelledby="auth-title">
         <div className="auth-intro">
           <p className="morning-eyebrow">{lang === "zh" ? "你的晨间梦境档案" : "Your morning dream archive"}</p>
-          <h1>{lang === "zh" ? "醒来后，从这里继续。" : "Continue from here when you wake."}</h1>
+          <h1>
+            {lang === "zh" ? <>醒来后，<br />从这里继续。</> : "Continue from here when you wake."}
+          </h1>
           <p>{lang === "zh" ? "安全地保存梦境，与 Agent 一起回忆，并观察只属于你的长期线索。" : "Keep dreams safely, recall them with the Agent, and notice patterns that belong only to you."}</p>
         </div>
 
@@ -116,7 +119,15 @@ function LoginForm() {
           ))}
         </div>
 
-        <form onSubmit={(e) => void handleSubmit(e)} className="auth-form">
+        <form
+          onSubmit={(e) => void handleSubmit(e)}
+          onPointerDown={() => setInputModality("pointer")}
+          onKeyDown={(event) => {
+            if (event.key === "Tab") setInputModality("keyboard");
+          }}
+          className="auth-form"
+          data-input-modality={inputModality}
+        >
           {isRegister && (
             <label className="auth-field">
               <span>{L.name}</span>

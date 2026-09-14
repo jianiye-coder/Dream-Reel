@@ -106,23 +106,23 @@ export default function AccountPage() {
       <div className="mist-orb left-[-8rem] top-[-5rem] h-[20rem] w-[20rem] bg-[#d7c9ea]/80" aria-hidden />
       <div className="mist-orb right-[-4rem] top-[6rem] h-[18rem] w-[18rem] bg-[#bfd2e6]/72" aria-hidden />
 
-      <nav className="relative z-10 flex items-center justify-between px-6 py-5 sm:px-10">
-        <Link href="/" className="landing-logo">
+      <nav className="site-header relative z-10 flex items-center justify-between px-6 py-5 sm:px-10">
+        <Link href="/" className="landing-logo site-brand">
           <Image src="/dream-reel-logo.png" alt="" aria-hidden width={36} height={36} className="logo-img" />
           <span>Dream Reel</span>
         </Link>
-        <div className="flex items-center gap-2">
-          <LangToggle className="mist-button-secondary rounded-full px-3 py-1.5 text-xs font-medium transition hover:bg-white/48" />
-          <Link href="/journal" className="mist-button-secondary rounded-full px-4 py-2 text-sm font-medium transition hover:bg-white/48">
+        <div className="site-nav-actions flex items-center gap-2">
+          <LangToggle className="site-language mist-button-secondary rounded-full px-3 py-1.5 text-xs font-medium transition hover:bg-white/48" />
+          <Link href="/journal" className="site-primary-action mist-button-secondary rounded-full px-4 py-2 text-sm font-medium transition hover:bg-white/48">
             {T.nav.journal}
           </Link>
-          <Link href="/archive" className="mist-button-secondary rounded-full px-4 py-2 text-sm font-medium transition hover:bg-white/48">
+          <Link href="/archive" className="site-nav-link mist-button-secondary rounded-full px-4 py-2 text-sm font-medium transition hover:bg-white/48">
             {T.nav.archive}
           </Link>
           {session?.user && (
             <button
               onClick={() => signOut({ callbackUrl: "/login" })}
-              className="mist-button-secondary rounded-full px-3 py-1.5 text-xs font-medium transition hover:bg-white/48"
+              className="site-nav-link mist-button-secondary rounded-full px-3 py-1.5 text-xs font-medium transition hover:bg-white/48"
             >
               {T.login.signOut}
             </button>

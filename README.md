@@ -56,6 +56,8 @@ DREAM_TEXT_ENCRYPTION_KEY_ID=primary
 DREAM_TEXT_PREVIOUS_ENCRYPTION_KEYS=
 OPENAI_API_KEY=your_openai_api_key
 OPENAI_MODEL=gpt-5.5
+# Optional: image generation uses Flatkey first when this key is configured.
+FLATKEY_API_KEY=your_flatkey_api_key
 # Primary provider for dream analysis and chat; OpenAI is used as fallback.
 GROQ_API_KEY=your_groq_api_key
 GROQ_MODEL=openai/gpt-oss-120b
@@ -148,6 +150,8 @@ DREAM_TEXT_ENCRYPTION_KEY_ID=primary
 DREAM_TEXT_PREVIOUS_ENCRYPTION_KEYS=
 OPENAI_API_KEY=your_openai_api_key
 OPENAI_MODEL=gpt-5.5
+# 可选：配置后，图像生成将优先通过 Flatkey。
+FLATKEY_API_KEY=your_flatkey_api_key
 # 梦境分析与对话优先使用 Groq；失败时回退 OpenAI。
 GROQ_API_KEY=your_groq_api_key
 GROQ_MODEL=openai/gpt-oss-120b
@@ -183,5 +187,5 @@ npm run dev
 - `DREAM_AGENT_GUARDED_PERCENT` 控制新梦境回忆策略的稳定用户灰度比例；默认保持 `0`，只按质量门禁逐级提高。
 - 管理员登录后可下载 `/api/admin/agent-feedback?days=14&download=1`，并在每次提高灰度前运行 `npm run eval:agent:canary -- snapshot.json`。
 - 梦境分析当前使用 `gpt-4o-mini`。
-- 图像生成当前使用 `gpt-image-2`。
+- 图像生成使用 `gpt-image-2`；配置 `FLATKEY_API_KEY` 时经由 Flatkey，否则回退为 OpenAI。
 - 生成的原图与缩略图存储在 Vercel Blob；图片生成功能需要配置 `BLOB_READ_WRITE_TOKEN`。
