@@ -8008,6 +8008,9 @@ body:has(.archive-editor-overlay)::after {
 .archive-editor-dialog .archive-editor-eyebrow {
   color: #8a5426 !important;
 }
+.archive-editor-dialog .archive-editor-title {
+  color: var(--morning-ink) !important;
+}
 .archive-editor-dialog .mist-muted,
 .archive-editor-dialog .mist-soft {
   color: var(--morning-muted) !important;
@@ -8024,6 +8027,9 @@ body:has(.archive-editor-overlay)::after {
 }
 .archive-editor-dialog .archive-editor-section-title {
   color: #8a5426 !important;
+}
+.archive-editor-dialog .archive-editor-empty-image {
+  color: #5c6472 !important;
 }
 .archive-editor-dialog .mist-input {
   border-color: #d8c9bf !important;

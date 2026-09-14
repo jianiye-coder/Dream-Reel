@@ -814,7 +814,7 @@ function DreamEditorModal({
         <div className="mb-6 flex items-start justify-between gap-4">
           <div>
             <p className="archive-editor-eyebrow text-xs font-semibold uppercase tracking-[0.22em] text-[#998db9]">{M.eyebrow}</p>
-            <h2 id={titleId} className="mt-2 text-2xl font-semibold tracking-[-0.03em] text-[#5f5673]">{M.title}</h2>
+            <h2 id={titleId} className="archive-editor-title mt-2 text-2xl font-semibold tracking-[-0.03em] text-[#5f5673]">{M.title}</h2>
             <p className="mist-muted mt-2 text-sm leading-7">{M.desc}</p>
           </div>
           <button
@@ -1037,7 +1037,7 @@ function DreamEditorModal({
               <p className="archive-editor-section-title text-sm font-medium text-[#8f82bc]">{M.imageTitle}</p>
               <p className="mist-soft mt-1 text-xs">{M.imageHint}</p>
 
-              <div className={`group relative mt-4 overflow-hidden rounded-[1.5rem] bg-gradient-to-br ${moodGradient(form.mood)}`}>
+              <div className={`group relative mt-4 overflow-hidden rounded-[1.5rem] bg-gradient-to-br ${form.imageUrl ? moodGradient(form.mood) : "from-[#f8f3f0] via-[#fffdf7] to-[#f2e8de]"}`}>
                 {form.imageUrl ? (
                   <>
                     <Image
@@ -1059,7 +1059,7 @@ function DreamEditorModal({
                     </a>
                   </>
                 ) : (
-                  <div className="flex h-[18rem] items-center justify-center text-sm text-[#766f8e]">
+                  <div className="archive-editor-empty-image flex h-[18rem] items-center justify-center text-sm text-[#766f8e]">
                     {M.noImage}
                   </div>
                 )}
