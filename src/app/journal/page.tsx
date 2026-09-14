@@ -1684,14 +1684,6 @@ export default function JournalPage() {
 
       {isDevelopingRoomOpen && (
         <div className="developing-room" role="dialog" aria-modal="true" aria-label="Dream Developing Room">
-          <div className="developing-atmosphere" aria-hidden>
-            <span className="developing-glow glow-a" />
-            <span className="developing-glow glow-b" />
-            <span className="developing-particle particle-a" />
-            <span className="developing-particle particle-b" />
-            <span className="developing-particle particle-c" />
-          </div>
-
           <button className="developing-close" onClick={() => setIsDevelopingRoomOpen(false)}>
             {lang === "zh" ? "关闭" : "Close"}
           </button>

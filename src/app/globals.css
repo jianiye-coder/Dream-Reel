@@ -7349,6 +7349,182 @@ body {
   color: var(--archive-pane-body) !important;
 }
 
+/* Dream image generation belongs to the same quiet morning surface as the
+   journal, rather than introducing a separate darkroom visual language. */
+.developing-room {
+  box-sizing: border-box;
+  min-height: 100dvh;
+  justify-content: center;
+  overflow-y: auto;
+  padding: clamp(1.25rem, 4vw, 3rem);
+  color: var(--morning-ink);
+  background: rgba(255, 251, 235, 0.98);
+  animation: developing-room-in 0.2s ease-out both;
+}
+
+.developing-room::before,
+.developing-room::after,
+.developing-atmosphere,
+.developing-image-shell::before,
+.developing-image-shell::after {
+  display: none;
+}
+
+.developing-close {
+  top: clamp(1rem, 2vw, 1.5rem);
+  right: clamp(1rem, 2vw, 1.5rem);
+  min-height: 44px;
+  border-color: #cdbdb2;
+  border-radius: 0.7rem;
+  background: #fff;
+  color: var(--morning-primary);
+  padding: 0.5rem 0.85rem;
+  font-size: 0.82rem;
+  font-weight: 700;
+  backdrop-filter: none;
+  transition: background-color 0.18s ease, border-color 0.18s ease;
+}
+
+.developing-close:hover {
+  border-color: #b98966;
+  background: var(--morning-soft);
+}
+
+.developing-copy {
+  max-width: 38rem;
+}
+
+.developing-copy p {
+  color: var(--morning-secondary);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+}
+
+.developing-copy h2 {
+  margin-top: 0.6rem;
+  color: var(--morning-ink);
+  font-family: inherit;
+  font-size: clamp(1.8rem, 4vw, 3rem);
+  font-weight: 650;
+  letter-spacing: 0;
+  line-height: 1.15;
+}
+
+.developing-image-stage {
+  width: min(40rem, 100%);
+  margin-top: clamp(1.25rem, 3vw, 2rem);
+}
+
+.developing-content-row,
+.developing-content-row-split {
+  display: block;
+}
+
+.developing-image-shell,
+.developing-content-row-split .developing-image-shell {
+  width: min(31rem, 100%);
+  margin: 0 auto;
+  border: 1px solid var(--morning-border);
+  border-radius: 0.75rem;
+  background: var(--morning-soft);
+  box-shadow: 0 16px 42px rgba(120, 53, 15, 0.1);
+  transform: none;
+}
+
+.developing-placeholder {
+  filter: none;
+  opacity: 1;
+  background: #f8f3f0;
+  animation: none;
+}
+
+.placeholder-moon {
+  background: rgba(146, 64, 14, 0.18);
+}
+
+.placeholder-window,
+.placeholder-page {
+  border-color: rgba(146, 64, 14, 0.2);
+}
+
+.placeholder-page {
+  background: rgba(255, 255, 255, 0.6);
+}
+
+.developed-image {
+  filter: blur(12px) saturate(0.8) contrast(0.9) brightness(0.88);
+}
+
+.developed-download-btn {
+  width: 2.75rem;
+  height: 2.75rem;
+  border: 1px solid var(--morning-border);
+  border-radius: 0.7rem;
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--morning-primary);
+  backdrop-filter: none;
+  opacity: 1;
+}
+
+.developed-download-btn:hover {
+  background: var(--morning-soft);
+}
+
+.developing-steps {
+  gap: 0.4rem 0.8rem;
+  margin-top: 1rem;
+  color: var(--morning-muted);
+  font-size: 0.8rem;
+}
+
+.developing-steps span {
+  animation: none;
+}
+
+.developing-fragments {
+  display: none;
+}
+
+.developing-error {
+  position: static;
+  margin: 1rem auto 0;
+  color: #9f1239;
+  font-size: 0.85rem;
+  text-align: center;
+}
+
+@keyframes developing-room-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .developing-room,
+  .developed-image {
+    animation: none;
+  }
+
+  .developed-image {
+    opacity: 1;
+    filter: none;
+    transform: none;
+  }
+}
+
+@media (max-width: 760px) {
+  .developing-room {
+    justify-content: flex-start;
+    padding-top: 5.25rem;
+  }
+
+  .developing-image-shell,
+  .developing-content-row-split .developing-image-shell {
+    width: min(100%, 25rem);
+    border-width: 1px;
+  }
+}
+
 /* Chat uses the same calm, readable morning surface as the journal. */
 .journal-root .messages-area,
 .journal-root .chips-bar {
