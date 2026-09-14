@@ -8041,6 +8041,14 @@ body:has(.archive-editor-overlay)::after {
   outline-offset: 2px;
   box-shadow: 0 0 0 3px rgba(185, 140, 112, .14) !important;
 }
+.archive-editor-dialog .archive-tag-chip-input:focus-within {
+  border-color: #b98c70 !important;
+  box-shadow: 0 0 0 3px rgba(185, 140, 112, .5) !important;
+}
+.archive-editor-dialog .archive-tag-chip-input input:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
+}
 .archive-editor-dialog .mist-button,
 .archive-editor-dialog .mist-button-secondary {
   min-height: 44px;

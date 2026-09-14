@@ -339,7 +339,7 @@ function TagChipInput({
   }
 
   return (
-    <div className="mist-input flex min-h-[2.75rem] flex-wrap items-center gap-1.5 rounded-[1rem] px-3 py-2 transition focus-within:ring-2 focus-within:ring-[#8f82bc]/50">
+    <div className="archive-tag-chip-input mist-input flex min-h-[2.75rem] flex-wrap items-center gap-1.5 rounded-[1rem] px-3 py-2 transition">
       {chips.map((chip, i) => (
         <span
           key={`${chip}-${i}`}
