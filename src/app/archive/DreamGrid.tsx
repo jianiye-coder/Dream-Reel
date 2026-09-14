@@ -1111,13 +1111,6 @@ function DreamEditorModal({
                 </button>
                 <button
                   type="button"
-                  onClick={() => exportCurrentDream("json")}
-                  className="mist-button-secondary rounded-full px-4 py-2.5 text-sm font-medium text-[#756a90] transition hover:bg-white/55"
-                >
-                  ↓ {M.exportJson}
-                </button>
-                <button
-                  type="button"
                   onClick={deleteEntry}
                   disabled={deleting}
                   className="mist-button-secondary rounded-full border-[#b8758f]/40 px-5 py-2.5 text-sm font-medium text-[#c58aa0] transition hover:bg-[#4a1f34]/24 disabled:opacity-50"
