@@ -8466,6 +8466,52 @@ body:has(.archive-editor-overlay)::after {
   opacity: 1;
 }
 
+/* Keep next-step actions on the same warm paper palette as the journal. */
+.journal-root .quick-choice-panel {
+  border-color: var(--morning-border) !important;
+  border-radius: 0.9rem;
+  background: rgba(255, 253, 245, 0.92) !important;
+  box-shadow: 0 12px 32px rgba(120, 53, 15, 0.07) !important;
+  backdrop-filter: none;
+}
+
+.journal-root .quick-choice-panel .tool-btn {
+  min-height: 44px;
+  border-radius: 0.7rem;
+  box-shadow: none;
+}
+
+.journal-root .quick-choice-panel .action-primary,
+.journal-root .quick-choice-panel .action-image {
+  border-color: var(--morning-primary);
+  background: var(--morning-primary);
+  color: #fff;
+}
+
+.journal-root .quick-choice-panel .action-secondary {
+  border-color: #cdbdb2;
+  background: #fff;
+  color: var(--morning-primary);
+}
+
+.journal-root .quick-choice-panel .action-primary:hover:not(:disabled),
+.journal-root .quick-choice-panel .action-image:hover:not(:disabled) {
+  border-color: var(--morning-primary-hover);
+  background: var(--morning-primary-hover);
+  color: #fff;
+}
+
+.journal-root .quick-choice-panel .action-secondary:hover:not(:disabled) {
+  border-color: #b98966;
+  background: #fff8f2;
+  color: var(--morning-primary-hover);
+}
+
+.journal-root .save-ok.save-status-text {
+  color: #3f6e5e;
+  opacity: 1 !important;
+}
+
 /* Keep the shared header above the legacy decorative film overlay while
    remaining below dialogs, so the product name stays readable. */
 .site-header {
