@@ -1336,7 +1336,7 @@ export default function JournalPage() {
             {currentAnalysis && mode === "quick" && (
               <div className="quick-analysis-card">
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.625rem" }}>
-                  <p style={{ fontSize: "0.7rem", fontWeight: 600, letterSpacing: "0.14em", textTransform: "uppercase", color: "rgba(165, 148, 220, 0.7)" }}>
+                  <p className="quick-analysis-heading" style={{ fontSize: "0.7rem", fontWeight: 600, letterSpacing: "0.14em", textTransform: "uppercase" }}>
                     {J.analysis.title.replace("✦  ", "")}
                   </p>
                   <button type="button" className="panel-close" onClick={() => setAnalysis(null)}>✕</button>
