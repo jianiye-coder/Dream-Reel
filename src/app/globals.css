@@ -8424,3 +8424,44 @@ body:has(.archive-editor-overlay)::after {
     transition-duration: .01ms !important;
   }
 }
+
+/* Analysis results are reference material: keep every text tier readable on
+   the warm surface instead of inheriting the legacy night-mode lavender. */
+.journal-root .quick-analysis-entry-copy p,
+.journal-root .quick-analysis-heading {
+  color: #8a5426 !important;
+}
+
+.journal-root .quick-analysis-entry-copy span,
+.journal-root .quick-choice-panel span,
+.journal-root .quick-analysis-insight {
+  color: #3f4a5f !important;
+}
+
+.journal-root .quick-analysis-value {
+  color: #352b42 !important;
+}
+
+.journal-root .quick-analysis-label {
+  color: #8a5426 !important;
+}
+
+.journal-root .quick-choice-panel > div > p {
+  color: var(--morning-ink) !important;
+  font-family: inherit;
+}
+
+.journal-root .quick-analysis-card .panel-close {
+  color: #64748b;
+}
+
+.journal-root .quick-analysis-card .panel-close:hover {
+  color: var(--morning-primary);
+}
+
+.journal-root .quick-choice-panel .tool-btn:disabled {
+  border-color: #d8c9bf;
+  background: #eee7e2;
+  color: #475569;
+  opacity: 1;
+}
