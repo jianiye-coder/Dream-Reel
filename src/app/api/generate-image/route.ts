@@ -48,7 +48,6 @@ function buildFinalImagePrompt(
   const parts = [
     prefix,
     brief ? `${prompt.trim()}\n\nVisual style: ${brief}` : prompt.trim(),
-    "Avoid text, captions, logos, watermarks, poster borders, or typography.",
   ].filter(Boolean);
   return parts.join("\n");
 }

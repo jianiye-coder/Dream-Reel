@@ -1037,7 +1037,7 @@ function DreamEditorModal({
               <p className="archive-editor-section-title text-sm font-medium text-[#8f82bc]">{M.imageTitle}</p>
               <p className="mist-soft mt-1 text-xs">{M.imageHint}</p>
 
-              <div className={`group relative mt-4 overflow-hidden rounded-[1.5rem] bg-gradient-to-br ${form.imageUrl ? moodGradient(form.mood) : "from-[#f8f3f0] via-[#fffdf7] to-[#f2e8de]"}`}>
+              <div className="archive-editor-image-frame group relative mt-4 overflow-hidden rounded-[1.5rem]">
                 {form.imageUrl ? (
                   <>
                     <Image
@@ -1059,7 +1059,7 @@ function DreamEditorModal({
                     </a>
                   </>
                 ) : (
-                  <div className="archive-editor-empty-image flex h-[18rem] items-center justify-center text-sm text-[#766f8e]">
+                  <div className="archive-editor-empty-image flex h-[18rem] items-center justify-center text-sm">
                     {M.noImage}
                   </div>
                 )}

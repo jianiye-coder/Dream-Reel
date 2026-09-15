@@ -8432,8 +8432,14 @@ body:has(.archive-editor-overlay)::after {
 .archive-editor-dialog .archive-editor-section-title {
   color: #8a5426 !important;
 }
+.archive-editor-dialog .archive-editor-image-frame {
+  border: 1px solid var(--morning-border);
+  background: #f8f1ea !important;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .48);
+}
 .archive-editor-dialog .archive-editor-empty-image {
-  color: #5c6472 !important;
+  background: #f8f1ea !important;
+  color: var(--morning-muted) !important;
 }
 .archive-editor-dialog .mist-input {
   border-color: #d8c9bf !important;
