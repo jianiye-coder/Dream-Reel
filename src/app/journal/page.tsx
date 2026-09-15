@@ -1720,9 +1720,11 @@ export default function JournalPage() {
                   </>
                 ) : (
                   <div className="developing-placeholder" aria-hidden>
-                    <span className="placeholder-moon" />
-                    <span className="placeholder-window" />
-                    <span className="placeholder-page" />
+                    <span className="placeholder-film-strip">
+                      <span className="placeholder-film-frame film-frame-one" />
+                      <span className="placeholder-film-frame film-frame-two" />
+                      <span className="placeholder-film-frame film-frame-three" />
+                    </span>
                   </div>
                 )}
               </div>
