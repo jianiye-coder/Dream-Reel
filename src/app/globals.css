@@ -8338,6 +8338,61 @@ body {
   background: transparent;
 }
 
+/* Archive day details use the same warm paper palette as the calendar. */
+.archive-day-dialog-backdrop {
+  background: rgba(72, 47, 27, .28);
+  backdrop-filter: blur(5px);
+}
+
+.archive-day-dialog {
+  border: 1px solid var(--morning-border);
+  background: #fffdf7;
+  box-shadow: 0 24px 70px rgba(72, 47, 27, .16);
+  color: var(--morning-ink);
+}
+
+.archive-day-dialog-count,
+.archive-day-dialog-mood {
+  color: #8a5426;
+}
+
+.archive-day-dialog-title,
+.archive-day-dialog-entry-title {
+  color: var(--morning-ink);
+  letter-spacing: 0;
+}
+
+.archive-day-dialog-close {
+  min-height: 44px;
+  border: 1px solid var(--morning-border);
+  background: #fff;
+  color: var(--morning-primary);
+}
+
+.archive-day-dialog-close:hover,
+.archive-day-dialog-close:focus-visible {
+  border-color: var(--morning-primary);
+  background: var(--morning-soft);
+}
+
+.archive-day-dialog-entry {
+  border: 1px solid var(--morning-border);
+  border-radius: .75rem;
+  background: #fff;
+  box-shadow: none;
+}
+
+.archive-day-dialog-entry:hover:not(:disabled),
+.archive-day-dialog-entry:focus-visible {
+  border-color: rgba(138, 84, 38, .48);
+  background: #fcf7f1;
+}
+
+.archive-day-dialog-date,
+.archive-day-dialog-entry-body {
+  color: var(--morning-muted);
+}
+
 /* Archive editing belongs to the same daylight surface as the rest of the app. */
 body:has(.archive-editor-overlay)::before,
 body:has(.archive-editor-overlay)::after {

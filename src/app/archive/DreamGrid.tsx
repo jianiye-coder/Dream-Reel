@@ -2085,7 +2085,7 @@ export default function DreamGrid({
 
       {selectedDay && (
         <div
-          className="fixed inset-0 z-50 flex items-end justify-center bg-[rgba(232,225,242,0.58)] backdrop-blur-xl sm:items-center"
+          className="archive-day-dialog-backdrop fixed inset-0 z-50 flex items-end justify-center sm:items-center"
           onClick={(event) => {
             if (event.target === event.currentTarget) closeDayDialog();
           }}
@@ -2097,15 +2097,15 @@ export default function DreamGrid({
             aria-labelledby={dayDialogTitleId}
             tabIndex={-1}
             onKeyDown={onDayDialogKeyDown}
-            className="mist-card relative max-h-[85vh] w-full max-w-xl overflow-y-auto overscroll-y-contain rounded-t-[2rem] p-5 sm:rounded-[2rem] sm:p-6"
+            className="archive-day-dialog relative max-h-[85vh] w-full max-w-xl overflow-y-auto overscroll-y-contain rounded-t-[2rem] p-5 sm:rounded-[2rem] sm:p-6"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="mb-5 flex items-center justify-between">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#998db9]">
+                <p className="archive-day-dialog-count text-xs font-semibold uppercase tracking-[0.22em]">
                   {selectedDay.entries.length}{lang === "zh" ? " 条梦境" : " dreams"}
                 </p>
-                <h2 id={dayDialogTitleId} className="mt-1 text-xl font-semibold tracking-[-0.02em] text-[#5f5673]">
+                <h2 id={dayDialogTitleId} className="archive-day-dialog-title mt-1 text-xl font-semibold">
                   {selectedDay.label}
                 </h2>
               </div>
@@ -2114,7 +2114,7 @@ export default function DreamGrid({
                 type="button"
                 onClick={closeDayDialog}
                 aria-label={lang === "zh" ? "关闭日期详情" : "Close date details"}
-                className="mist-button-secondary flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-medium text-[#6b6282] transition hover:bg-white/55"
+                className="archive-day-dialog-close flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-medium transition"
               >
                 ✕
               </button>
@@ -2127,14 +2127,14 @@ export default function DreamGrid({
                   type="button"
                   onClick={() => { setSelectedDay(null); void openEntry(entry); }}
                   disabled={openingEntryId === entry.id}
-                  className={`w-full rounded-[1.5rem] bg-gradient-to-br p-4 text-left transition hover:brightness-95 ${moodGradient(entry.mood)}`}
+                  className="archive-day-dialog-entry w-full p-4 text-left transition"
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-xs font-medium text-[#8f82bc]">{entry.mood || (lang === "zh" ? "无情绪标注" : "No mood")}</span>
-                    <span className="text-xs text-[#9b90b4]">{formatDateTime(entry.capturedAt, lang)}</span>
+                    <span className="archive-day-dialog-mood text-xs font-medium">{entry.mood || (lang === "zh" ? "无情绪标注" : "No mood")}</span>
+                    <span className="archive-day-dialog-date text-xs">{formatDateTime(entry.capturedAt, lang)}</span>
                   </div>
-                  <p className="mt-2 text-sm font-semibold text-[#5f5673]">{dreamDisplayTitle(entry)}</p>
-                  <p className="mt-1.5 line-clamp-2 text-xs leading-5 text-[#6e667f]">
+                  <p className="archive-day-dialog-entry-title mt-2 text-sm font-semibold">{dreamDisplayTitle(entry)}</p>
+                  <p className="archive-day-dialog-entry-body mt-1.5 line-clamp-2 text-xs leading-5">
                     {truncate(entry.cleanText.replace(/\s+/g, " "), 100)}
                   </p>
                 </button>
