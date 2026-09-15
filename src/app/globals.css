@@ -7619,6 +7619,85 @@ body {
   text-align: center;
 }
 
+.developing-room > * {
+  flex-shrink: 0;
+}
+
+.developing-room:has(.developed-next-steps) {
+  justify-content: flex-start;
+  padding-top: 4.75rem;
+}
+
+.developing-room:has(.developed-next-steps) .developing-image-shell {
+  width: min(31rem, 100%, max(12rem, calc(100dvh - 21rem)));
+}
+
+.developed-next-steps {
+  position: relative;
+  width: min(40rem, 100%);
+  margin-top: 1.25rem;
+  text-align: center;
+}
+
+.developed-next-steps > p {
+  color: var(--morning-muted);
+  font-size: .875rem;
+  line-height: 1.6;
+}
+
+.developed-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: .75rem;
+  margin-top: .875rem;
+}
+
+.developed-actions button {
+  min-height: 44px;
+  padding: .65rem 1rem;
+  border: 1px solid var(--morning-border);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--morning-primary);
+  font-size: .875rem;
+  font-weight: 650;
+  line-height: 1.4;
+  cursor: pointer;
+  transition: background-color .18s ease, border-color .18s ease;
+}
+
+.developed-actions button:hover:not(:disabled) {
+  background: var(--morning-soft);
+  border-color: var(--morning-primary);
+}
+
+.developed-actions .developed-chat-action {
+  background: var(--morning-primary);
+  color: #fff;
+}
+
+.developed-actions .developed-chat-action:hover {
+  background: var(--morning-primary-hover);
+}
+
+.developed-actions button:focus-visible {
+  outline: 2px solid var(--morning-primary);
+  outline-offset: 3px;
+}
+
+.developed-actions button:disabled {
+  background: #f3f0ec;
+  color: #70685f;
+  cursor: not-allowed;
+}
+
+@media (max-width: 480px) {
+  .developed-actions button {
+    flex: 1 1 100%;
+  }
+}
+
 @keyframes developing-room-in {
   from { opacity: 0; }
   to { opacity: 1; }
