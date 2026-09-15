@@ -158,9 +158,7 @@ export default function LandingPage() {
         <div><Image src="/dream-reel-logo.png" width={36} height={36} alt="" aria-hidden /><span>Dream Reel</span></div>
         <p>{lang === "zh" ? "在梦消失之前，留住第一帧。" : "Keep the first frame before it fades."}</p>
         <div>
-          <Link href="/journal">{T.nav.journal}</Link>
-          <Link href="/archive">{T.nav.archive}</Link>
-          <Link href="/blog/dreams-and-consciousness">{lang === "zh" ? "梦与意识" : "Dreams & consciousness"}</Link>
+          <a href="mailto:yejiani0831@gmail.com">contact: yejiani0831@gmail.com</a>
         </div>
       </footer>
     </main>

@@ -1273,16 +1273,16 @@ export default function DreamGrid({
     };
   }, [localEntries]);
 
-  const [activeMonth, setActiveMonth] = useState(monthKeys[0] ?? "");
+  const [activeMonth, setActiveMonth] = useState(monthKeys[0] ?? formatDayKey(new Date()).slice(0, 7));
+  const visibleMonth = activeMonth;
+  const selectableMonths = Array.from(new Set([...monthKeys, visibleMonth])).sort().reverse();
 
-  useEffect(() => {
-    if (!monthKeys.includes(activeMonth)) {
-      setActiveMonth(monthKeys[0] ?? "");
-    }
-  }, [activeMonth, monthKeys]);
-
-  const activeIndex = monthKeys.indexOf(activeMonth);
-  const visibleMonth = activeMonth || monthKeys[0] || "";
+  function changeMonth(offset: number) {
+    setActiveMonth((current) => {
+      const [year, month] = current.split("-").map(Number);
+      return new Date(Date.UTC(year, month - 1 + offset, 1)).toISOString().slice(0, 7);
+    });
+  }
   const calendarCells = useMemo(
     () => (visibleMonth ? buildCalendarCells(visibleMonth, buckets) : []),
     [visibleMonth, buckets],
@@ -1537,8 +1537,7 @@ export default function DreamGrid({
             <div className="flex items-center gap-2">
               <button
                 type="button"
-                onClick={() => activeIndex > 0 && setActiveMonth(monthKeys[activeIndex - 1])}
-                disabled={activeIndex <= 0}
+                onClick={() => changeMonth(-1)}
                 className="mist-button-secondary rounded-full px-3 py-2 text-sm text-[#706786] transition disabled:cursor-not-allowed disabled:opacity-35"
               >
                 {G.prev}
@@ -1550,7 +1549,7 @@ export default function DreamGrid({
                   onChange={(event) => setActiveMonth(event.target.value)}
                   aria-label={G.monthFilter}
                 >
-                  {monthKeys.map((monthKey) => (
+                  {selectableMonths.map((monthKey) => (
                     <option key={monthKey} value={monthKey}>
                       {formatMonthLabel(monthKey, lang)}
                     </option>
@@ -1559,8 +1558,7 @@ export default function DreamGrid({
               </label>
               <button
                 type="button"
-                onClick={() => activeIndex < monthKeys.length - 1 && setActiveMonth(monthKeys[activeIndex + 1])}
-                disabled={activeIndex === -1 || activeIndex >= monthKeys.length - 1}
+                onClick={() => changeMonth(1)}
                 className="mist-button-secondary rounded-full px-3 py-2 text-sm text-[#706786] transition disabled:cursor-not-allowed disabled:opacity-35"
               >
                 {G.next}

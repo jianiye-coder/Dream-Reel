@@ -7131,6 +7131,7 @@ body {
 .morning-footer { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; min-height: 120px; border-top: 1px solid var(--morning-border); }
 .morning-footer > p { color: var(--morning-faint); font-size: .82rem; }
 .morning-footer > div:last-child { justify-content: flex-end; }
+.morning-footer > div:last-child a { white-space: nowrap; }
 
 /* Logged-in surfaces: preserve behavior, replace the night-film shell. */
 .journal-root,
