@@ -136,10 +136,16 @@ export async function POST(request: NextRequest) {
 
     const payload = (await upstreamResponse.json()) as {
       data?: Array<{ b64_json?: string }>;
-      error?: { message?: string };
+      error?: { code?: string; type?: string; message?: string };
     };
 
     if (!upstreamResponse.ok) {
+      console.error("Image provider request failed", {
+        provider: process.env.FLATKEY_API_KEY ? "flatkey" : "openai",
+        status: upstreamResponse.status,
+        ...(payload.error?.code ? { upstreamCode: payload.error.code } : {}),
+        ...(payload.error?.type ? { upstreamType: payload.error.type } : {}),
+      });
       await refundImageUsageOnce();
       return NextResponse.json(
         { error: API_ERROR_CODES.upstreamError },
