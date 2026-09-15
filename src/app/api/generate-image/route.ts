@@ -71,6 +71,13 @@ function getImageProvider() {
   return null;
 }
 
+function hasBlobCredentials() {
+  return Boolean(
+    process.env.BLOB_READ_WRITE_TOKEN
+      || (process.env.VERCEL_OIDC_TOKEN && process.env.BLOB_STORE_ID),
+  );
+}
+
 export async function POST(request: NextRequest) {
   const session = await auth() as { user?: { id?: string } } | null;
   if (!session?.user?.id) {
@@ -100,7 +107,7 @@ export async function POST(request: NextRequest) {
         { status: 500 },
       );
     }
-    if (!process.env.BLOB_READ_WRITE_TOKEN) {
+    if (!hasBlobCredentials()) {
       return NextResponse.json(
         { error: API_ERROR_CODES.configurationError },
         { status: 503 },

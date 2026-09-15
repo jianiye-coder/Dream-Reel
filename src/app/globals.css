@@ -7349,6 +7349,314 @@ body {
   color: var(--archive-pane-body) !important;
 }
 
+/* Dream image generation belongs to the same quiet morning surface as the
+   journal, rather than introducing a separate darkroom visual language. */
+.developing-room {
+  box-sizing: border-box;
+  min-height: 100dvh;
+  justify-content: center;
+  overflow-y: auto;
+  padding: clamp(1.25rem, 4vw, 3rem);
+  color: var(--morning-ink);
+  background: rgba(255, 251, 235, 0.98);
+  animation: developing-room-in 0.2s ease-out both;
+}
+
+.developing-room::before,
+.developing-room::after,
+.developing-atmosphere,
+.developing-image-shell::before,
+.developing-image-shell::after {
+  display: none;
+}
+
+.developing-close {
+  top: clamp(1rem, 2vw, 1.5rem);
+  right: clamp(1rem, 2vw, 1.5rem);
+  min-height: 44px;
+  border-color: #cdbdb2;
+  border-radius: 0.7rem;
+  background: #fff;
+  color: var(--morning-primary);
+  padding: 0.5rem 0.85rem;
+  font-size: 0.82rem;
+  font-weight: 700;
+  backdrop-filter: none;
+  transition: background-color 0.18s ease, border-color 0.18s ease;
+}
+
+.developing-close:hover {
+  border-color: #b98966;
+  background: var(--morning-soft);
+}
+
+.developing-copy {
+  max-width: 38rem;
+}
+
+.developing-copy p {
+  color: var(--morning-secondary);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+}
+
+.developing-copy h2 {
+  margin-top: 0.6rem;
+  color: var(--morning-ink);
+  font-family: inherit;
+  font-size: clamp(1.8rem, 4vw, 3rem);
+  font-weight: 650;
+  letter-spacing: 0;
+  line-height: 1.15;
+}
+
+.developing-image-stage {
+  width: min(40rem, 100%);
+  margin-top: clamp(1.25rem, 3vw, 2rem);
+}
+
+.developing-content-row,
+.developing-content-row-split {
+  display: block;
+}
+
+.developing-image-shell,
+.developing-content-row-split .developing-image-shell {
+  width: min(31rem, 100%);
+  margin: 0 auto;
+  border: 1px solid var(--morning-border);
+  border-radius: 0.75rem;
+  background: var(--morning-soft);
+  box-shadow: 0 16px 42px rgba(120, 53, 15, 0.1);
+  transform: none;
+}
+
+.developing-placeholder {
+  overflow: hidden;
+  filter: none;
+  opacity: 1;
+  background:
+    linear-gradient(135deg, #f9f1eb 0%, #fdfaf5 52%, #f4e7dd 100%);
+  animation: placeholder-breathe 4.8s ease-in-out infinite;
+}
+
+.developing-placeholder::before {
+  display: none;
+}
+
+.developing-placeholder::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    105deg,
+    transparent 33%,
+    rgba(255, 255, 255, 0.7) 47%,
+    rgba(195, 133, 84, 0.16) 52%,
+    transparent 66%
+  );
+  transform: translateX(-110%);
+  animation: placeholder-scan 3.2s ease-in-out infinite;
+}
+
+.placeholder-film-strip {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  display: flex;
+  gap: clamp(0.45rem, 1.6vw, 0.8rem);
+  box-sizing: border-box;
+  padding: clamp(0.8rem, 2.5vw, 1.25rem) clamp(0.55rem, 1.8vw, 0.95rem);
+  border: 0;
+  border-radius: 0;
+  background:
+    radial-gradient(ellipse at center, var(--morning-paper) 0 42%, transparent 46%) left top / 1.25rem 0.65rem repeat-x,
+    radial-gradient(ellipse at center, var(--morning-paper) 0 42%, transparent 46%) left bottom / 1.25rem 0.65rem repeat-x,
+    #5a4035;
+  box-shadow: inset 0 0 0 1px rgba(87, 59, 47, 0.28);
+  animation: placeholder-film-drift 5.4s ease-in-out infinite;
+}
+
+.placeholder-film-frame {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid rgba(255, 250, 240, 0.5);
+  border-radius: 0.12rem;
+  background: #d7bfae;
+}
+
+.placeholder-film-frame::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, transparent 20%, rgba(255, 252, 243, 0.45) 50%, transparent 78%);
+  transform: translateX(-120%);
+  animation: placeholder-frame-exposure 3.6s ease-in-out infinite;
+}
+
+.film-frame-one {
+  background:
+    radial-gradient(circle at 68% 32%, rgba(255, 247, 221, 0.86) 0 17%, transparent 18%),
+    linear-gradient(145deg, #9f7a67, #d5b69e 56%, #76584b);
+}
+
+.film-frame-two {
+  background:
+    linear-gradient(90deg, transparent 0 44%, rgba(254, 247, 231, 0.52) 45% 48%, transparent 49%),
+    linear-gradient(145deg, #66566b, #b38b78 52%, #e0c5ac);
+}
+
+.film-frame-three {
+  background:
+    radial-gradient(ellipse at 50% 65%, rgba(255, 248, 232, 0.58) 0 19%, transparent 20%),
+    linear-gradient(145deg, #836553, #d2a87c 48%, #5f504d);
+}
+
+.film-frame-two::after { animation-delay: -1.2s; }
+.film-frame-three::after { animation-delay: -2.4s; }
+
+.placeholder-moon,
+.placeholder-window,
+.placeholder-page {
+  display: none;
+}
+
+.placeholder-window,
+.placeholder-page {
+  z-index: 1;
+  border-color: rgba(146, 64, 14, 0.2);
+}
+
+.placeholder-window {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.5), rgba(230, 204, 187, 0.24)),
+    repeating-linear-gradient(90deg, transparent 0 1.1rem, rgba(146, 64, 14, 0.07) 1.1rem 1.16rem);
+  box-shadow: inset 0 0 0 0.6rem rgba(255, 255, 255, 0.18);
+  animation: placeholder-rise 4.2s ease-in-out infinite;
+}
+
+.placeholder-page {
+  background: rgba(255, 255, 255, 0.6);
+  box-shadow: 0 1rem 1.8rem rgba(120, 53, 15, 0.1);
+  animation: placeholder-page-shift 4.8s ease-in-out infinite;
+}
+
+.placeholder-page::after {
+  content: "";
+  position: absolute;
+  inset: 1rem 0.8rem;
+  background: repeating-linear-gradient(
+    180deg,
+    rgba(146, 64, 14, 0.14) 0 1px,
+    transparent 1px 0.55rem
+  );
+}
+
+@keyframes placeholder-breathe {
+  0%, 100% { filter: saturate(0.88); }
+  50% { filter: saturate(1.08); }
+}
+
+@keyframes placeholder-scan {
+  0%, 12% { transform: translateX(-110%); opacity: 0; }
+  30% { opacity: 1; }
+  72%, 100% { transform: translateX(110%); opacity: 0; }
+}
+
+@keyframes placeholder-film-drift {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-0.35rem); }
+}
+
+@keyframes placeholder-frame-exposure {
+  0%, 18% { transform: translateX(-120%); opacity: 0; }
+  42% { opacity: 0.9; }
+  78%, 100% { transform: translateX(120%); opacity: 0; }
+}
+
+.developed-image {
+  filter: blur(12px) saturate(0.8) contrast(0.9) brightness(0.88);
+}
+
+.developed-download-btn {
+  width: 2.75rem;
+  height: 2.75rem;
+  border: 1px solid var(--morning-border);
+  border-radius: 0.7rem;
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--morning-primary);
+  backdrop-filter: none;
+  opacity: 1;
+}
+
+.developed-download-btn:hover {
+  background: var(--morning-soft);
+}
+
+.developing-steps {
+  gap: 0.4rem 0.8rem;
+  margin-top: 1rem;
+  color: var(--morning-muted);
+  font-size: 0.8rem;
+}
+
+.developing-steps span {
+  animation: none;
+}
+
+.developing-fragments {
+  display: none;
+}
+
+.developing-error {
+  position: static;
+  margin: 1rem auto 0;
+  color: #9f1239;
+  font-size: 0.85rem;
+  text-align: center;
+}
+
+@keyframes developing-room-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .developing-room,
+  .developed-image {
+    animation: none;
+  }
+
+  .developed-image {
+    opacity: 1;
+    filter: none;
+    transform: none;
+  }
+
+  .developing-placeholder,
+  .developing-placeholder::after,
+  .placeholder-film-strip,
+  .placeholder-film-frame::after {
+    animation: none;
+  }
+}
+
+@media (max-width: 760px) {
+  .developing-room {
+    justify-content: flex-start;
+    padding-top: 5.25rem;
+  }
+
+  .developing-image-shell,
+  .developing-content-row-split .developing-image-shell {
+    width: min(100%, 25rem);
+    border-width: 1px;
+  }
+}
+
 /* Chat uses the same calm, readable morning surface as the journal. */
 .journal-root .messages-area,
 .journal-root .chips-bar {
@@ -8247,4 +8555,103 @@ body:has(.archive-editor-overlay)::after {
     animation-iteration-count: 1 !important;
     transition-duration: .01ms !important;
   }
+}
+
+/* Analysis results are reference material: keep every text tier readable on
+   the warm surface instead of inheriting the legacy night-mode lavender. */
+.journal-root .quick-analysis-entry-copy p,
+.journal-root .quick-analysis-heading {
+  color: #8a5426 !important;
+}
+
+.journal-root .quick-analysis-entry-copy span,
+.journal-root .quick-choice-panel span,
+.journal-root .quick-analysis-insight {
+  color: #3f4a5f !important;
+}
+
+.journal-root .quick-analysis-value {
+  color: #352b42 !important;
+}
+
+.journal-root .quick-analysis-label {
+  color: #8a5426 !important;
+}
+
+.journal-root .quick-choice-panel > div > p {
+  color: var(--morning-ink) !important;
+  font-family: inherit;
+}
+
+.journal-root .quick-analysis-card .panel-close {
+  color: #64748b;
+}
+
+.journal-root .quick-analysis-card .panel-close:hover {
+  color: var(--morning-primary);
+}
+
+.journal-root .quick-choice-panel .tool-btn:disabled {
+  border-color: #d8c9bf;
+  background: #eee7e2;
+  color: #475569;
+  opacity: 1;
+}
+
+/* Keep next-step actions on the same warm paper palette as the journal. */
+.journal-root .quick-choice-panel {
+  border-color: var(--morning-border) !important;
+  border-radius: 0.9rem;
+  background: rgba(255, 253, 245, 0.92) !important;
+  box-shadow: 0 12px 32px rgba(120, 53, 15, 0.07) !important;
+  backdrop-filter: none;
+}
+
+.journal-root .quick-choice-panel .tool-btn {
+  min-height: 44px;
+  border-radius: 0.7rem;
+  box-shadow: none;
+}
+
+.journal-root .quick-choice-panel .action-primary,
+.journal-root .quick-choice-panel .action-image {
+  border-color: var(--morning-primary);
+  background: var(--morning-primary);
+  color: #fff;
+}
+
+.journal-root .quick-choice-panel .action-secondary {
+  border-color: #cdbdb2;
+  background: #fff;
+  color: var(--morning-primary);
+}
+
+.journal-root .quick-choice-panel .action-primary:hover:not(:disabled),
+.journal-root .quick-choice-panel .action-image:hover:not(:disabled) {
+  border-color: var(--morning-primary-hover);
+  background: var(--morning-primary-hover);
+  color: #fff;
+}
+
+.journal-root .quick-choice-panel .action-secondary:hover:not(:disabled) {
+  border-color: #b98966;
+  background: #fff8f2;
+  color: var(--morning-primary-hover);
+}
+
+.journal-root .save-ok.save-status-text {
+  color: #3f6e5e;
+  opacity: 1 !important;
+}
+
+/* Keep the shared header above the legacy decorative film overlay while
+   remaining below dialogs, so the product name stays readable. */
+.site-header {
+  position: relative;
+  z-index: 902;
+}
+
+.site-header .site-brand {
+  color: #0f172a !important;
+  opacity: 1;
 }

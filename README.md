@@ -64,6 +64,7 @@ GROQ_MODEL=openai/gpt-oss-120b
 DREAM_AGENT_FEEDBACK_SECRET=your_separate_feedback_signing_secret
 DREAM_AGENT_JSON_SCHEMA_PERCENT=0
 DREAM_AGENT_GUARDED_PERCENT=0
+# Required only outside Vercel OIDC deployments (for example, local development).
 BLOB_READ_WRITE_TOKEN=your_vercel_blob_token
 NEXT_PUBLIC_APP_URL=http://localhost:3000
 ```
@@ -94,7 +95,7 @@ npm run dev
 - Download `/api/admin/agent-feedback?days=14&download=1` while signed in as the administrator and validate it with `npm run eval:agent:canary -- snapshot.json` before each rollout increase.
 - Dream analysis currently uses `gpt-4o-mini`.
 - Image generation currently uses `gpt-image-2`.
-- Generated images and thumbnails are stored in Vercel Blob; `BLOB_READ_WRITE_TOKEN` is required for image generation.
+- Generated images and thumbnails are stored in Vercel Blob. On Vercel, connect a Blob store to use managed OIDC; elsewhere, configure `BLOB_READ_WRITE_TOKEN`.
 
 ---
 
@@ -158,6 +159,7 @@ GROQ_MODEL=openai/gpt-oss-120b
 DREAM_AGENT_FEEDBACK_SECRET=your_separate_feedback_signing_secret
 DREAM_AGENT_JSON_SCHEMA_PERCENT=0
 DREAM_AGENT_GUARDED_PERCENT=0
+# 仅在 Vercel OIDC 部署之外需要（例如本地开发）。
 BLOB_READ_WRITE_TOKEN=your_vercel_blob_token
 NEXT_PUBLIC_APP_URL=http://localhost:3000
 ```
@@ -188,4 +190,4 @@ npm run dev
 - 管理员登录后可下载 `/api/admin/agent-feedback?days=14&download=1`，并在每次提高灰度前运行 `npm run eval:agent:canary -- snapshot.json`。
 - 梦境分析当前使用 `gpt-4o-mini`。
 - 图像生成使用 `gpt-image-2`；配置 `FLATKEY_API_KEY` 时经由 Flatkey，否则回退为 OpenAI。
-- 生成的原图与缩略图存储在 Vercel Blob；图片生成功能需要配置 `BLOB_READ_WRITE_TOKEN`。
+- 生成的原图与缩略图存储在 Vercel Blob；部署在 Vercel 时连接 Blob Store 即可使用托管 OIDC，其他环境则配置 `BLOB_READ_WRITE_TOKEN`。

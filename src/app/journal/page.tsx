@@ -1336,7 +1336,7 @@ export default function JournalPage() {
             {currentAnalysis && mode === "quick" && (
               <div className="quick-analysis-card">
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.625rem" }}>
-                  <p style={{ fontSize: "0.7rem", fontWeight: 600, letterSpacing: "0.14em", textTransform: "uppercase", color: "rgba(165, 148, 220, 0.7)" }}>
+                  <p className="quick-analysis-heading" style={{ fontSize: "0.7rem", fontWeight: 600, letterSpacing: "0.14em", textTransform: "uppercase" }}>
                     {J.analysis.title.replace("✦  ", "")}
                   </p>
                   <button type="button" className="panel-close" onClick={() => setAnalysis(null)}>✕</button>
@@ -1684,14 +1684,6 @@ export default function JournalPage() {
 
       {isDevelopingRoomOpen && (
         <div className="developing-room" role="dialog" aria-modal="true" aria-label="Dream Developing Room">
-          <div className="developing-atmosphere" aria-hidden>
-            <span className="developing-glow glow-a" />
-            <span className="developing-glow glow-b" />
-            <span className="developing-particle particle-a" />
-            <span className="developing-particle particle-b" />
-            <span className="developing-particle particle-c" />
-          </div>
-
           <button className="developing-close" onClick={() => setIsDevelopingRoomOpen(false)}>
             {lang === "zh" ? "关闭" : "Close"}
           </button>
@@ -1700,7 +1692,7 @@ export default function JournalPage() {
             <p>{lang === "zh" ? "梦境显影室" : "Dream Developing Room"}</p>
             <h2>{isGeneratingImage
               ? (lang === "zh" ? "梦境正在慢慢浮现。" : "The dream is slowly appearing.")
-              : (lang === "zh" ? "梦境已经显影。" : "The dream has surfaced.")
+              : (lang === "zh" ? "梦境已经显影" : "The dream has surfaced")
             }</h2>
           </div>
 
@@ -1728,9 +1720,11 @@ export default function JournalPage() {
                   </>
                 ) : (
                   <div className="developing-placeholder" aria-hidden>
-                    <span className="placeholder-moon" />
-                    <span className="placeholder-window" />
-                    <span className="placeholder-page" />
+                    <span className="placeholder-film-strip">
+                      <span className="placeholder-film-frame film-frame-one" />
+                      <span className="placeholder-film-frame film-frame-two" />
+                      <span className="placeholder-film-frame film-frame-three" />
+                    </span>
                   </div>
                 )}
               </div>
@@ -1740,7 +1734,7 @@ export default function JournalPage() {
             <div className="developing-steps" aria-live="polite">
               <span>{lang === "zh" ? "正在解读意象…" : "Interpreting symbols..."}</span>
               <span>{lang === "zh" ? "正在重建记忆…" : "Reconstructing memory..."}</span>
-              <span>{lang === "zh" ? "让画面找到它的光…" : "Letting the image find its light..."}</span>
+              <span>{lang === "zh" ? "正在冲洗胶片…" : "Developing the film..."}</span>
             </div>
 
             <div className="developing-fragments" aria-label="Dream fragments being developed">
