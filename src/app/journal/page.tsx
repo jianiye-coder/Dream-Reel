@@ -1734,7 +1734,7 @@ export default function JournalPage() {
             <div className="developing-steps" aria-live="polite">
               <span>{lang === "zh" ? "正在解读意象…" : "Interpreting symbols..."}</span>
               <span>{lang === "zh" ? "正在重建记忆…" : "Reconstructing memory..."}</span>
-              <span>{lang === "zh" ? "让画面找到它的光…" : "Letting the image find its light..."}</span>
+              <span>{lang === "zh" ? "正在冲洗胶片…" : "Developing the film..."}</span>
             </div>
 
             <div className="developing-fragments" aria-label="Dream fragments being developed">
