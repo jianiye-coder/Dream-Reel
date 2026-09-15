@@ -8238,16 +8238,22 @@ body {
 .site-nav-links a,
 .site-nav-link,
 .journal-root .site-nav-link {
+  box-sizing: border-box;
+  height: 44px;
   min-height: 44px;
-  padding: 0 !important;
+  justify-content: center;
+  padding: 0 1rem !important;
   border: 0 !important;
-  border-radius: 0 !important;
+  border-radius: .65rem !important;
   background: transparent !important;
-  color: #3f4a5f !important;
+  color: var(--morning-primary) !important;
   font-size: .875rem !important;
   font-weight: 650 !important;
   line-height: 1;
   text-decoration: none;
+  white-space: nowrap;
+  box-shadow: inset 0 0 0 0 transparent;
+  transition: color .18s ease, background-color .18s ease, box-shadow .18s ease, transform .18s ease;
 }
 .site-nav-links a,
 .site-nav-link {
@@ -8261,24 +8267,25 @@ body {
 }
 .site-language {
   box-sizing: border-box;
+  height: 44px !important;
   min-width: 44px !important;
   min-height: 44px !important;
-  padding: 0 .75rem !important;
-  border: 1px solid #d9c8bc !important;
-  border-radius: 999px !important;
+  padding: 0 1rem !important;
+  border: 0 !important;
+  border-radius: .65rem !important;
   background: transparent !important;
-  color: #71452d !important;
+  color: var(--morning-primary) !important;
   font-size: .8125rem !important;
   font-weight: 700 !important;
   letter-spacing: .02em;
 }
 .site-language:hover {
-  border-color: #b98c70 !important;
-  background: rgba(255, 255, 255, .64) !important;
   color: var(--morning-primary) !important;
 }
 .site-primary-action {
+  box-sizing: border-box;
   display: inline-flex;
+  height: 44px;
   min-height: 44px;
   align-items: center;
   justify-content: center;
@@ -8299,12 +8306,17 @@ body {
 
 /* Navigation highlights the item under the pointer without shifting the header. */
 .site-header .site-nav-actions > :is(.site-language, .site-nav-link) {
+  box-sizing: border-box;
+  height: 44px;
   min-height: 44px;
-  padding: 0 .8rem !important;
+  justify-content: center;
+  padding: 0 1rem !important;
   border-color: transparent !important;
   border-radius: .65rem !important;
   background: transparent !important;
+  color: var(--morning-primary) !important;
   box-shadow: inset 0 0 0 0 transparent;
+  white-space: nowrap;
   transition: color .18s ease, background-color .18s ease, box-shadow .18s ease, transform .18s ease;
 }
 
@@ -8313,7 +8325,7 @@ body {
 }
 
 @media (hover: hover) {
-  .site-header .site-nav-actions > :is(.site-language, .site-nav-link):hover {
+  .site-header :is(.site-nav-links a, .site-nav-actions > .site-language, .site-nav-actions > .site-nav-link):hover {
     background: #fffaf5 !important;
     color: var(--morning-primary) !important;
     box-shadow: inset 0 0 0 1px var(--morning-primary), 0 4px 12px rgba(120, 53, 15, .08);
@@ -8326,10 +8338,11 @@ body {
   }
 }
 
-.site-header .site-nav-actions > :is(.site-language, .site-nav-link):focus-visible {
+.site-header :is(.site-nav-links a, .site-nav-actions > .site-language, .site-nav-actions > .site-nav-link):focus-visible {
   background: #fffaf5 !important;
   color: var(--morning-primary) !important;
   box-shadow: inset 0 0 0 2px var(--morning-primary);
+  outline: 0;
 }
 
 /* Feature overview reads as an editorial index, not a tinted card within a card. */
