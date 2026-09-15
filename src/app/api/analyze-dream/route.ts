@@ -80,7 +80,7 @@ ${ZH_DREAM_EMOTION_CALIBRATION}
   关键意象：最核心的物体、道具与意象（直接来自梦境描述）
   视觉方向：整体画面风格定位（如轻微超现实、真实感梦境、空间漂浮感、时间停滞感）
   色彩方向：具体配色（使用色彩名称，如雾粉、月光白、暖金、湖蓝），避免"色彩丰富"或"鲜艳"等通用词
-  光线方向：光线质感与来源（如自然发光、体积雾、晨间散射光、胶片颗粒、柔焦高光）
+  光线方向：必须根据这场梦实际出现的时间、天气、空间、可见光源与情绪推导专属光线；写明光从哪里来、方向与硬度、明暗关系，以及它如何影响人物和环境。不得复用固定的柔光、薄雾或散射光模板；梦境没有明确光源时，从场景和情绪合理推导
   镜头与构图：景别、构图方式、景深感（如中近景、浅景深、电影宽画面）
   风格参考：具体的艺术风格/导演/流派（如王家卫式情绪氛围、dreamcore、柔和超现实主义、电影记忆美学）
   输出目标：1句话，说明这张图像最终要传递的核心情感或画面体验
@@ -123,7 +123,7 @@ const EN_SYSTEM_PROMPT = `You are a dream analysis assistant. The user will prov
   Key imagery: The most significant objects, props, and symbols directly from the dream
   Visual direction: Overall style (e.g. soft surrealism, grounded dreamscape, floating spatial quality, suspended time)
   Color palette: Specific color names (e.g. misty rose, moonlit ivory, warm amber, lake blue) — no generic terms like "colorful" or "vivid"
-  Lighting: Light quality and sources (e.g. natural bloom, volumetric fog, scattered morning light, film grain, soft-focus highlight)
+  Lighting: Derive lighting specifically from this dream's time, weather, setting, visible light sources, and mood. State where the light comes from, its direction and hardness, the light-shadow relationship, and how it affects characters and the environment. Do not reuse a generic soft-glow, fog, or scattered-light template; infer a plausible source from the scene and mood when none is explicit
   Camera & composition: Shot type, framing, depth of field (e.g. medium close-up, shallow depth of field, cinematic wide angle)
   Style references: Specific art styles, directors, or movements (e.g. Wong Kar-wai atmospheric intimacy, dreamcore, soft surrealism, cinematic memory aesthetics)
   Strictly prohibited: Text, Chinese characters, English words, logos, watermarks, borders, poster layouts; and any styles mismatched with the dream's mood (list specifically)
