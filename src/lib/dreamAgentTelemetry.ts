@@ -3,7 +3,7 @@ import type { DreamAgentResult } from "./dreamFollowUpAgent";
 
 export type DreamAgentVariant = "deterministic-v1" | "json-object-v1" | "json-schema-v1";
 export type DreamAgentProvider = "deterministic" | "openai" | "groq";
-export type DreamAgentPolicyVariant = "legacy-v1" | "guarded-v2";
+export type DreamAgentPolicyVariant = "legacy-v1" | "guarded-v2" | "support-v1";
 
 export interface DreamAgentResponseMeta {
   interactionId: string;
@@ -65,7 +65,7 @@ export function verifyDreamAgentFeedbackToken(token: string, userId: number): Fe
     if (typeof parsed.interactionId !== "string" || !/^[0-9a-f-]{36}$/i.test(parsed.interactionId)) return null;
     if (!(["deterministic-v1", "json-object-v1", "json-schema-v1"] as const).includes(parsed.variant as DreamAgentVariant)) return null;
     const policyVariant = parsed.policyVariant ?? "legacy-v1";
-    if (!(["legacy-v1", "guarded-v2"] as const).includes(policyVariant as DreamAgentPolicyVariant)) return null;
+    if (!(["legacy-v1", "guarded-v2", "support-v1"] as const).includes(policyVariant as DreamAgentPolicyVariant)) return null;
     if (typeof parsed.expiresAt !== "number" || parsed.expiresAt < Date.now()) return null;
     const expectedBinding = createHmac("sha256", secret).update(`user:${userId}`).digest("base64url");
     if (parsed.userBinding !== expectedBinding) return null;

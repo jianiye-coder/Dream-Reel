@@ -32,6 +32,13 @@ describe("dream agent telemetry", () => {
     expect(verifyDreamAgentFeedbackToken(`${meta.feedbackToken}x`, 7)).toBeNull();
   });
 
+  it("keeps emotional-support feedback separate from recall canaries", () => {
+    process.env.DREAM_AGENT_FEEDBACK_SECRET = "unit-test-feedback-secret";
+    const meta = createDreamAgentResponseMeta("json-object-v1", "model", 10, 7, "openai", "support-v1");
+    expect(verifyDreamAgentFeedbackToken(meta.feedbackToken!, 7)).toMatchObject({ policyVariant: "support-v1" });
+    expect(verifyDreamAgentFeedbackToken(meta.feedbackToken!, 8)).toBeNull();
+  });
+
   it("logs only operational metadata, never message or memory content", () => {
     const info = vi.spyOn(console, "info").mockImplementation(() => undefined);
     logDreamAgentCompletion({

@@ -13,7 +13,7 @@ export interface VerifiedAgentFeedbackInput {
   rating: AgentFeedbackInput["rating"];
   reason?: AgentFeedbackInput["reason"];
   variant: "deterministic-v1" | "json-object-v1" | "json-schema-v1";
-  policyVariant: "legacy-v1" | "guarded-v2";
+  policyVariant: "legacy-v1" | "guarded-v2" | "support-v1";
 }
 
 export async function saveAgentFeedback(userId: number, input: VerifiedAgentFeedbackInput) {

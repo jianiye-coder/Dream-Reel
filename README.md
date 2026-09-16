@@ -16,6 +16,7 @@ The application is for personal journaling and reflection. AI interpretations ar
 
 - **Capture and revisit:** quick text entry, browser-based voice dictation, autosaving, and optional sleep/wake times, sleep quality, pre-sleep meals, and activities.
 - **Guided recall:** an AI conversation asks contextual follow-up questions and helps expand incomplete memories before analysis.
+- **Optional emotional support:** switch from recall to reflection on waking feelings, sleep impact, and possible next steps, even without a remembered dream. Download a personal consultation-preparation note containing only your own statements; nothing is automatically sent to a clinician. This mode uses the existing analysis quota and is not therapy or diagnosis.
 - **Structured analysis:** suggested titles, emotions, stress scores, people, locations, symbols, sleep insights, and visual briefs remain editable.
 - **Dream imagery:** content-specific prompts and lighting descriptions, an animated film-frame generation view, image download, and next steps to open the archive or continue the conversation.
 - **Searchable archive:** calendar, people/place exploration, recent entries, keyword search, editing, re-analysis, image regeneration, Markdown export, and weekly aggregates.
@@ -150,6 +151,7 @@ src/
     dreams.ts             Validation, user-scoped SQL, row mapping, weekly recap
     dreamTextEncryption.ts Narrative encryption and key rotation
     dreamFollowUpAgent.ts Conversation state and recall policy
+    dreamSupport.ts       Optional emotional support and self-report notes
     imagePrompt.ts        Content-specific image prompt assembly
     billing.ts            Subscriptions, quotas, usage refunds, webhook deduplication
     dreamAgentTelemetry.ts Feedback tokens and interaction telemetry
@@ -211,6 +213,7 @@ Dream Reel 起源于我自己记录梦境的习惯。过去散落在备忘录里
 
 - **记录与保存**：文字输入、浏览器语音听写、自动保存，可选记录入睡/醒来时间、睡眠质量、睡前饮食与活动。
 - **对话回忆**：Agent 根据上下文追问，帮助补充梦境细节，再进入分析。
+- **可选情绪支持**：切换后可以从醒来后的感受、睡眠影响或当下困扰开始，无需记起梦境。可下载仅含用户自述的咨询准备记录，不会自动发送给医生；使用现有分析额度，不提供心理治疗或诊断。
 - **结构化整理**：生成可编辑的标题、情绪、压力分数、人物、地点、意象、睡眠洞察与视觉描述。
 - **梦境图像**：根据梦境内容调整提示词与光线描述，提供胶片显影动效；生成后可下载图片、进入档案或继续对话。
 - **梦境档案**：日历、人物/地点探索、最近记录、关键词搜索、编辑、重新分析、生图、Markdown 导出与本周统计。

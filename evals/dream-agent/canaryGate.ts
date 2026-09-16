@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-const policyVariantSchema = z.enum(["legacy-v1", "guarded-v2"]);
+const policyVariantSchema = z.enum(["legacy-v1", "guarded-v2", "support-v1"]);
 const rateSchema = z.number().min(0).max(1).nullable();
 
 const feedbackVariantSchema = z.object({

@@ -71,6 +71,12 @@ function snapshot(): DreamAgentCanarySnapshot {
 }
 
 describe("dream agent production canary gate", () => {
+  it("accepts separate support metrics without mixing them into the recall comparison", () => {
+    const input = snapshot();
+    input.funnel.policies.push({ ...input.funnel.policies[0], policy_variant: "support-v1", journal_save_rate: 0 });
+    input.reliability.policies.push({ ...input.reliability.policies[0], policy_variant: "support-v1", error_rate: 1 });
+    expect(analyzeDreamAgentCanary(input, {}, now).passed).toBe(true);
+  });
   it("passes a fresh, mature candidate with no quality regression", () => {
     const report = analyzeDreamAgentCanary(snapshot(), {}, now);
     expect(report.passed).toBe(true);

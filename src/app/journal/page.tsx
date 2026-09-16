@@ -13,6 +13,8 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { LangToggle } from "@/components/LangToggle";
 import { getApiErrorMessage } from "@/lib/apiErrors";
 import { shouldFlushLatestSave } from "@/lib/autosave";
+import { DreamConversationControls } from "@/components/DreamConversationControls";
+import type { DreamConversationGoal } from "@/lib/dreamSupport";
 
 type SpeechRecognitionConstructor = new () => SpeechRecognitionLike;
 
@@ -54,6 +56,7 @@ interface ChatMessage {
   retryText?: string;
   retryUserId?: string;
   isCommand?: boolean;
+  goal?: DreamConversationGoal;
 }
 
 type AgentHistoryMessage = Pick<ChatMessage, "role" | "content" | "questions" | "memory">;
@@ -103,6 +106,7 @@ export default function JournalPage() {
   const router = useRouter();
 
   const [mode, setMode] = useState<"chat" | "quick">("quick");
+  const [conversationGoal, setConversationGoal] = useState<DreamConversationGoal>("recall");
   const [chatUnlocked, setChatUnlocked] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [visibleChatMessageCount, setVisibleChatMessageCount] = useState(CHAT_RENDER_WINDOW);
@@ -292,17 +296,20 @@ export default function JournalPage() {
 
   // Seed or update welcome message when lang changes
   useEffect(() => {
-    const welcome: ChatMessage = { id: "welcome", role: "assistant", content: J.welcome };
+    const content = conversationGoal === "support"
+      ? (lang === "zh" ? "记不住梦也没关系。不用把空白补完整，我们可以从醒来后留下的感受，或你现在想聊的事情开始。" : "It is okay not to remember the dream. You do not need to fill in the gaps. We can start with how you felt after waking, or whatever you want to talk about now.")
+      : J.welcome;
+    const welcome: ChatMessage = { id: "welcome", role: "assistant", content };
     if (!welcomed) {
       setMessages([welcome]);
       setWelcomed(true);
     } else {
       setMessages((prev) =>
-        prev.map((m) => (m.id === "welcome" ? { ...m, content: J.welcome } : m)),
+        prev.map((m) => (m.id === "welcome" ? { ...m, content } : m)),
       );
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lang]);
+  }, [lang, conversationGoal]);
 
   // Auto-build image prompt from active content
   useEffect(() => {
@@ -331,15 +338,19 @@ export default function JournalPage() {
 
   // Latest questions from most recent AI message
   const latestQuestions = useMemo(() => {
+    const latest = messages.filter((m) => m.role === "assistant").at(-1);
+    if (conversationGoal === "support" || latest?.goal === "support") {
+      return latest?.goal === conversationGoal ? latest.questions ?? [] : [];
+    }
     const ai = messages.filter((m) => m.role === "assistant" && m.questions?.length);
     return ai[ai.length - 1]?.questions ?? [];
-  }, [messages]);
+  }, [messages, conversationGoal]);
 
   const latestAgentDecision = useMemo(() => {
     const ai = messages.filter((m) => m.role === "assistant" && m.nextAction);
     return ai[ai.length - 1] ?? null;
   }, [messages]);
-  const agentReadyToAnalyze = latestAgentDecision?.nextAction === "ready_to_analyze";
+  const agentReadyToAnalyze = conversationGoal === "recall" && latestAgentDecision?.nextAction === "ready_to_analyze";
   const visibleMessages = useMemo(
     () => messages.slice(-visibleChatMessageCount),
     [messages, visibleChatMessageCount],
@@ -440,6 +451,7 @@ export default function JournalPage() {
       body: JSON.stringify({
         messages: history,
         lang,
+        goal: conversationGoal,
         preSleepMeal: preSleepMeal || undefined,
         preSleepActivity: preSleepActivity || undefined,
       }),
@@ -468,6 +480,7 @@ export default function JournalPage() {
       nextAction: data.nextAction,
       memory: data.memory,
       meta: data.meta,
+      goal: conversationGoal,
     };
   }
 
@@ -1114,6 +1127,14 @@ export default function JournalPage() {
       {mode === "chat" && step === "dream" && (
         <main id="journal-panel-chat" role="tabpanel" aria-labelledby="journal-tab-chat" className="messages-area" ref={messagesAreaRef}>
           <div className="messages-inner">
+            <DreamConversationControls
+              goal={conversationGoal}
+              onGoalChange={setConversationGoal}
+              disabled={isTyping}
+              lang={lang}
+              date={dreamDate}
+              statements={messages.filter((m) => m.role === "user" && !m.isCommand).map((m) => m.content)}
+            />
             {hiddenChatMessageCount > 0 ? (
               <div className="mb-4 text-center">
                 <button
@@ -1660,7 +1681,7 @@ export default function JournalPage() {
                 value={input}
                 onChange={handleInputChange}
                 onKeyDown={handleKeyDown}
-                placeholder={J.placeholder}
+                placeholder={conversationGoal === "support" ? (lang === "zh" ? "聊聊醒来后的感受…" : "What is on your mind?") : J.placeholder}
                 className="main-input"
                 rows={1}
               />
