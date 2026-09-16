@@ -13,6 +13,8 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { LangToggle } from "@/components/LangToggle";
 import { getApiErrorMessage } from "@/lib/apiErrors";
 import { shouldFlushLatestSave } from "@/lib/autosave";
+import { DreamConversationControls } from "@/components/DreamConversationControls";
+import type { DreamConversationGoal } from "@/lib/dreamSupport";
 
 type SpeechRecognitionConstructor = new () => SpeechRecognitionLike;
 
@@ -54,6 +56,7 @@ interface ChatMessage {
   retryText?: string;
   retryUserId?: string;
   isCommand?: boolean;
+  goal?: DreamConversationGoal;
 }
 
 type AgentHistoryMessage = Pick<ChatMessage, "role" | "content" | "questions" | "memory">;
@@ -103,6 +106,7 @@ export default function JournalPage() {
   const router = useRouter();
 
   const [mode, setMode] = useState<"chat" | "quick">("quick");
+  const [conversationGoal, setConversationGoal] = useState<DreamConversationGoal>("recall");
   const [chatUnlocked, setChatUnlocked] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [visibleChatMessageCount, setVisibleChatMessageCount] = useState(CHAT_RENDER_WINDOW);
@@ -128,6 +132,9 @@ export default function JournalPage() {
   const [imagePromptEdited, setImagePromptEdited] = useState(false);
   const [isGeneratingImage, setIsGeneratingImage] = useState(false);
   const [generatedImageUrl, setGeneratedImageUrl] = useState<string | null>(null);
+  const [savedImageUrl, setSavedImageUrl] = useState<string | null>(null);
+  const [isDownloadingImage, setIsDownloadingImage] = useState(false);
+  const [downloadError, setDownloadError] = useState("");
   const [imageError, setImageError] = useState("");
   const [isDevelopingRoomOpen, setIsDevelopingRoomOpen] = useState(false);
 
@@ -289,17 +296,20 @@ export default function JournalPage() {
 
   // Seed or update welcome message when lang changes
   useEffect(() => {
-    const welcome: ChatMessage = { id: "welcome", role: "assistant", content: J.welcome };
+    const content = conversationGoal === "support"
+      ? (lang === "zh" ? "记不住梦也没关系。不用把空白补完整，我们可以从醒来后留下的感受，或你现在想聊的事情开始。" : "It is okay not to remember the dream. You do not need to fill in the gaps. We can start with how you felt after waking, or whatever you want to talk about now.")
+      : J.welcome;
+    const welcome: ChatMessage = { id: "welcome", role: "assistant", content };
     if (!welcomed) {
       setMessages([welcome]);
       setWelcomed(true);
     } else {
       setMessages((prev) =>
-        prev.map((m) => (m.id === "welcome" ? { ...m, content: J.welcome } : m)),
+        prev.map((m) => (m.id === "welcome" ? { ...m, content } : m)),
       );
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lang]);
+  }, [lang, conversationGoal]);
 
   // Auto-build image prompt from active content
   useEffect(() => {
@@ -328,15 +338,19 @@ export default function JournalPage() {
 
   // Latest questions from most recent AI message
   const latestQuestions = useMemo(() => {
+    const latest = messages.filter((m) => m.role === "assistant").at(-1);
+    if (conversationGoal === "support" || latest?.goal === "support") {
+      return latest?.goal === conversationGoal ? latest.questions ?? [] : [];
+    }
     const ai = messages.filter((m) => m.role === "assistant" && m.questions?.length);
     return ai[ai.length - 1]?.questions ?? [];
-  }, [messages]);
+  }, [messages, conversationGoal]);
 
   const latestAgentDecision = useMemo(() => {
     const ai = messages.filter((m) => m.role === "assistant" && m.nextAction);
     return ai[ai.length - 1] ?? null;
   }, [messages]);
-  const agentReadyToAnalyze = latestAgentDecision?.nextAction === "ready_to_analyze";
+  const agentReadyToAnalyze = conversationGoal === "recall" && latestAgentDecision?.nextAction === "ready_to_analyze";
   const visibleMessages = useMemo(
     () => messages.slice(-visibleChatMessageCount),
     [messages, visibleChatMessageCount],
@@ -437,6 +451,7 @@ export default function JournalPage() {
       body: JSON.stringify({
         messages: history,
         lang,
+        goal: conversationGoal,
         preSleepMeal: preSleepMeal || undefined,
         preSleepActivity: preSleepActivity || undefined,
       }),
@@ -465,6 +480,7 @@ export default function JournalPage() {
       nextAction: data.nextAction,
       memory: data.memory,
       meta: data.meta,
+      goal: conversationGoal,
     };
   }
 
@@ -794,6 +810,7 @@ export default function JournalPage() {
     if (!dreamText.trim() || !promptToUse.trim() || isGeneratingImage) return;
     setIsGeneratingImage(true);
     setImageError("");
+    setDownloadError("");
     setIsDevelopingRoomOpen(true);
     try {
       const userGender = (() => { try { return localStorage.getItem("dreamReel_userGender") ?? ""; } catch { return ""; } })();
@@ -829,6 +846,8 @@ export default function JournalPage() {
         setChatUnlocked(true);
         void refreshBillingStatus();
         void autoSave({ pendingImageUrl: data.imageUrl });
+      } else {
+        throw new Error(lang === "zh" ? "未收到生成的图片，请重试。" : "No image was returned. Please try again.");
       }
     } catch (err) {
       console.error(err);
@@ -885,6 +904,41 @@ export default function JournalPage() {
     setJournalMode("chat");
     setPanel("none");
     setStep("dream");
+  }
+
+  async function downloadDreamImage() {
+    if (!generatedImageUrl || isDownloadingImage) return;
+    setIsDownloadingImage(true);
+    setDownloadError("");
+    try {
+      const response = await fetch(generatedImageUrl);
+      if (!response.ok) throw new Error("Image download failed");
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      const extension = blob.type === "image/jpeg" ? "jpg" : blob.type === "image/webp" ? "webp" : "png";
+      anchor.href = url;
+      anchor.download = `${(quickTitle || analysis?.title || "dream").replace(/[\\/:*?"<>|]/g, "_")}.${extension}`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch {
+      setDownloadError(lang === "zh" ? "图片下载失败，请重试。" : "Couldn't download the image. Please try again.");
+    } finally {
+      setIsDownloadingImage(false);
+    }
+  }
+
+  function continueFromImage() {
+    setIsDevelopingRoomOpen(false);
+    if (mode === "quick") {
+      enterDreamChat();
+    } else {
+      setPanel("none");
+      setStep("dream");
+    }
+    requestAnimationFrame(() => inputRef.current?.focus());
   }
 
   async function autoSave(opts?: {
@@ -960,6 +1014,7 @@ export default function JournalPage() {
         if (data.entry?.id && !savedEntryIdRef.current) {
           savedEntryIdRef.current = data.entry.id;
         }
+        setSavedImageUrl(effectiveImageUrl);
         if (isNewEntry) void refreshBillingStatus();
         if (saveRevisionRef.current === startedRevision) {
           setAutoSaveStatus("saved");
@@ -1072,6 +1127,14 @@ export default function JournalPage() {
       {mode === "chat" && step === "dream" && (
         <main id="journal-panel-chat" role="tabpanel" aria-labelledby="journal-tab-chat" className="messages-area" ref={messagesAreaRef}>
           <div className="messages-inner">
+            <DreamConversationControls
+              goal={conversationGoal}
+              onGoalChange={setConversationGoal}
+              disabled={isTyping}
+              lang={lang}
+              date={dreamDate}
+              statements={messages.filter((m) => m.role === "user" && !m.isCommand).map((m) => m.content)}
+            />
             {hiddenChatMessageCount > 0 ? (
               <div className="mb-4 text-center">
                 <button
@@ -1618,7 +1681,7 @@ export default function JournalPage() {
                 value={input}
                 onChange={handleInputChange}
                 onKeyDown={handleKeyDown}
-                placeholder={J.placeholder}
+                placeholder={conversationGoal === "support" ? (lang === "zh" ? "聊聊醒来后的感受…" : "What is on your mind?") : J.placeholder}
                 className="main-input"
                 rows={1}
               />
@@ -1692,7 +1755,9 @@ export default function JournalPage() {
             <p>{lang === "zh" ? "梦境显影室" : "Dream Developing Room"}</p>
             <h2>{isGeneratingImage
               ? (lang === "zh" ? "梦境正在慢慢浮现。" : "The dream is slowly appearing.")
-              : (lang === "zh" ? "梦境已经显影" : "The dream has surfaced")
+              : imageError
+                ? (lang === "zh" ? "图片生成失败" : "Image generation failed")
+                : (lang === "zh" ? "梦境已经显影" : "The dream has surfaced")
             }</h2>
           </div>
 
@@ -1709,14 +1774,6 @@ export default function JournalPage() {
                       unoptimized
                       className="developed-image"
                     />
-                    <a
-                      href={generatedImageUrl}
-                      download={`${(quickTitle || "dream").replace(/[\\/:*?"<>|]/g, "_")}.png`}
-                      className="developed-download-btn"
-                      title={J.image.download}
-                    >
-                      ↓
-                    </a>
                   </>
                 ) : (
                   <div className="developing-placeholder" aria-hidden>
@@ -1729,11 +1786,11 @@ export default function JournalPage() {
 
             </div>
 
-            <div className="developing-steps" aria-live="polite">
+            {isGeneratingImage && <div className="developing-steps" aria-live="polite">
               <span>{lang === "zh" ? "正在解读意象…" : "Interpreting symbols..."}</span>
               <span>{lang === "zh" ? "正在重建记忆…" : "Reconstructing memory..."}</span>
               <span>{lang === "zh" ? "正在冲洗胶片…" : "Developing the film..."}</span>
-            </div>
+            </div>}
 
             <div className="developing-fragments" aria-label="Dream fragments being developed">
               {(dreamFragments.length ? dreamFragments : ["moonlight", "old room", "unfinished door"]).map((fragment, index) => (
@@ -1744,7 +1801,38 @@ export default function JournalPage() {
             </div>
           </div>
 
+          {generatedImageUrl && !isGeneratingImage && !imageError && (
+            <div className="developed-next-steps">
+              <p role="status">
+                {autoSaveStatus === "error"
+                  ? (lang === "zh" ? "图片已生成，但存入档案失败，请重试保存。" : "Image ready, but saving to your archive failed. Please retry.")
+                  : savedImageUrl === generatedImageUrl
+                    ? (lang === "zh" ? "图片已保存到这条梦境档案" : "Image saved to this dream in your archive")
+                    : (lang === "zh" ? "正在将图片存入档案…" : "Saving the image to your archive…")}
+              </p>
+              <div className="developed-actions">
+                <button type="button" onClick={() => void downloadDreamImage()} disabled={isDownloadingImage}>
+                  {isDownloadingImage ? (lang === "zh" ? "下载中…" : "Downloading…") : (lang === "zh" ? "保存图片" : "Download image")}
+                </button>
+                <button type="button" onClick={() => router.push("/archive")} disabled={savedImageUrl !== generatedImageUrl || autoSaveStatus === "saving" || autoSaveStatus === "error"}>
+                  {lang === "zh" ? "进入档案" : "View archive"}
+                </button>
+                <button type="button" className="developed-chat-action" onClick={continueFromImage}>
+                  {lang === "zh" ? "与 Agent 对话" : "Continue with Agent"}
+                </button>
+                {autoSaveStatus === "error" && <button type="button" onClick={() => void autoSave({ pendingImageUrl: generatedImageUrl })}>
+                  {lang === "zh" ? "重试保存" : "Retry saving"}
+                </button>}
+              </div>
+              {downloadError && <p role="alert" className="developing-error">{downloadError}</p>}
+            </div>
+          )}
+
           {imageError ? <p className="developing-error">{imageError}</p> : null}
+          {imageError && !isGeneratingImage && <div className="developed-actions">
+            <button type="button" onClick={() => void generateImage()}>{lang === "zh" ? "重新生成" : "Try again"}</button>
+            <button type="button" onClick={() => setIsDevelopingRoomOpen(false)}>{lang === "zh" ? "返回梦境" : "Back to dream"}</button>
+          </div>}
         </div>
       )}
     </div>
