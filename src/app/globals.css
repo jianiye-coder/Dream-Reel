@@ -8655,3 +8655,61 @@ body:has(.archive-editor-overlay)::after {
   color: #0f172a !important;
   opacity: 1;
 }
+
+/* Account settings uses the daytime surface, not the archive film treatment. */
+body:has(.account-page) {
+  background-color: var(--morning-bg);
+}
+
+body:has(.account-page)::before,
+body:has(.account-page)::after {
+  content: none;
+}
+
+.account-page {
+  background:
+    radial-gradient(circle at 88% 2%, rgba(245, 158, 11, .12), transparent 24rem),
+    linear-gradient(180deg, #fffdf5 0%, var(--morning-bg) 46%, #fff 100%) !important;
+  color: var(--morning-ink) !important;
+}
+
+.account-page .account-kicker {
+  color: var(--morning-primary) !important;
+}
+
+.account-page .account-title,
+.account-page .account-section-heading {
+  color: var(--morning-ink) !important;
+}
+
+.account-page .account-field .mist-label,
+.account-page .mist-soft {
+  color: var(--morning-muted) !important;
+}
+
+.account-page .account-readonly {
+  border-color: #d8c9bf !important;
+  background: #fffaf2 !important;
+  color: var(--morning-ink) !important;
+}
+
+.account-page .account-clear {
+  color: var(--morning-primary);
+  font-weight: 650;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.account-page .account-clear:hover {
+  color: var(--morning-primary-hover);
+}
+
+.account-page .mist-button:disabled {
+  background: #ead8ca !important;
+  color: #6b3a1e !important;
+  cursor: not-allowed;
+  opacity: 1;
+}
+
+.account-page .account-status-success { color: #166534; }
+.account-page .account-status-error { color: #b91c1c; }

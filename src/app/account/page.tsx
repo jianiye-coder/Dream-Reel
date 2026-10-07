@@ -9,8 +9,8 @@ import { LangToggle } from "@/components/LangToggle";
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="mist-card rounded-[2rem] p-5 sm:p-6">
-      <h2 className="mb-5 text-base font-semibold text-[#5f5673]">{title}</h2>
+    <div className="mist-card account-section rounded-[2rem] p-5 sm:p-6">
+      <h2 className="account-section-heading mb-5 text-base font-semibold">{title}</h2>
       {children}
     </div>
   );
@@ -18,7 +18,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <label className="grid gap-1.5">
+    <label className="account-field grid gap-1.5">
       <span className="mist-label text-xs font-medium">{label}</span>
       {children}
     </label>
@@ -102,7 +102,7 @@ export default function AccountPage() {
   }
 
   return (
-    <div className="mist-page archive-page">
+    <div className="mist-page account-page">
       <div className="mist-orb left-[-8rem] top-[-5rem] h-[20rem] w-[20rem] bg-[#d7c9ea]/80" aria-hidden />
       <div className="mist-orb right-[-4rem] top-[6rem] h-[18rem] w-[18rem] bg-[#bfd2e6]/72" aria-hidden />
 
@@ -132,10 +132,10 @@ export default function AccountPage() {
 
       <main className="relative z-10 mx-auto w-full max-w-2xl space-y-5 px-4 pb-20 pt-4 sm:px-8">
         <div className="mb-6">
-          <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#978abd]">
+          <p className="account-kicker text-xs font-semibold uppercase tracking-[0.22em]">
             {lang === "zh" ? "账号设置" : "Account"}
           </p>
-          <h1 className="mt-2 text-3xl font-semibold tracking-[-0.03em] text-[#5d5471]">
+          <h1 className="account-title mt-2 text-3xl font-semibold tracking-[-0.03em]">
             {lang === "zh" ? "个人信息" : "Profile"}
           </h1>
         </div>
@@ -163,7 +163,7 @@ export default function AccountPage() {
             ))}
           </div>
           {userGender && (
-            <button type="button" onClick={() => setUserGender("")} className="mist-soft mt-2 text-xs hover:text-[#c58aa0]">
+            <button type="button" onClick={() => setUserGender("")} className="account-clear mt-2 text-xs">
               {lang === "zh" ? "清除" : "Clear"}
             </button>
           )}
@@ -190,8 +190,8 @@ export default function AccountPage() {
               >
                 {nameSaving ? (lang === "zh" ? "保存中…" : "Saving…") : (lang === "zh" ? "保存" : "Save")}
               </button>
-              {nameMsg && <p className="text-sm text-[#7f9c8b]">{nameMsg}</p>}
-              {nameErr && <p className="text-sm text-[#bb7f94]">{nameErr}</p>}
+              {nameMsg && <p className="account-status-success text-sm">{nameMsg}</p>}
+              {nameErr && <p className="account-status-error text-sm">{nameErr}</p>}
             </div>
           </div>
         </Section>
@@ -199,7 +199,7 @@ export default function AccountPage() {
         {/* Account info (email read-only) */}
         {session?.user?.email && (
           <Section title={lang === "zh" ? "邮箱" : "Email"}>
-            <p className="mist-input w-full rounded-[1rem] px-3.5 py-2.5 text-sm text-[#8b82a0]">
+            <p className="mist-input account-readonly w-full rounded-[1rem] px-3.5 py-2.5 text-sm">
               {session.user.email}
             </p>
             <p className="mist-soft mt-2 text-xs">
@@ -239,8 +239,8 @@ export default function AccountPage() {
               >
                 {pwSaving ? (lang === "zh" ? "保存中…" : "Saving…") : (lang === "zh" ? "更新密码" : "Update password")}
               </button>
-              {pwMsg && <p className="text-sm text-[#7f9c8b]">{pwMsg}</p>}
-              {pwErr && <p className="text-sm text-[#bb7f94]">{pwErr}</p>}
+              {pwMsg && <p className="account-status-success text-sm">{pwMsg}</p>}
+              {pwErr && <p className="account-status-error text-sm">{pwErr}</p>}
             </div>
           </div>
         </Section>
