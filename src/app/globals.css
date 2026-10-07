@@ -8378,7 +8378,42 @@ body:has(.archive-editor-overlay)::after {
   color: #8a5426 !important;
 }
 .archive-editor-dialog .archive-editor-empty-image {
-  color: #5c6472 !important;
+  padding: 1.5rem;
+  color: var(--morning-muted) !important;
+  text-align: center;
+  line-height: 1.7;
+}
+.archive-page .archive-image-empty {
+  background: var(--morning-soft) !important;
+}
+.archive-editor-dialog .archive-editor-image {
+  border: 1px solid var(--morning-border);
+  border-radius: .75rem;
+}
+.archive-editor-dialog .archive-image-download {
+  position: absolute;
+  top: .75rem;
+  right: .75rem;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border: 1px solid #cdbdb2;
+  border-radius: .5rem;
+  background: var(--morning-paper);
+  color: var(--morning-primary);
+  font-size: 1.4rem;
+  cursor: pointer;
+}
+.archive-editor-dialog .archive-image-download:hover:not(:disabled) {
+  background: var(--morning-soft);
+}
+.archive-editor-dialog .archive-image-download:disabled {
+  color: var(--morning-muted);
+  cursor: wait;
+}
+.archive-editor-dialog .archive-image-download-error {
+  color: #b91c1c !important;
 }
 .archive-editor-dialog .mist-input {
   border-color: #d8c9bf !important;
