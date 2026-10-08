@@ -1,19 +1,19 @@
 "use client";
 
-import Link from "next/link";
-import Image from "next/image";
 import { useSearchParams } from "next/navigation";
 import { signIn } from "next-auth/react";
 import { Suspense, useState } from "react";
+import { NotebookShell } from "@/components/notebook/NotebookShell";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { LangToggle } from "@/components/LangToggle";
 import { getApiErrorMessage } from "@/lib/apiErrors";
+import { stroke } from "@/lib/notebookSound";
 
 function LoginForm() {
   const searchParams = useSearchParams();
   const callbackUrl = searchParams.get("callbackUrl") ?? "/journal";
   const { lang, T } = useLanguage();
   const L = T.login;
+  const P = T.nbPaper;
 
   const [tab, setTab] = useState<"signin" | "register">("signin");
   const [name, setName] = useState("");
@@ -21,9 +21,10 @@ function LoginForm() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [inputModality, setInputModality] = useState<"keyboard" | "pointer">("keyboard");
 
   const isRegister = tab === "register";
+  // the bookplate shows the name being written, or the start of the email while signing in
+  const owner = (isRegister && name) || email.split("@")[0] || "";
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -71,103 +72,67 @@ function LoginForm() {
   }
 
   return (
-    <main className="auth-page">
-      <header className="auth-header site-header">
-        <Link href="/" className="morning-brand site-brand">
-          <Image src="/dream-reel-logo.png" width={40} height={40} alt="" aria-hidden />
-          <span>Dream Reel</span>
-        </Link>
-        <LangToggle className="morning-language site-language" />
-      </header>
-
-      <section className="auth-shell" aria-labelledby="auth-title">
-        <div className="auth-intro">
-          <p className="morning-eyebrow">{lang === "zh" ? "你的晨间梦境档案" : "Your morning dream archive"}</p>
-          <h1>
-            {lang === "zh" ? <>醒来后，<br />从这里继续</> : "Continue from here when you wake."}
-          </h1>
-          <p>{lang === "zh" ? "安全地保存梦境，与 Agent 一起回忆，并观察只属于你的长期线索。" : "Keep dreams safely, recall them with the Agent, and notice patterns that belong only to you."}</p>
+    <NotebookShell surface="paper">
+      <main className="nb-auth" id="main">
+        <div className="nb-plate" aria-hidden>
+          <div className="nb-plate-in">
+            <div className="nb-ex">{P.exLibris}</div>
+            <svg width="64" height="64" viewBox="0 0 64 64" fill="none" stroke="#1f1c17" strokeWidth="1.2">
+              <path d="M40 8a24 24 0 1 0 16 38A20 20 0 0 1 40 8z" />
+              <path d="M14 52h36M20 57h24" strokeWidth=".9" />
+              <circle cx="46" cy="20" r="1.4" fill="#b0432e" stroke="none" />
+            </svg>
+            <div className="nb-belongs">{P.belongsTo}</div>
+            <div className="nb-owner">{owner || "　"}</div>
+            <div className="nb-since">{P.plateSince}</div>
+          </div>
         </div>
 
-        <div className="auth-card">
-          <Link href="/" className="auth-card-brand" aria-label="Dream Reel home">
-            <Image src="/dream-reel-logo.png" width={32} height={32} alt="" aria-hidden />
-            <span>Dream Reel</span>
-          </Link>
-
-          <div className="auth-card-heading">
-            <h2 id="auth-title">
-              {isRegister ? L.createAccount : L.welcomeBack}
-            </h2>
-            <p>
-              {isRegister ? L.createAccountDesc : L.welcomeBackDesc}
-            </p>
+        <div className="nb-auth-form">
+          <span className="nb-kicker">{P.authKicker}</span>
+          <h1>{isRegister ? P.authTitleUp : P.authTitleIn}</h1>
+          <div className="nb-pencil-tabs" role="tablist" aria-label={P.authTabs}>
+            {(["signin", "register"] as const).map((t) => (
+              <button key={t} type="button" role="tab" aria-selected={tab === t} onClick={() => { setTab(t); setError(""); stroke(0.5); }}>
+                {t === "signin" ? L.signIn : L.register}
+              </button>
+            ))}
           </div>
 
-        <div className="auth-tabs" role="tablist" aria-label={lang === "zh" ? "账号操作" : "Account action"}>
-          {(["signin", "register"] as const).map((t) => (
-            <button
-              key={t}
-              type="button"
-              onClick={() => { setTab(t); setError(""); }}
-              className={tab === t ? "is-active" : ""}
-              role="tab"
-              aria-selected={tab === t}
-            >
-              {t === "signin" ? L.signIn : L.register}
-            </button>
-          ))}
-        </div>
-
-        <form
-          onSubmit={(e) => void handleSubmit(e)}
-          onPointerDown={() => setInputModality("pointer")}
-          onKeyDown={(event) => {
-            if (event.key === "Tab") setInputModality("keyboard");
-          }}
-          className="auth-form"
-          data-input-modality={inputModality}
-        >
-          {isRegister && (
-            <label className="auth-field">
-              <span>{L.name}</span>
-              <input type="text" value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" required={isRegister} />
+          <form onSubmit={(e) => void handleSubmit(e)}>
+            {isRegister && (
+              <label className="nb-field">
+                <span>{L.name} · {P.authNameHint}</span>
+                <input type="text" value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" required={isRegister} />
+              </label>
+            )}
+            <label className="nb-field">
+              <span>{L.email}</span>
+              <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" required />
             </label>
-          )}
-          <label className="auth-field">
-            <span>{L.email}</span>
-            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" required />
-          </label>
-          <label className="auth-field">
-            <span>{L.password}</span>
-            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete={isRegister ? "new-password" : "current-password"} required minLength={6} />
-          </label>
+            <label className="nb-field">
+              <span>{L.password}</span>
+              <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete={isRegister ? "new-password" : "current-password"} required minLength={6} />
+            </label>
 
-          {error && (
-            <p className="auth-error" role="alert">{error}</p>
-          )}
+            <p className="nb-msg" role="alert">{error}</p>
 
-          <button
-            type="submit"
-            disabled={isLoading}
-            className="auth-submit"
-          >
-            {isLoading ? L.loading : isRegister ? L.submitRegister : L.submitSignIn}
-          </button>
-        </form>
-
-        <p className="auth-switch">
-          {isRegister ? L.hasAccount : L.noAccount}
-          <button
-            type="button"
-            onClick={() => { setTab(isRegister ? "signin" : "register"); setError(""); }}
-          >
-            {isRegister ? L.goSignIn : L.goRegister}
-          </button>
-        </p>
-      </div>
-      </section>
-    </main>
+            <div className="nb-submit">
+              <button type="submit" className="nb-act" disabled={isLoading}>
+                {isLoading ? L.loading : isRegister ? P.authSubmitUp : P.authSubmitIn} <span aria-hidden>→</span>
+              </button>
+              <span className="nb-act-quiet">
+                {isRegister ? L.hasAccount : L.noAccount}{" "}
+                <button type="button" onClick={() => { setTab(isRegister ? "signin" : "register"); setError(""); }}>
+                  {isRegister ? L.goSignIn : L.goRegister}
+                </button>
+              </span>
+            </div>
+          </form>
+          <p className="nb-fine">{P.authFine}</p>
+        </div>
+      </main>
+    </NotebookShell>
   );
 }
 

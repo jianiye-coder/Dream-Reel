@@ -2,169 +2,247 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { LangToggle } from "@/components/LangToggle";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Book, BookPage } from "@/components/notebook/Book";
+import { NotebookShell } from "@/components/notebook/NotebookShell";
+import { TurnLink } from "@/components/notebook/TurnLink";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { handwrite, sleep } from "@/lib/notebookHandwriting";
+import { pageTurn, stroke, unlock } from "@/lib/notebookSound";
 
-const morningSteps = {
-  zh: [
-    { n: "01", title: "先留下碎片", copy: "一句话、一个场景或一种感觉都够。文字和语音会自动保存。" },
-    { n: "02", title: "和 Agent 一起回忆", copy: "直接对话，沿着人物、动作和转折，慢慢找回梦的轮廓。" },
-    { n: "03", title: "等你准备好再分析", copy: "提取情绪、地点与重复意象，把梦整理成可回看的记忆。" },
-  ],
-  en: [
-    { n: "01", title: "Catch the fragment", copy: "A sentence, a scene, or a feeling is enough. Text and voice save automatically." },
-    { n: "02", title: "Recall with the Agent", copy: "Talk it through and gently recover people, movement, and turning points." },
-    { n: "03", title: "Analyze when you are ready", copy: "Surface mood, places, and recurring symbols in a memory you can revisit." },
-  ],
-};
+const CN = "〇一二三四五六七八九";
+function cnNum(n: number) {
+  if (n <= 10) return n === 10 ? "十" : CN[n];
+  if (n < 20) return "十" + CN[n % 10];
+  return CN[Math.floor(n / 10)] + "十" + (n % 10 ? CN[n % 10] : "");
+}
 
 export default function LandingPage() {
   const { lang, T } = useLanguage();
-  const L = T.landing;
-  const steps = morningSteps[lang];
+  const L = T.nbLanding;
+  const [closed, setClosed] = useState(true);
+  const [coverGone, setCoverGone] = useState(false);
+  const [lit, setLit] = useState(false);
+  const [dateLine, setDateLine] = useState<string[]>([]);
+  const entry = useRef<HTMLParagraphElement>(null);
+  const cluesEl = useRef<HTMLDivElement>(null);
+  const indexEl = useRef<HTMLOListElement>(null);
+  const [thread, setThread] = useState<{ top: number; height: number } | null>(null);
+  const opened = useRef(false);
+  const run = useRef(0);
+
+  useEffect(() => {
+    const now = new Date();
+    setDateLine(lang === "zh"
+      ? [`${cnNum(now.getMonth() + 1)}月${cnNum(now.getDate())}日`, "周" + "日一二三四五六"[now.getDay()], "六点四十二分"]
+      : [now.toLocaleDateString("en-US", { month: "long", day: "numeric" }), now.toLocaleDateString("en-US", { weekday: "long" }), "6:42 am"]);
+  }, [lang]);
+
+  // write the sample dream once the book is open; restart if the language changes mid-way
+  const writeDemo = useCallback(async () => {
+    const id = ++run.current;
+    const p = entry.current, c = cluesEl.current;
+    if (!p || !c) return;
+    p.textContent = "";
+    c.textContent = "";
+    await handwrite(p, L.demo, { speed: 1.35, cancelled: () => id !== run.current });
+    for (const line of L.clues) {
+      if (id !== run.current) return;
+      const el = document.createElement("p");
+      el.className = "nb-note";
+      c.appendChild(el);
+      await sleep(350);
+      for (const ch of line) {
+        if (id !== run.current) return;
+        el.textContent += ch;
+        stroke(0.5);
+        await sleep(55);
+      }
+    }
+  }, [L]);
+
+  const open = useCallback(async (instant = false) => {
+    if (opened.current) return;
+    opened.current = true;
+    sessionStorage.setItem("dr-cover-seen", "1");
+    if (!instant) { unlock(); pageTurn({ dur: 1.2, heavy: true }); } // a cover is stiffer and heavier than a page
+    setClosed(false);
+    window.setTimeout(() => setCoverGone(true), instant ? 0 : 520);
+    await sleep(instant ? 250 : 1300);
+    setLit(true);
+    void writeDemo();
+  }, [writeDemo]);
+
+  useEffect(() => {
+    if (sessionStorage.getItem("dr-cover-seen") || matchMedia("(max-width: 900px)").matches) void open(true);
+  }, [open]);
+
+  useEffect(() => {
+    if (opened.current && lit) void writeDemo();
+    // only when the language (and so the demo text) changes
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [L]);
+
+  useEffect(() => () => { run.current += 1; }, []);
+
+  // the red thread joining the three nights with the sea
+  useEffect(() => {
+    const measure = () => {
+      const li = indexEl.current?.querySelectorAll("li");
+      if (!li || li.length < 7) return;
+      const a = li[0].offsetTop + 30, b = li[6].offsetTop + 30;
+      setThread({ top: a, height: b - a });
+    };
+    measure();
+    addEventListener("resize", measure);
+    return () => removeEventListener("resize", measure);
+  }, [lang]);
 
   return (
-    <main className="morning-landing">
-      <nav className="morning-nav site-header" aria-label={lang === "zh" ? "主导航" : "Main navigation"}>
-        <Link href="/" className="morning-brand site-brand" aria-label="Dream Reel home">
-          <Image src="/dream-reel-logo.png" width={40} height={40} alt="" aria-hidden />
-          <span>Dream Reel</span>
-        </Link>
-        <div className="morning-nav-links site-nav-links">
-          <Link href="/journal">{T.nav.journal}</Link>
-          <Link href="/morning-pages">{T.nav.morningPages}</Link>
-          <Link href="/archive">{T.nav.archive}</Link>
-          <Link href="/blog/dreams-and-consciousness">{lang === "zh" ? "博客" : "Blog"}</Link>
-        </div>
-        <div className="morning-nav-actions site-nav-actions">
-          <LangToggle className="morning-language site-language" />
-          <Link href="/journal" className="morning-nav-cta site-primary-action">{L.heroCta1}</Link>
-        </div>
-      </nav>
+    <NotebookShell>
+      <main className="nb-stage" id="main">
+          <Book className={`${closed ? "nb-closed " : ""}nb-r-first`} pencil>
+            <BookPage side="l" ruled indent folio="p. 214">
+              <div className="nb-date-line">{dateLine.map((d, i) => i === 0 ? <b key={i}>{d}</b> : <span key={i}>{d}</span>)}</div>
+              <p className="nb-hand nb-entry" ref={entry} />
+              <div className="nb-clues" ref={cluesEl} />
+              <span className={`nb-note nb-margin-note nb-fade-in${lit ? " nb-on" : ""}`} aria-hidden>{L.marginNote}</span>
+            </BookPage>
 
-      <section className="morning-hero" aria-labelledby="morning-hero-title">
-        <div className="morning-hero-copy">
-          <p className="morning-eyebrow">{lang === "zh" ? "AI 梦境日记与自我反思工具" : "An AI dream journal for morning reflection"}</p>
-          <h1 id="morning-hero-title">
-            {lang === "zh" ? <>趁梦还在，<br />先把它留下</> : "Before the dream fades, leave it here."}
-          </h1>
-          <p className="morning-lede">
-            {lang === "zh"
-              ? "快速记录刚醒来的梦，与 AI 一起回忆，并通过温和的提问，把散落的片段变成属于你的长期线索。"
-              : "Capture what you just dreamed, recall it with AI, and use gentle questions to turn fragments into patterns that belong to you."}
-          </p>
-          <div className="morning-hero-actions">
-            <Link href="/journal" className="morning-button morning-button-primary">
-              {lang === "zh" ? "记录刚醒来的梦" : "Record this morning’s dream"}
-            </Link>
-            <Link href="/journal" className="morning-button morning-button-secondary">
-              {lang === "zh" ? "直接与 Agent 对话" : "Chat with the Agent"}
-            </Link>
+            <BookPage side="r" folio="p. 215" curl padClassName={`nb-hero-r${lit ? " nb-lit" : ""}`}>
+              <span className="nb-kicker">{L.heroKicker}</span>
+              <div>
+                <h1>{L.heroTitleA}<br />{L.heroTitleB}<em>{L.heroTitleEm}</em>{L.heroTitleC}</h1>
+                <p className="nb-body">{L.heroBody}</p>
+              </div>
+              <div className="nb-cta-row">
+                <TurnLink className="nb-act" href="/journal">{L.heroCta} <span aria-hidden>→</span></TurnLink>
+                <a className="nb-act-quiet" href="#later">{L.heroCtaQuiet}</a>
+                <Link className="nb-act-quiet" href="/morning-pages">{T.morningPages.landingLink}</Link>
+              </div>
+            </BookPage>
+
+            <div className="nb-thick nb-thick-b" /><div className="nb-thick nb-thick-r" />
+            <Cover open={!closed} past={coverGone} label={L.coverAria} onOpen={() => void open()} />
+            <span className="nb-open-hint" aria-hidden>{L.coverHint}</span>
+          </Book>
+      </main>
+
+      <div className="nb-sheet-section" id="later">
+        <section className="nb-morning">
+          <div className="nb-m-head">
+            <span className="nb-kicker">{L.morningKicker}</span>
+            <h2>{L.morningTitleA}<br />{L.morningTitleB}</h2>
           </div>
-          <p className="morning-trust-line">
-            <span aria-hidden>●</span>
-            {lang === "zh" ? "自动保存 · 支持语音 · 由你决定何时分析" : "Autosave · Voice input · You choose when to analyze"}
-          </p>
-          <Link href="/morning-pages" className="inline-flex min-h-11 items-center text-sm text-[#92400e] underline underline-offset-4">
-            {T.morningPages.landingLink}
-          </Link>
-        </div>
+          <ol className="nb-steps4">
+            {L.steps.map((s, i) => (
+              <li key={s.title}><span className="nb-n">0{i + 1}</span><h3>{s.title}</h3><p>{s.copy}</p></li>
+            ))}
+          </ol>
+        </section>
 
-        <div className="morning-hero-visual" aria-label={lang === "zh" ? "晨间梦境记录示例" : "Morning dream capture example"}>
-          <div className="morning-photo-frame">
-            <Image
-              src="/dream-photo-2.jpg"
-              alt={lang === "zh" ? "清晨醒来后，现实与梦境重叠的画面" : "A waking morning where dream and reality overlap"}
-              fill
-              priority
-              sizes="(max-width: 900px) 92vw, 46vw"
-              className="morning-photo"
-            />
-            <span className="morning-photo-time">06:42</span>
-          </div>
-          <article className="morning-capture-card">
-            <div className="morning-capture-topline">
-              <span>{lang === "zh" ? "刚刚醒来" : "Just woke up"}</span>
-              <span>{lang === "zh" ? "已自动保存" : "Autosaved"}</span>
-            </div>
-            <p>{lang === "zh" ? "我坐在一辆车里，窗外像海底，但天已经亮了……" : "I was sitting in a train. Outside felt underwater, but the sun was already up…"}</p>
-            <div className="morning-capture-actions" aria-hidden>
-              <span>{lang === "zh" ? "继续说" : "Keep talking"}</span>
-              <span>{lang === "zh" ? "与 Agent 回忆" : "Recall with Agent"}</span>
-            </div>
-          </article>
-        </div>
-      </section>
-
-      <section className="morning-process" aria-labelledby="morning-process-title">
-        <div className="morning-section-heading">
-          <p className="morning-eyebrow">{lang === "zh" ? "低负担的晨间流程" : "A low-friction morning ritual"}</p>
-          <h2 id="morning-process-title">{lang === "zh" ? "不必先理解，先不要忘记。" : "You do not need to understand it yet."}</h2>
-        </div>
-        <div className="morning-step-grid">
-          {steps.map((step) => (
-            <article key={step.n} className="morning-step-card">
-              <span>{step.n}</span>
-              <h3>{step.title}</h3>
-              <p>{step.copy}</p>
-            </article>
-          ))}
-        </div>
-      </section>
-
-      <section className="morning-studio" aria-labelledby="morning-studio-title">
-        <div className="morning-studio-copy">
-          <p className="morning-eyebrow">{lang === "zh" ? "从碎片到记忆" : "From fragment to memory"}</p>
-          <h2 id="morning-studio-title">{lang === "zh" ? "一场梦，可以有很多种入口。" : "A dream can be entered in more than one way."}</h2>
-          <p>{lang === "zh" ? "先聊天、先分析、先生成画面，或者只存下一句话。Dream Reel 不要求你按固定顺序理解自己。" : "Chat first, analyze first, develop an image, or save one sentence. Dream Reel never forces a single path into your inner life."}</p>
-          <Link href="/journal" className="morning-text-link">{lang === "zh" ? "打开晨间记录 →" : "Open morning capture →"}</Link>
-        </div>
-        <div className="morning-bento">
-          {L.features.slice(0, 4).map((feature, index) => (
-            <article key={feature.title} className={`morning-bento-card morning-bento-${index + 1}`}>
-              <p>{feature.eyebrow}</p>
-              <h3>{feature.title}</h3>
-              <span>{feature.copy}</span>
-            </article>
-          ))}
-        </div>
-      </section>
-
-      <section className="morning-archive" aria-labelledby="morning-archive-title">
-        <div className="morning-section-heading morning-section-heading-row">
+        <section className="nb-later">
           <div>
-            <h2 id="morning-archive-title">{L.archiveIntroTitle}</h2>
+            <span className="nb-kicker">{L.laterKicker}</span>
+            <h2>{L.laterTitleA}<br />{L.laterTitleB}</h2>
+            <p className="nb-body">{L.laterBody}</p>
+            <p className="nb-body nb-small">{L.laterSmall}</p>
+            <figure className="nb-print">
+              <span className="nb-tape" />
+              <Image src="/dream-photo-1.jpg" alt="" width={520} height={390} />
+              <span className="nb-cap">{L.photoCaption}</span>
+            </figure>
           </div>
-          <p>{L.archiveIntroBody}</p>
-        </div>
-        <div className="morning-archive-grid">
-          {L.archiveNodes.map((node, index) => (
-            <article key={node.title} className="morning-dream-card">
-              <div><span>{node.time}</span><span>0{index + 1}</span></div>
-              <h3>{node.title}</h3>
-              <p>{node.fragment}</p>
-              <strong>{node.signal}</strong>
-            </article>
-          ))}
-        </div>
-      </section>
+          <div>
+            <div className="nb-month"><b>{L.monthName}</b><span className="nb-kicker">{L.monthMeta}</span></div>
+            <ol className="nb-index-list" ref={indexEl}>
+              {L.index.map((row) => (
+                <li key={row.d}><span className="nb-d">{row.d}</span><span className={`nb-t${row.blank ? " nb-blank" : ""}`}>{row.t}</span><span className="nb-n">{row.n}</span></li>
+              ))}
+              {thread && <span className="nb-thread" style={{ top: thread.top, height: thread.height }} aria-hidden />}
+            </ol>
+            <div className="nb-cta-row">
+              <Link className="nb-act" href="/journal">{L.laterCta} <span aria-hidden>→</span></Link>
+              <span className="nb-mono" style={{ color: "var(--ink-faint)" }}>{L.laterMeta}</span>
+            </div>
+          </div>
+        </section>
 
-      <section className="morning-privacy" aria-labelledby="morning-privacy-title">
-        <div>
-          <p className="morning-eyebrow">{L.privacyEyebrow}</p>
-          <h2 id="morning-privacy-title">{L.privacyTitle}</h2>
-          <p>{L.privacyBody}</p>
-        </div>
-        <ul>{L.privacyNotes.map((note) => <li key={note}>{note}</li>)}</ul>
-      </section>
+        <section className="nb-price-line">
+          <div className="nb-pl-in">
+            <span className="nb-kicker">{L.priceKicker}</span>
+            <p>{L.priceText}<span>{L.priceSoft}</span></p>
+            <Link className="nb-act-quiet" href="/pricing">{L.priceLink}</Link>
+          </div>
+        </section>
 
-      <footer className="morning-footer">
-        <div><Image src="/dream-reel-logo.png" width={36} height={36} alt="" aria-hidden /><span>Dream Reel</span></div>
-        <p>{lang === "zh" ? "在梦消失之前，留住第一帧。" : "Keep the first frame before it fades."}</p>
-        <div>
-          <a href="mailto:yejiani0831@gmail.com">contact: yejiani0831@gmail.com</a>
-        </div>
-      </footer>
-    </main>
+        <section className="nb-trust">
+          <div className="nb-trust-in">
+            <span className="nb-stamp">{L.privateStamp}</span>
+            <p>{L.privateText}</p>
+            <Link className="nb-act-quiet" href="/blog/dreams-and-consciousness">{L.blogLink}</Link>
+          </div>
+        </section>
+        <footer className="nb-landing-footer"><span>{L.footerA}</span><span>{L.footerB}</span><a href="mailto:yejiani0831@gmail.com">contact: yejiani0831@gmail.com</a></footer>
+      </div>
+    </NotebookShell>
+  );
+}
+
+/* Full leather, softly padded, worn at the edges; gilt only in the corners and the title. */
+function Cover({ open, past, label, onOpen }: { open: boolean; past: boolean; label: string; onOpen: () => void }) {
+  return (
+    <div
+      role="button"
+      tabIndex={open ? -1 : 0}
+      aria-hidden={open || undefined}
+      className={`nb-cover${open ? " nb-open" : ""}${past ? " nb-past" : ""}`}
+      aria-label={label}
+      onClick={onOpen}
+      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onOpen(); } }}
+    >
+      <div className="nb-out">
+        <span className="nb-spine-edge" /><span className="nb-hinge" />
+        <svg className="nb-tool" viewBox="0 0 740 1000" preserveAspectRatio="none" aria-hidden>
+          <defs>
+            <linearGradient id="nb-gold" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" stopColor="#7a5822" /><stop offset=".25" stopColor="#c8a256" /><stop offset=".45" stopColor="#f0dc9f" />
+              <stop offset=".6" stopColor="#b08638" /><stop offset=".8" stopColor="#e3c47c" /><stop offset="1" stopColor="#86622a" />
+              <animateTransform attributeName="gradientTransform" type="translate" values="-.5 -.5; .5 .5; -.5 -.5" dur="10s" repeatCount="indefinite" />
+            </linearGradient>
+            <g id="nb-flourish" fill="none" stroke="url(#nb-gold)" strokeLinecap="round">
+              <path d="M0 74 V0 H74" strokeWidth="1.5" />
+              <path d="M10 58 C10 30 30 10 58 10" strokeWidth="1.3" />
+              <path d="M58 10 C74 10 80 24 70 30 C62 35 56 26 63 22" strokeWidth="1.3" />
+              <path d="M10 58 C10 74 24 80 30 70 C35 62 26 56 22 63" strokeWidth="1.3" />
+              <path d="M20 20 C32 24 40 32 44 44 C32 40 24 32 20 20Z" fill="url(#nb-gold)" stroke="none" />
+              <path d="M86 0 C96 6 104 6 112 2" strokeWidth="1.1" />
+              <path d="M0 86 C6 96 6 104 2 112" strokeWidth="1.1" />
+              <circle cx="120" cy="1" r="2" fill="url(#nb-gold)" stroke="none" />
+              <circle cx="1" cy="120" r="2" fill="url(#nb-gold)" stroke="none" />
+            </g>
+          </defs>
+          <g className="nb-blind" fill="none" stroke="rgba(8,12,22,.55)">
+            <rect x="74" y="44" width="622" height="912" strokeWidth="2" />
+            <rect x="86" y="56" width="598" height="888" strokeWidth=".8" />
+          </g>
+          <g className="nb-gilt">
+            <use href="#nb-flourish" transform="translate(98 68)" />
+            <use href="#nb-flourish" transform="translate(672 68) scale(-1 1)" />
+            <use href="#nb-flourish" transform="translate(98 932) scale(1 -1)" />
+            <use href="#nb-flourish" transform="translate(672 932) scale(-1 -1)" />
+            <g fill="url(#nb-gold)">
+              <path d="M396 330a40 40 0 1 0 26 70a33 33 0 1 1 -26 -70z" />
+              <circle cx="438" cy="350" r="2.2" /><circle cx="352" cy="338" r="1.5" />
+              <text className="nb-title" x="385" y="520" textAnchor="middle" fontSize="96">Dream Reel</text>
+              <path d="M335 574 h40 M395 574 h40" stroke="url(#nb-gold)" strokeWidth="1" />
+              <path d="M385 569 l4 5 -4 5 -4 -5z" />
+            </g>
+          </g>
+        </svg>
+        <span className="nb-ribbon-tail" />
+      </div>
+      <div className="nb-in" />
+    </div>
   );
 }
