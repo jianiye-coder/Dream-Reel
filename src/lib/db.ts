@@ -32,7 +32,7 @@ export function getPool(): Pool {
 
 // Bump this whenever you add new migrations. ensureSchema will skip all DDL
 // once this version is recorded in the DB, making cold starts near-instant.
-const SCHEMA_VERSION = 9;
+const SCHEMA_VERSION = 10;
 
 let schemaReady = false;
 let schemaReadyPromise: Promise<void> | null = null;
@@ -314,6 +314,16 @@ async function ensureSchemaInternal(): Promise<void> {
 
   // Tables that reference users (after users exists)
   await Promise.all([
+    pool.query(`
+      CREATE TABLE IF NOT EXISTS morning_pages (
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        date DATE NOT NULL,
+        content TEXT NOT NULL,
+        revision INTEGER NOT NULL DEFAULT 1 CHECK (revision > 0),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        PRIMARY KEY (user_id, date)
+      );
+    `),
     pool.query(`
       CREATE TABLE IF NOT EXISTS accounts (
         id SERIAL PRIMARY KEY,

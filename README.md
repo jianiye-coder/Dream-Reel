@@ -21,6 +21,9 @@ This project hopes to turn scattered dream notes into a private archive that can
 ### Features
 
 - **Quick Record / Chat mode** — write, dictate, or explore a dream conversationally with an AI companion
+- **Morning Pages** — a separate private daily journal at `/morning-pages`, with freewriting, editable handwriting and sketches, autosave, date history, text/PNG downloads, and deletion. Text and strokes are encrypted together; they are not sent for AI analysis. Concurrent edits produce a conflict instead of silently overwriting another window.
+
+Morning Pages reuse the dream-text encryption keyring. During key rotation, retain previous keys for existing morning pages until those pages have been saved under the current key; the existing batch migration covers dream entries only.
 - **AI analysis** — extracts title, mood, stress score, people, locations, symbols, follow-up questions, visual brief, and sleep insight
 - **Dream image generation** — creates an image from the dream text, visual brief, atmosphere, and optional profile context
 - **Sleep log** — optional bedtime context: sleep/wake time, quality rating, pre-sleep meal, and activity
@@ -116,6 +119,9 @@ Dream Reel 还帮我整理梦里出现的人物、场景和意象。用了一段
 ### 功能
 
 - **快速记录 / Chat 模式** — 用文字、语音，或与 AI 对话的方式记录和探索梦境
+- **Morning Pages 晨间书写** — `/morning-pages` 提供独立的私人晨间日记，支持打字、手写涂画、自动保存、按日期回看、文字/PNG 下载与删除。正文和可编辑笔迹一起加密，不发送给 AI 分析；多窗口修改冲突时提示处理，不静默覆盖。
+
+晨间书写复用梦境正文的加密密钥配置。轮换密钥时，旧晨间记录重新保存到当前密钥之前必须保留旧密钥；现有批量迁移只处理梦境记录。
 - **AI 分析** — 自动提取标题、情绪、压力分数、人物、地点、意象、追问、视觉摘要与睡眠洞察
 - **梦境图像生成** — 根据梦境文本、视觉摘要、氛围和可选个人资料生成图像
 - **睡眠日志** — 可选填入睡/清醒时间、睡眠质量评分、睡前饮食与活动
