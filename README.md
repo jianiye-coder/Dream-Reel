@@ -10,7 +10,7 @@ An AI-assisted dream journal for capturing fragments, exploring them through con
 
 Dream Reel started with my own habit of recording dreams in a notes app. The fragments were easy to collect but difficult to revisit together. I wanted a place to preserve those memories, visualize them, and notice recurring people, places, and connections with waking life.
 
-The application is for personal journaling and reflection. AI interpretations are suggestions, not clinical assessments; the project does not implement a clinician workflow or claim clinical validation.
+The application is for personal journaling and reflection.
 
 ### What It Does
 
@@ -114,16 +114,6 @@ Image prompts are assembled from dream content and structured fields in `src/lib
 
 Subscription handling supports `checkout.session.completed` and `customer.subscription.created`, `.updated`, and `.deleted`. Webhook processing is transactional and deduplicates committed events. Plan limits and usage periods are defined in `src/lib/billing.ts`.
 
-### Deploying on Vercel
-
-1. Import the repository as a Next.js project and configure the baseline and selected provider variables in that project's environment settings.
-2. Configure **Production** and **Preview** separately. Check that the deployment belongs to the project where the variables were added, and create a new deployment after changing them.
-3. Connect a **public** Vercel Blob store. The installed Blob SDK supports managed OIDC with `BLOB_STORE_ID` and a Vercel OIDC token, or `BLOB_READ_WRITE_TOKEN`. A store ID alone is not authentication. Local development can use a read-write token.
-4. Set `NEXT_PUBLIC_APP_URL` to the appropriate deployment origin for billing redirects. If enabling payments, configure the Stripe prices and webhook endpoint for that environment.
-5. Verify registration, saving and reopening a dream, analysis, image upload, and `GET /api/health`. Use separate databases and payment test credentials for non-production environments.
-
-The image route declares a 180-second maximum duration and a 170-second upstream timeout. The hosting environment must support the required execution duration.
-
 ### Troubleshooting
 
 | Symptom | What to check |
@@ -160,8 +150,6 @@ tests/                    Unit, database integration, and browser tests
 evals/dream-agent/         Synthetic evaluations, replay, review and canary tools
 docs/                     Agent evaluation and design documentation
 ```
-
-Primary APIs include `/api/dreams` (GET, POST, PATCH, PUT, DELETE), `/api/dreams/export`, `/api/weekly-recap`, `/api/chat-dream`, `/api/analyze-dream`, `/api/generate-title`, and `/api/generate-image`. Journal data, AI operations, and exports require a signed-in user. The export API supports Markdown and JSON, although the archive UI exposes Markdown rather than a JSON export button.
 
 ### Privacy and Limits
 
@@ -208,7 +196,7 @@ See [Agent Improvement Loop](docs/agent-improvement-loop.md) and [Evaluation Bas
 
 Dream Reel 起源于我自己记录梦境的习惯。过去散落在备忘录里的片段很难一起回看，所以我希望做一个地方，保存梦境、把记忆变成画面，并整理反复出现的人物、地点，以及它们与现实生活的联系。
 
-这是一个用于个人记录与自我回顾的应用，不是临床诊断工具。目前没有医生工作流，也不宣称经过临床验证。
+这是一个用于个人记录与自我回顾的应用。
 
 ### 当前功能
 
@@ -246,19 +234,7 @@ Next.js 16 App Router、React 19、TypeScript、Tailwind CSS 3；后端是运行
 | 图片存储 | 公共 Vercel Blob Store；本地可配置 `BLOB_READ_WRITE_TOKEN` |
 | 订阅支付 | `STRIPE_SECRET_KEY`、Plus Price ID、`STRIPE_WEBHOOK_SECRET`，以及用于跳转的 `NEXT_PUBLIC_APP_URL` |
 
-Flatkey 只接管图片生成，不替代文本服务；Flatkey 请求失败时不会自动切换 OpenAI。上述模型名是代码默认值，不代表第三方服务一定可用。完整可选变量见 [Optional Configuration](#optional-configuration)。
-
 图片提示词会随梦境字段更新；手动编辑后，自动更新暂停，直到恢复自动填充。另需注意：图片接口收到超过 200 字符的视觉描述时，会优先使用该描述，并附加原始梦境及可选性别信息，而不是直接使用编辑框里的组装提示词。
-
-### Vercel 部署与排错
-
-在实际部署项目中分别配置 Production / Preview 环境变量，修改后重新部署。连接公共 Blob Store：当前 SDK 支持 `BLOB_STORE_ID` 配合有效 Vercel OIDC 令牌，或使用 `BLOB_READ_WRITE_TOKEN`；只有 Store ID 不足以完成认证。非生产环境应使用独立数据库与支付测试凭据。
-
-- **“服务尚未配置”**：生图路由没有读到 Flatkey 或 OpenAI Key。检查项目、环境范围以及是否重新部署。
-- **“AI 服务暂时不可用”**：上游返回失败。检查供应商日志、模型权限、余额/限额和服务状态，不应直接归因于缺少 Key。
-- **生成后存图失败**：单独检查 Blob 凭据、公共访问模式和服务器日志。生图与存储是两个环节。
-- **分析正常但标题失败**：独立标题接口仍需要 OpenAI Key。
-- **`/api/health` 返回 503**：数据库不可达，或没有配置独立的梦境加密密钥。健康接口不会检查 AI、Blob 或 Stripe 是否可用。
 
 ### 隐私边界
 
