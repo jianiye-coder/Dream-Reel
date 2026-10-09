@@ -32,7 +32,7 @@ export function getPool(): Pool {
 
 // Bump this whenever you add new migrations. ensureSchema will skip all DDL
 // once this version is recorded in the DB, making cold starts near-instant.
-const SCHEMA_VERSION = 9;
+const SCHEMA_VERSION = 10;
 
 let schemaReady = false;
 let schemaReadyPromise: Promise<void> | null = null;
@@ -239,29 +239,50 @@ export async function ensureSchema(): Promise<void> {
   await schemaReadyPromise;
 }
 
+// Arbitrary constant for pg_advisory_lock; only Dream Reel's schema setup uses it.
+const SCHEMA_LOCK_KEY = 0x44524d52; // "DRMR"
+
+// Must never raise: pg-pool destroys a connection whose query errors, which would also drop
+// the advisory lock held on it. Check the table exists instead of catching "undefined table".
+async function schemaVersionApplied(pool: Pool): Promise<boolean> {
+  const { rows } = await pool.query<{ present: boolean }>(
+    "SELECT to_regclass('schema_version') IS NOT NULL AS present",
+  );
+  if (!rows[0]?.present) return false;
+  const version = await pool.query("SELECT 1 FROM schema_version WHERE version = $1", [SCHEMA_VERSION]);
+  return version.rows.length > 0;
+}
+
 async function ensureSchemaInternal(): Promise<void> {
   if (schemaReady) return;
 
   const pool = getPool();
 
-  // Bootstrap: create the version tracking table in one round-trip
+  // Fast path on cold starts: this version is already applied, skip all DDL.
+  if (!(await schemaVersionApplied(pool))) {
+    // Concurrent `CREATE ... IF NOT EXISTS` from several instances races inside Postgres
+    // (duplicate key in pg_type), e.g. right after a deploy bumps SCHEMA_VERSION. Serialise
+    // the DDL with a session lock. The pool has a single connection, so the lock and every
+    // query in applySchema run on the same session.
+    await pool.query("SELECT pg_advisory_lock($1)", [SCHEMA_LOCK_KEY]);
+    try {
+      if (!(await schemaVersionApplied(pool))) await applySchema(pool);
+    } finally {
+      await pool.query("SELECT pg_advisory_unlock($1)", [SCHEMA_LOCK_KEY]).catch(() => {});
+    }
+  }
+
+  await migrateDreamTextEncryption(pool);
+  schemaReady = true;
+}
+
+async function applySchema(pool: Pool): Promise<void> {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS schema_version (
       version INTEGER PRIMARY KEY,
       applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
   `);
-
-  // If this version is already applied, skip all DDL — fast path on cold starts
-  const { rows } = await pool.query<{ version: number }>(
-    "SELECT version FROM schema_version WHERE version = $1",
-    [SCHEMA_VERSION],
-  );
-  if (rows.length > 0) {
-    await migrateDreamTextEncryption(pool);
-    schemaReady = true;
-    return;
-  }
 
   // ── First-time / upgrade: run all DDL in parallel where safe ─────────────
 
@@ -314,6 +335,16 @@ async function ensureSchemaInternal(): Promise<void> {
 
   // Tables that reference users (after users exists)
   await Promise.all([
+    pool.query(`
+      CREATE TABLE IF NOT EXISTS morning_pages (
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        date DATE NOT NULL,
+        content TEXT NOT NULL,
+        revision INTEGER NOT NULL DEFAULT 1 CHECK (revision > 0),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        PRIMARY KEY (user_id, date)
+      );
+    `),
     pool.query(`
       CREATE TABLE IF NOT EXISTS accounts (
         id SERIAL PRIMARY KEY,
@@ -492,8 +523,4 @@ async function ensureSchemaInternal(): Promise<void> {
     "INSERT INTO schema_version (version) VALUES ($1) ON CONFLICT DO NOTHING",
     [SCHEMA_VERSION],
   );
-
-  await migrateDreamTextEncryption(pool);
-
-  schemaReady = true;
 }

@@ -13,6 +13,8 @@ export default auth((req) => {
 
 export const config = {
   matcher: [
+    "/morning-pages",
+    "/morning-pages/(.*)",
     "/journal",
     "/journal/(.*)",
     "/archive",

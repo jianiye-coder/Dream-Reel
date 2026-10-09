@@ -18,6 +18,7 @@ The application is for personal journaling and reflection. AI interpretations ar
 - **Guided recall:** an AI conversation asks contextual follow-up questions and helps expand incomplete memories before analysis.
 - **Optional emotional support:** switch from recall to reflection on waking feelings, sleep impact, and possible next steps, even without a remembered dream. Download a personal consultation-preparation note containing only your own statements; nothing is automatically sent to a clinician. This mode uses the existing analysis quota and is not therapy or diagnosis.
 - **Structured analysis:** suggested titles, emotions, stress scores, people, locations, symbols, sleep insights, and visual briefs remain editable.
+- **Morning Pages:** a separate private daily journal at `/morning-pages` — freewriting, editable handwriting and sketches, autosave, date history, text/PNG downloads, and deletion. Text and strokes are encrypted together and never sent for AI analysis; concurrent edits in two windows produce a conflict instead of silently overwriting. Morning Pages reuse the dream-text encryption keyring: during key rotation, keep previous keys until existing pages have been re-saved under the current key (the batch migration covers dream entries only).
 - **Dream imagery:** content-specific prompts and lighting descriptions, an animated film-frame generation view, image download, and next steps to open the archive or continue the conversation.
 - **Searchable archive:** calendar, people/place exploration, recent entries, keyword search, editing, re-analysis, image regeneration, Markdown export, and weekly aggregates.
 - **Accounts and plans:** email/password authentication, profile and password updates, usage quotas, and optional Stripe subscriptions and customer portal.
@@ -215,6 +216,7 @@ Dream Reel 起源于我自己记录梦境的习惯。过去散落在备忘录里
 - **对话回忆**：Agent 根据上下文追问，帮助补充梦境细节，再进入分析。
 - **可选情绪支持**：切换后可以从醒来后的感受、睡眠影响或当下困扰开始，无需记起梦境。可下载仅含用户自述的咨询准备记录，不会自动发送给医生；使用现有分析额度，不提供心理治疗或诊断。
 - **结构化整理**：生成可编辑的标题、情绪、压力分数、人物、地点、意象、睡眠洞察与视觉描述。
+- **晨间书写（Morning Pages）**：`/morning-pages` 提供独立的私人晨间日记，支持打字、手写涂画、自动保存、按日期回看、文字/PNG 下载与删除。正文和可编辑笔迹一起加密，不发送给 AI 分析；多窗口修改冲突时提示处理，不静默覆盖。晨间书写复用梦境正文的加密密钥：轮换密钥时，旧晨间记录重新保存到当前密钥之前必须保留旧密钥（现有批量迁移只处理梦境记录）。
 - **梦境图像**：根据梦境内容调整提示词与光线描述，提供胶片显影动效；生成后可下载图片、进入档案或继续对话。
 - **梦境档案**：日历、人物/地点探索、最近记录、关键词搜索、编辑、重新分析、生图、Markdown 导出与本周统计。
 - **账号与订阅**：邮箱密码登录、个人资料与密码管理、用量限制，以及可选的 Stripe 订阅和客户门户。
