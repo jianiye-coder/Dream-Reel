@@ -1,61 +1,36 @@
-.page {
-  --ink: #0f172a;
-  --muted: #475569;
-  position: relative;
-  min-height: 100vh;
-  overflow: hidden;
-  color: var(--ink);
-  background: radial-gradient(circle at 82% 6%, rgba(245, 158, 11, .11), transparent 28rem), #fffbeb;
-  font-family: var(--font-sub), "PingFang SC", sans-serif;
-}
-.glow { position: absolute; inset: 0; pointer-events: none; opacity: .35; background-image: linear-gradient(rgba(146,64,14,.035) 1px, transparent 1px), linear-gradient(90deg, rgba(146,64,14,.035) 1px, transparent 1px); background-size: 5rem 5rem; mask-image: linear-gradient(to bottom, black, transparent 55%); }
-.header { position: relative; z-index: 2; display: flex; justify-content: space-between; align-items: center; width: min(72rem, calc(100% - 2rem)); min-height: 76px; margin: 0 auto; border-bottom: 1px solid #e9ded6; }
-.back { display: inline-flex; min-height: 44px; align-items: center; color: #475569; font-size: .88rem; text-decoration: none; }
-.back:hover { color: #92400e; }
-.lang { min-width: 44px; min-height: 44px; border: 1px solid #e9ded6; border-radius: 999px; color: var(--ink); background: rgba(255,255,255,.7); cursor: pointer; }
-.article { position: relative; z-index: 1; width: min(72rem, calc(100% - 2rem)); margin: 0 auto; padding-bottom: 7rem; }
-.hero { max-width: 61rem; padding: clamp(4rem, 8vw, 6.5rem) 0 clamp(3rem, 5vw, 4.5rem); }
-.eyebrow, .sectionNumber { color: #92400e; font-size: .72rem; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; }
-.hero h1 { max-width: 13em; margin: 1.25rem 0 1.25rem; font-family: var(--font-serif), sans-serif; font-size: clamp(2rem, 3vw, 3.1rem); font-weight: 650; line-height: 1.12; letter-spacing: -.03em; text-wrap: balance; }
-.dek { max-width: 46rem; color: #334155; font-family: var(--font-serif), sans-serif; font-size: clamp(1rem, 1.25vw, 1.12rem); line-height: 1.8; }
-.meta { margin-top: 2rem; color: #64748b; font-size: .78rem; }
-.toc { display: flex; flex-wrap: wrap; gap: .65rem 1.4rem; padding: 1.5rem 0; border-block: 1px solid #e9ded6; }
-.toc span { width: 100%; color: #64748b; font-size: .68rem; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; }
-.toc a { display: inline-flex; min-height: 44px; align-items: center; color: #475569; font-size: .88rem; text-decoration: none; }
-.toc a:hover { color: #92400e; }
-.proseSection, .person, .practice { scroll-margin-top: 2rem; padding: clamp(4.5rem, 9vw, 8rem) 0; border-bottom: 1px solid #e9ded6; }
-.proseSection { max-width: 52rem; }
-.proseSection h2, .practice h2 { margin: .9rem 0 1.35rem; font-family: var(--font-serif), sans-serif; font-size: clamp(1.65rem, 2.6vw, 2.45rem); font-weight: 650; line-height: 1.16; letter-spacing: -.025em; text-wrap: balance; }
-.proseSection > p:not(.sectionNumber), .practice > p { max-width: 46rem; margin-top: 1.2rem; color: var(--muted); font-size: 1.02rem; line-height: 1.95; }
-.personHeading { display: grid; grid-template-columns: 4rem 1fr; gap: 1rem; align-items: start; }
-.personHeading > p { color: #a16207; font-size: .76rem; font-weight: 700; letter-spacing: .14em; }
-.personHeading h2 { margin: 0; font-family: var(--font-serif), sans-serif; font-size: clamp(1.85rem, 3vw, 2.75rem); font-weight: 650; line-height: 1.12; letter-spacing: -.03em; }
-.personHeading span { display: block; margin-top: .7rem; color: #64748b; font-size: .78rem; }
-.thesis { max-width: 44rem; margin: 2.4rem 0 2rem 5rem; color: #1e293b; font-family: var(--font-serif), sans-serif; font-size: clamp(1.05rem, 1.55vw, 1.3rem); line-height: 1.6; }
-.columns { display: grid; grid-template-columns: 1fr 1fr; gap: clamp(2rem, 5vw, 5rem); margin-left: 5rem; }
-.columns p { color: var(--muted); font-size: .98rem; line-height: 1.95; }
-.prompt { max-width: 48rem; margin: 3rem 0 0 5rem; padding: 1.15rem 1.4rem; border-left: 3px solid #a16207; border-radius: 0 .8rem .8rem 0; color: #334155; background: rgba(255,255,255,.72); font-size: .92rem; line-height: 1.75; }
-.practice { margin-top: 3rem; padding-inline: clamp(1.2rem,4vw,3rem); border: 1px solid #e9ded6; border-radius: 1.5rem; background: rgba(255,255,255,.7); }
-.practice ol { margin: 3rem 0 0; padding: 0; list-style: none; border-top: 1px solid #e9ded6; }
-.practice li { display: grid; grid-template-columns: 4rem minmax(0, 1fr); gap: 1rem; padding: 1.6rem 0; border-bottom: 1px solid #e9ded6; }
-.practice li > span { color: #a16207; font-size: .72rem; font-weight: 700; letter-spacing: .12em; }
-.practice h3 { margin: 0 0 .45rem; font-size: 1rem; font-weight: 650; }
-.practice li p { max-width: 42rem; color: var(--muted); line-height: 1.75; }
-.closing { max-width: 50rem; margin: clamp(4rem, 8vw, 7rem) auto 3rem; padding: 0; border: 0; color: #1e293b; font-family: var(--font-serif), sans-serif; font-size: clamp(1.25rem, 2vw, 1.85rem); font-weight: 550; line-height: 1.55; text-align: center; }
-.cta { display: flex; width: fit-content; min-height: 48px; align-items: center; margin: 0 auto clamp(6rem, 12vw, 10rem); padding: .8rem 1.4rem; border-radius: 999px; color: #fff; background: #92400e; font-weight: 700; text-decoration: none; }
-.cta:hover { background: #78350f; }
-.sources { padding-top: 3rem; border-top: 1px solid #e9ded6; }
-.sources h2 { margin-bottom: 1.5rem; font-size: .78rem; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; }
-.sources ul { display: grid; grid-template-columns: 1fr 1fr; gap: .75rem 2rem; padding: 0; list-style: none; }
-.sources a { display: inline-flex; min-height: 44px; align-items: center; color: #475569; font-size: .84rem; line-height: 1.5; text-decoration: none; }
-.sources a:hover { color: #92400e; }
-.sources > p { max-width: 48rem; margin-top: 2.5rem; color: #64748b; font-size: .76rem; line-height: 1.65; }
-
-@media (max-width: 700px) {
-  .hero { padding-top: 4.5rem; }
-  .personHeading { grid-template-columns: 2.6rem 1fr; }
-  .thesis, .columns, .prompt { margin-left: 0; }
-  .thesis { margin-top: 2.4rem; }
-  .columns, .sources ul { grid-template-columns: 1fr; }
-  .practice li { grid-template-columns: 2.6rem 1fr; }
-}
+/* Long-form article set directly on the paper surface (inherits notebook tokens from .nb-root). */
+.page { position: relative; color: var(--ink); font-family: var(--serif); }
+.article { width: min(46rem, calc(100% - 3rem)); margin: 0 auto; padding-bottom: 7rem; }
+.hero { padding: clamp(3.5rem, 7vw, 5.5rem) 0 2.5rem; border-bottom: 1px solid var(--ink); }
+.eyebrow { font-family: var(--mono); font-size: 11px; letter-spacing: .16em; color: var(--ink-faint); text-transform: uppercase; }
+.sectionNumber { font-family: var(--latin); font-style: italic; font-size: 22px; color: var(--pencil); }
+.hero h1 { margin: 1rem 0 1.25rem; font-weight: 900; font-size: clamp(2rem, 3.4vw, 3rem); line-height: 1.22; letter-spacing: -.02em; text-wrap: balance; }
+.dek { color: var(--ink-soft); font-size: 1.08rem; line-height: 2; }
+.meta { margin-top: 1.4rem; font-family: var(--mono); font-size: 11px; letter-spacing: .1em; color: var(--ink-faint); }
+.toc { display: flex; flex-wrap: wrap; gap: .3rem 1.4rem; padding: 1.4rem 0; border-bottom: 1px solid rgba(31,28,23,.18); }
+.toc span { width: 100%; font-family: var(--mono); font-size: 10.5px; letter-spacing: .16em; color: var(--ink-faint); text-transform: uppercase; }
+.toc a { display: inline-flex; min-height: 40px; align-items: center; color: var(--ink-soft); font-size: .9rem; text-decoration: none; border-bottom: 1px solid transparent; }
+.toc a:hover { color: var(--ink); }
+.proseSection, .person, .practice { scroll-margin-top: 2rem; padding: clamp(3.5rem, 7vw, 5.5rem) 0 0; }
+.proseSection h2, .practice h2 { margin: .5rem 0 1.2rem; font-weight: 900; font-size: clamp(1.45rem, 2.2vw, 1.85rem); line-height: 1.35; }
+.proseSection > p:not(.sectionNumber), .practice > p { margin-top: 1.1rem; color: #36322b; font-size: 1.04rem; line-height: 2.05; text-align: justify; }
+.personHeading { display: grid; grid-template-columns: 3rem 1fr; gap: .8rem; align-items: baseline; }
+.personHeading > p { font-family: var(--latin); font-style: italic; font-size: 22px; color: var(--pencil); }
+.personHeading h2 { margin: 0; font-weight: 900; font-size: clamp(1.5rem, 2.4vw, 2rem); line-height: 1.25; }
+.personHeading span { display: block; margin-top: .4rem; font-family: var(--mono); font-size: 11px; letter-spacing: .1em; color: var(--ink-faint); }
+.thesis { margin: 1.6rem 0 1.2rem; font-size: 1.2rem; font-weight: 600; line-height: 1.7; }
+.columns p { margin-top: 1rem; color: #36322b; font-size: 1.02rem; line-height: 2.05; text-align: justify; }
+.prompt { margin: 1.8rem 0 0; padding-left: 1.2rem; border-left: 2px solid var(--pencil); font-family: var(--hand); font-size: 1.15rem; line-height: 1.75; color: var(--hand-ink); }
+.practice ol { margin: 2rem 0 0; padding: 0; list-style: none; border-top: 1px solid rgba(31,28,23,.18); }
+.practice li { display: grid; grid-template-columns: 3rem minmax(0, 1fr); gap: .8rem; padding: 1.3rem 0; border-bottom: 1px dotted #c9bfac; }
+.practice li > span { font-family: var(--latin); font-style: italic; font-size: 18px; color: var(--pencil); }
+.practice h3 { margin: 0 0 .35rem; font-size: 1rem; font-weight: 600; }
+.practice li p { color: var(--ink-soft); line-height: 1.85; }
+.closing { margin: clamp(3.5rem, 7vw, 5.5rem) 0 2rem; padding: 0; border: 0; font-family: var(--hand); font-size: clamp(1.3rem, 2vw, 1.7rem); line-height: 1.7; color: var(--hand-ink); text-align: center; }
+.cta { display: flex; width: fit-content; margin: 0 auto clamp(4rem, 9vw, 7rem); padding-bottom: 3px; font-weight: 600; font-size: 17px; color: var(--ink); border-bottom: 1.5px solid var(--ink); text-decoration: none; }
+.sources { padding-top: 2rem; border-top: 1px solid var(--ink); }
+.sources h2 { margin-bottom: 1rem; font-family: var(--mono); font-size: 11px; font-weight: 400; letter-spacing: .16em; color: var(--ink-faint); text-transform: uppercase; }
+.sources ul { display: grid; grid-template-columns: 1fr; gap: .2rem; padding: 0; list-style: none; }
+.sources a { display: inline-flex; min-height: 40px; align-items: center; color: var(--ink-soft); font-size: .88rem; line-height: 1.5; text-decoration: none; }
+.sources a:hover { color: var(--ink); }
+.sources > p { margin-top: 2rem; color: var(--ink-faint); font-size: .8rem; line-height: 1.7; }
