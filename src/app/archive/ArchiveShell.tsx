@@ -147,6 +147,9 @@ export default function ArchiveShell({
             <p className="mist-muted mt-3 max-w-2xl text-sm leading-7">{A.desc}</p>
           </div>
           <div className="archive-export-panel shrink-0">
+            <Link href="/morning-pages" className="inline-flex min-h-11 items-center px-2 text-sm font-medium text-[#92400e] underline underline-offset-4">
+              {T.nav.morningPages}
+            </Link>
             <div className="flex flex-wrap">
               <button
                 type="button"

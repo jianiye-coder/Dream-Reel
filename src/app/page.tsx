@@ -32,6 +32,7 @@ export default function LandingPage() {
         </Link>
         <div className="morning-nav-links site-nav-links">
           <Link href="/journal">{T.nav.journal}</Link>
+          <Link href="/morning-pages">{T.nav.morningPages}</Link>
           <Link href="/archive">{T.nav.archive}</Link>
           <Link href="/blog/dreams-and-consciousness">{lang === "zh" ? "博客" : "Blog"}</Link>
         </div>
@@ -64,6 +65,9 @@ export default function LandingPage() {
             <span aria-hidden>●</span>
             {lang === "zh" ? "自动保存 · 支持语音 · 由你决定何时分析" : "Autosave · Voice input · You choose when to analyze"}
           </p>
+          <Link href="/morning-pages" className="inline-flex min-h-11 items-center text-sm text-[#92400e] underline underline-offset-4">
+            {T.morningPages.landingLink}
+          </Link>
         </div>
 
         <div className="morning-hero-visual" aria-label={lang === "zh" ? "晨间梦境记录示例" : "Morning dream capture example"}>
