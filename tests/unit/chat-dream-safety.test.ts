@@ -35,6 +35,51 @@ describe("dream chat safety routing", () => {
     vi.restoreAllMocks();
   });
 
+  it("routes opt-in support separately, even without more dream recall", async () => {
+    vi.spyOn(console, "info").mockImplementation(() => undefined);
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(Response.json({
+      choices: [{ message: { content: JSON.stringify({
+        message: "We can stay with how you feel now.", questions: ["What is on your mind now?"],
+        stage: "ready", nextAction: "ready_to_analyze", memory: { missingDetails: [], observedSignals: [] },
+      }) } }],
+    }));
+    const response = await POST(new NextRequest("http://localhost/api/chat-dream", {
+      method: "POST", body: JSON.stringify({ goal: "support", lang: "en", messages: [
+        { role: "user", content: "Will you automatically save this?" },
+        { role: "assistant", content: "This journal autosaves text." },
+        { role: "user", content: "I cannot remember anything more." },
+      ] }),
+    }));
+    expect(await response.json()).toMatchObject({
+      stage: "deepening", nextAction: "summarize", questions: ["What is on your mind now?"],
+      meta: { policyVariant: "support-v1", source: "model" },
+    });
+    const upstream = JSON.parse(String(fetchSpy.mock.calls[0][1]?.body));
+    expect(upstream.messages[0].content).toContain("emotional-support journaling assistant");
+    expect(upstream.messages[0].content).not.toContain("This is user turn");
+    expect(billing.checkAndConsumeUsage).toHaveBeenCalledWith(7, "analysis");
+  });
+
+  it("preserves free immediate safety routing in support mode without provider keys", async () => {
+    delete process.env.OPENAI_API_KEY;
+    delete process.env.GROQ_API_KEY;
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    const response = await POST(new NextRequest("http://localhost/api/chat-dream", {
+      method: "POST", body: JSON.stringify({ goal: "support", lang: "zh", messages: [{ role: "user", content: "我现在想伤害自己。" }] }),
+    }));
+    expect(await response.json()).toMatchObject({ nextAction: "summarize", meta: { policyVariant: "support-v1", source: "deterministic" } });
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(billing.checkAndConsumeUsage).not.toHaveBeenCalled();
+  });
+
+  it("rejects an unknown conversation goal before provider use", async () => {
+    const response = await POST(new NextRequest("http://localhost/api/chat-dream", {
+      method: "POST", body: JSON.stringify({ goal: "diagnose", messages: [{ role: "user", content: "A dream" }] }),
+    }));
+    expect(response.status).toBe(400);
+    expect(billing.checkAndConsumeUsage).not.toHaveBeenCalled();
+  });
+
   it("keeps the guarded recall policy behind a deterministic rollout", async () => {
     vi.spyOn(console, "info").mockImplementation(() => undefined);
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(Response.json({
