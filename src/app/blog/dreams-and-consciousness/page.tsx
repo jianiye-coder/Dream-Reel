@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { LangToggle } from "@/components/LangToggle";
+import { NotebookShell } from "@/components/notebook/NotebookShell";
 import { useLanguage } from "@/contexts/LanguageContext";
 import styles from "./page.module.css";
 
@@ -136,12 +136,8 @@ export default function DreamsAndConsciousnessPage() {
   const C = copy[lang];
 
   return (
-    <main className={styles.page}>
-      <div className={styles.glow} aria-hidden />
-      <header className={styles.header}>
-        <Link href="/" className={styles.back}>← {C.back}</Link>
-        <LangToggle className={styles.lang} />
-      </header>
+    <NotebookShell surface="paper">
+    <main className={styles.page} id="main">
 
       <article className={styles.article}>
         <header className={styles.hero}>
@@ -199,5 +195,6 @@ export default function DreamsAndConsciousnessPage() {
         </footer>
       </article>
     </main>
+    </NotebookShell>
   );
 }

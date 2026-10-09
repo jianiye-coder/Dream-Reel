@@ -1,34 +1,26 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { signOut, useSession } from "next-auth/react";
 import { useEffect, useState } from "react";
-import { useLanguage } from "@/contexts/LanguageContext";
 import { LangToggle } from "@/components/LangToggle";
+import { NotebookShell } from "@/components/notebook/NotebookShell";
+import { useLanguage } from "@/contexts/LanguageContext";
+import { getApiErrorMessage } from "@/lib/apiErrors";
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <div className="mist-card rounded-[2rem] p-5 sm:p-6">
-      <h2 className="mb-5 text-base font-semibold text-[#5f5673]">{title}</h2>
-      {children}
-    </div>
-  );
+type Quota = { dreamEntries: number; analysis: number; imageGenerations: number };
+type BillingStatus = { plan: "free" | "plus"; isUnlimited: boolean; periodEnd: string; limits: Quota; usage: Quota; remaining: Quota };
+
+// usage drawn as ten little pencil boxes
+function Boxes({ used, total }: { used: number; total: number }) {
+  const filled = total > 0 ? Math.min(10, Math.round((used / total) * 10)) : 0;
+  return <span className="nb-boxes" aria-hidden>{Array.from({ length: 10 }, (_, i) => <i key={i} className={i < filled ? "nb-f" : undefined} />)}</span>;
 }
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <label className="grid gap-1.5">
-      <span className="mist-label text-xs font-medium">{label}</span>
-      {children}
-    </label>
-  );
-}
-
-const inputCls = "mist-input w-full rounded-[1rem] px-3.5 py-2.5 text-sm transition";
 
 export default function AccountPage() {
   const { lang, T } = useLanguage();
+  const P = T.nbPaper;
+  const B = T.billing;
   const { data: session, update: updateSession } = useSession();
 
   // ── Name ──────────────────────────────────────────────────────────────────
@@ -52,16 +44,16 @@ export default function AccountPage() {
       });
       if (res.ok) {
         await updateSession({ name: name.trim() });
-        setNameMsg(lang === "zh" ? "用户名已更新" : "Name updated");
+        setNameMsg(P.nameSaved);
       } else {
         const d = (await res.json()) as { error?: string };
-        setNameErr(d.error ?? (lang === "zh" ? "更新失败" : "Update failed"));
+        setNameErr(d.error ?? P.updateFailed);
       }
-    } catch { setNameErr(lang === "zh" ? "网络错误" : "Network error"); }
+    } catch { setNameErr(P.networkError); }
     finally { setNameSaving(false); }
   }
 
-  // ── Gender ────────────────────────────────────────────────────────────────
+  // ── Gender (device-local, used for image prompts) ─────────────────────────
   const [userGender, setUserGenderState] = useState("");
   useEffect(() => {
     try { setUserGenderState(localStorage.getItem("dreamReel_userGender") ?? ""); } catch {}
@@ -92,159 +84,141 @@ export default function AccountPage() {
       });
       if (res.ok) {
         setCurrentPw(""); setNewPw("");
-        setPwMsg(lang === "zh" ? "密码已更新" : "Password updated");
+        setPwMsg(P.passwordSaved);
       } else {
         const d = (await res.json()) as { error?: string };
-        setPwErr(d.error ?? (lang === "zh" ? "修改失败" : "Update failed"));
+        setPwErr(d.error ?? P.updateFailed);
       }
-    } catch { setPwErr(lang === "zh" ? "网络错误" : "Network error"); }
+    } catch { setPwErr(P.networkError); }
     finally { setPwSaving(false); }
   }
 
+  // ── Allowance (library card) ──────────────────────────────────────────────
+  const [billing, setBilling] = useState<BillingStatus | null>(null);
+  const [billingState, setBillingState] = useState<"loading" | "ready" | "error">("loading");
+  const [billingErr, setBillingErr] = useState("");
+  useEffect(() => {
+    if (!session?.user) return;
+    fetch("/api/billing/status", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() as Promise<BillingStatus> : Promise.reject(new Error("status"))))
+      .then((s) => { setBilling(s); setBillingState("ready"); })
+      .catch(() => setBillingState("error"));
+  }, [session?.user]);
+
+  async function openBilling() {
+    setBillingErr("");
+    const endpoint = billing?.plan === "plus" ? "/api/billing/portal" : "/api/billing/checkout";
+    const fallbackError = billing?.plan === "plus" ? B.portalError : B.checkoutError;
+    try {
+      const res = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ lang, currency: lang === "zh" ? "cny" : "usd" }),
+      });
+      const data = (await res.json()) as { url?: string; error?: string };
+      if (!res.ok || !data.url) throw new Error(getApiErrorMessage(data.error, lang, fallbackError));
+      window.location.href = data.url;
+    } catch (error) {
+      setBillingErr(error instanceof Error ? error.message : fallbackError);
+    }
+  }
+
+  const rows: [string, keyof Quota][] = [[P.cardDreams, "dreamEntries"], [P.cardAnalysis, "analysis"], [P.cardImages, "imageGenerations"]];
+  const planLabel = billing?.isUnlimited ? B.planAdmin : billing?.plan === "plus" ? B.planPlus : B.planFree;
+  const resetDate = billing ? new Date(billing.periodEnd).toLocaleDateString(lang === "zh" ? "zh-CN" : "en-US", { month: "long", day: "numeric" }) : "";
+
   return (
-    <div className="mist-page archive-page">
-      <div className="mist-orb left-[-8rem] top-[-5rem] h-[20rem] w-[20rem] bg-[#d7c9ea]/80" aria-hidden />
-      <div className="mist-orb right-[-4rem] top-[6rem] h-[18rem] w-[18rem] bg-[#bfd2e6]/72" aria-hidden />
+    <NotebookShell surface="paper">
+      <main className="nb-paper-main" id="main">
+        <div className="nb-account">
+          <section>
+            <span className="nb-kicker">{P.accountKicker}</span>
+            <div className="nb-owner">{session?.user?.name || P.accountUnnamed}</div>
+            <dl className="nb-facts">
+              {session?.user?.email && <><dt>{P.email}</dt><dd>{session.user.email}<small>{P.emailFixed}</small></dd></>}
+              <dt>{P.language}</dt><dd><LangToggle className="nb-act-quiet" /></dd>
+            </dl>
 
-      <nav className="site-header relative z-10 flex items-center justify-between px-6 py-5 sm:px-10">
-        <Link href="/" className="landing-logo site-brand">
-          <Image src="/dream-reel-logo.png" alt="" aria-hidden width={36} height={36} className="logo-img" />
-          <span>Dream Reel</span>
-        </Link>
-        <div className="site-nav-actions flex items-center gap-2">
-          <LangToggle className="site-language mist-button-secondary rounded-full px-3 py-1.5 text-xs font-medium transition hover:bg-white/48" />
-          <Link href="/journal" className="site-primary-action mist-button-secondary rounded-full px-4 py-2 text-sm font-medium transition hover:bg-white/48">
-            {T.nav.journal}
-          </Link>
-          <Link href="/archive" className="site-nav-link mist-button-secondary rounded-full px-4 py-2 text-sm font-medium transition hover:bg-white/48">
-            {T.nav.archive}
-          </Link>
-          {session?.user && (
-            <button
-              onClick={() => signOut({ callbackUrl: "/login" })}
-              className="site-nav-link mist-button-secondary rounded-full px-3 py-1.5 text-xs font-medium transition hover:bg-white/48"
-            >
-              {T.login.signOut}
-            </button>
-          )}
-        </div>
-      </nav>
-
-      <main className="relative z-10 mx-auto w-full max-w-2xl space-y-5 px-4 pb-20 pt-4 sm:px-8">
-        <div className="mb-6">
-          <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#978abd]">
-            {lang === "zh" ? "账号设置" : "Account"}
-          </p>
-          <h1 className="mt-2 text-3xl font-semibold tracking-[-0.03em] text-[#5d5471]">
-            {lang === "zh" ? "个人信息" : "Profile"}
-          </h1>
-        </div>
-
-        {/* Gender */}
-        <Section title={lang === "zh" ? "性别" : "Gender"}>
-          <p className="mist-muted mb-3 text-sm leading-7">
-            {lang === "zh"
-              ? "设置你的性别后，Dream Reel 在生成梦境图像时会更准确地呈现画面中的你。"
-              : "Setting your gender helps Dream Reel generate more accurate dream images."}
-          </p>
-          <div className="flex gap-2">
-            {(lang === "zh"
-              ? [{ v: "male", label: "男性" }, { v: "female", label: "女性" }, { v: "other", label: "其他" }]
-              : [{ v: "male", label: "Male" }, { v: "female", label: "Female" }, { v: "other", label: "Other" }]
-            ).map(({ v, label }) => (
-              <button
-                key={v}
-                type="button"
-                onClick={() => setUserGender(userGender === v ? "" : v)}
-                className={`rounded-full px-4 py-2 text-sm font-medium transition ${userGender === v ? "mist-button" : "mist-button-secondary hover:bg-white/48"}`}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-          {userGender && (
-            <button type="button" onClick={() => setUserGender("")} className="mist-soft mt-2 text-xs hover:text-[#c58aa0]">
-              {lang === "zh" ? "清除" : "Clear"}
-            </button>
-          )}
-        </Section>
-
-        {/* Username */}
-        <Section title={lang === "zh" ? "用户名" : "Display Name"}>
-          <div className="grid gap-3">
-            <Field label={lang === "zh" ? "当前用户名" : "Name"}>
-              <input
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                className={inputCls}
-                placeholder={lang === "zh" ? "你的名字" : "Your name"}
-                onKeyDown={(e) => e.key === "Enter" && void saveName()}
-              />
-            </Field>
-            <div className="flex items-center gap-3">
-              <button
-                type="button"
-                onClick={() => void saveName()}
-                disabled={nameSaving || !name.trim()}
-                className="mist-button rounded-full px-5 py-2 text-sm font-medium disabled:opacity-50"
-              >
-                {nameSaving ? (lang === "zh" ? "保存中…" : "Saving…") : (lang === "zh" ? "保存" : "Save")}
-              </button>
-              {nameMsg && <p className="text-sm text-[#7f9c8b]">{nameMsg}</p>}
-              {nameErr && <p className="text-sm text-[#bb7f94]">{nameErr}</p>}
+            <div className="nb-account-block">
+              <h2>{P.displayName}</h2>
+              <label className="nb-field">
+                <input value={name} onChange={(e) => setName(e.target.value)} placeholder={P.namePlaceholder} onKeyDown={(e) => e.key === "Enter" && void saveName()} />
+              </label>
+              <div className="nb-row">
+                <button type="button" className="nb-act" onClick={() => void saveName()} disabled={nameSaving || !name.trim()}>{nameSaving ? P.saving : P.save}</button>
+                <p className={`nb-msg${nameMsg ? " nb-ok" : ""}`} role="status">{nameMsg || nameErr}</p>
+              </div>
             </div>
-          </div>
-        </Section>
 
-        {/* Account info (email read-only) */}
-        {session?.user?.email && (
-          <Section title={lang === "zh" ? "邮箱" : "Email"}>
-            <p className="mist-input w-full rounded-[1rem] px-3.5 py-2.5 text-sm text-[#8b82a0]">
-              {session.user.email}
-            </p>
-            <p className="mist-soft mt-2 text-xs">
-              {lang === "zh" ? "邮箱目前不支持修改" : "Email cannot be changed at this time"}
-            </p>
-          </Section>
-        )}
-
-        {/* Password */}
-        <Section title={lang === "zh" ? "修改密码" : "Change Password"}>
-          <div className="grid gap-3">
-            <Field label={lang === "zh" ? "当前密码" : "Current password"}>
-              <input
-                type="password"
-                value={currentPw}
-                onChange={(e) => setCurrentPw(e.target.value)}
-                className={inputCls}
-                autoComplete="current-password"
-              />
-            </Field>
-            <Field label={lang === "zh" ? "新密码（至少 6 位）" : "New password (min. 6 chars)"}>
-              <input
-                type="password"
-                value={newPw}
-                onChange={(e) => setNewPw(e.target.value)}
-                className={inputCls}
-                autoComplete="new-password"
-                onKeyDown={(e) => e.key === "Enter" && void savePassword()}
-              />
-            </Field>
-            <div className="flex items-center gap-3">
-              <button
-                type="button"
-                onClick={() => void savePassword()}
-                disabled={pwSaving || !currentPw || newPw.length < 6}
-                className="mist-button rounded-full px-5 py-2 text-sm font-medium disabled:opacity-50"
-              >
-                {pwSaving ? (lang === "zh" ? "保存中…" : "Saving…") : (lang === "zh" ? "更新密码" : "Update password")}
-              </button>
-              {pwMsg && <p className="text-sm text-[#7f9c8b]">{pwMsg}</p>}
-              {pwErr && <p className="text-sm text-[#bb7f94]">{pwErr}</p>}
+            <div className="nb-account-block">
+              <h2>{P.gender}</h2>
+              <p className="nb-hint">{P.genderHint}</p>
+              <div className="nb-pencil-tabs">
+                {P.genders.map(({ v, label }) => (
+                  <button key={v} type="button" aria-pressed={userGender === v} onClick={() => setUserGender(userGender === v ? "" : v)}>{label}</button>
+                ))}
+                {userGender && <button type="button" className="nb-act-quiet" onClick={() => setUserGender("")}>{P.clear}</button>}
+              </div>
             </div>
-          </div>
-        </Section>
+
+            <div className="nb-account-block">
+              <h2>{P.password}</h2>
+              <label className="nb-field"><span>{P.currentPassword}</span>
+                <input type="password" value={currentPw} onChange={(e) => setCurrentPw(e.target.value)} autoComplete="current-password" />
+              </label>
+              <label className="nb-field"><span>{P.newPassword}</span>
+                <input type="password" value={newPw} onChange={(e) => setNewPw(e.target.value)} autoComplete="new-password" onKeyDown={(e) => e.key === "Enter" && void savePassword()} />
+              </label>
+              <div className="nb-row">
+                <button type="button" className="nb-act" onClick={() => void savePassword()} disabled={pwSaving || !currentPw || newPw.length < 6}>{pwSaving ? P.saving : P.updatePassword}</button>
+                <p className={`nb-msg${pwMsg ? " nb-ok" : ""}`} role="status">{pwMsg || pwErr}</p>
+              </div>
+            </div>
+
+            {session?.user && (
+              <div className="nb-account-block">
+                <button type="button" className="nb-act-quiet" onClick={() => void signOut({ callbackUrl: "/" })}>{P.signOut}</button>
+              </div>
+            )}
+          </section>
+
+          <section>
+            <span className="nb-kicker">{B.usageLabel}</span>
+            <div className="nb-card">
+              <div className="nb-card-head"><b>{P.cardTitle}</b><span className="nb-mono" style={{ color: "var(--ink-faint)" }}>{billing ? planLabel.toUpperCase() : ""}</span></div>
+              {billingState === "ready" && billing ? (
+                <>
+                  <table>
+                    <thead><tr><th>{P.cardItem}</th><th>{P.cardUsed}</th><th style={{ textAlign: "right" }}>{P.cardLeft}</th></tr></thead>
+                    <tbody>
+                      {rows.map(([label, key]) => (
+                        <tr key={key}>
+                          <td>{label}</td>
+                          <td>{billing.isUnlimited ? null : <Boxes used={billing.usage[key]} total={billing.limits[key]} />}</td>
+                          <td className="nb-hand">{billing.isUnlimited ? P.cardUnlimited : billing.remaining[key]}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  <div className="nb-card-foot"><span className="nb-mono">{P.cardResets.replace("{date}", resetDate)}</span></div>
+                </>
+              ) : (
+                <p className="nb-msg" role="status" style={{ marginTop: 16 }}>{billingState === "error" ? P.cardError : P.cardLoading}</p>
+              )}
+            </div>
+            {billing && !billing.isUnlimited && (
+              <div className="nb-upsell">
+                <p className="nb-body" style={{ maxWidth: "20em" }}>{billing.plan === "plus" ? "" : P.upsell}</p>
+                <div style={{ display: "grid", gap: 10, justifyItems: "end" }}>
+                  <button type="button" className="nb-act" onClick={() => void openBilling()}>{billing.plan === "plus" ? B.manage : B.upgrade} <span aria-hidden>→</span></button>
+                  {billing.plan !== "plus" && <Link className="nb-act-quiet" href="/pricing">{P.seePlans}</Link>}
+                </div>
+              </div>
+            )}
+            {billingErr && <p className="nb-msg" role="alert" style={{ marginTop: 12 }}>{billingErr}</p>}
+          </section>
+        </div>
       </main>
-    </div>
+    </NotebookShell>
   );
 }
