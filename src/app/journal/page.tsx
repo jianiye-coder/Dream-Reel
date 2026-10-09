@@ -1122,6 +1122,12 @@ export default function JournalPage() {
         </div>
       )}
 
+      <div className="relative z-10 px-6 py-2 text-right">
+        <Link href="/morning-pages" className="inline-flex min-h-11 items-center text-sm text-[#92400e] underline underline-offset-4">
+          {T.morningPages.journalLink}
+        </Link>
+      </div>
+
 
       {/* Chat mode — messages */}
       {mode === "chat" && step === "dream" && (

@@ -11,7 +11,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:unit": "vitest run tests/unit",
-    "test:integration": "vitest run tests/integration",
+    "test:integration": "vitest run tests/integration --no-file-parallelism",
     "test:e2e": "playwright test",
     "eval:agent": "tsx evals/dream-agent/run.ts",
     "eval:agent:replay": "tsx evals/dream-agent/replay.ts",
@@ -23,12 +23,14 @@
     "@auth/pg-adapter": "^1.11.3",
     "@vercel/blob": "^2.6.1",
     "bcryptjs": "^3.0.3",
-    "next": "^16.3.0",
+    "lucide-react": "^1.52.0",
+    "lxgw-wenkai-webfont": "^1.7.0",
+    "next": "~16.3.8",
     "next-auth": "^5.0.0-beta.32",
     "pg": "^8.20.0",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
-    "sharp": "^0.35.3",
+    "sharp": "^0.35.5",
     "zod": "^4.3.6"
   },
   "devDependencies": {
@@ -38,13 +40,13 @@
     "@types/pg": "^8.20.0",
     "@types/react": "^19",
     "@types/react-dom": "^19",
-    "@vitest/coverage-v8": "^4.1.10",
+    "@vitest/coverage-v8": "^4.1.11",
     "autoprefixer": "^10.5.0",
     "eslint": "^9",
-    "eslint-config-next": "^16.3.0",
+    "eslint-config-next": "~16.3.8",
     "tailwindcss": "^3.4.19",
     "tsx": "^4.23.12",
     "typescript": "^5",
-    "vitest": "^4.1.10"
+    "vitest": "^4.1.11"
   }
 }

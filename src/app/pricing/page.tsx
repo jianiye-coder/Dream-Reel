@@ -1,61 +1,54 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
+import { useSession } from "next-auth/react";
+import { NotebookShell } from "@/components/notebook/NotebookShell";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { LangToggle } from "@/components/LangToggle";
 
 export default function PricingPage() {
-  const { lang, T } = useLanguage();
+  const { T } = useLanguage();
   const L = T.landing;
+  const P = T.nbPaper;
+  const { status } = useSession();
+  const signedIn = status === "authenticated";
+  const fors = [P.planFreeFor, P.planPlusFor];
+  // upgrading happens from the account page, where the Stripe checkout lives
+  const hrefs = signedIn ? ["/journal", "/account"] : ["/login?callbackUrl=%2Fjournal", "/login?callbackUrl=%2Faccount"];
 
   return (
-    <main className="morning-landing morning-pricing-page">
-      <nav className="morning-nav site-header" aria-label={lang === "zh" ? "主导航" : "Main navigation"}>
-        <Link href="/" className="morning-brand site-brand" aria-label="Dream Reel home">
-          <Image src="/dream-reel-logo.png" alt="" aria-hidden width={40} height={40} />
-          <span>Dream Reel</span>
-        </Link>
-        <div className="morning-nav-links site-nav-links">
-          <Link href="/journal">{T.nav.journal}</Link>
-          <Link href="/archive">{T.nav.archive}</Link>
-        </div>
-        <div className="morning-nav-actions site-nav-actions">
-          <LangToggle className="morning-language site-language" />
-          <Link href="/journal" className="morning-nav-cta site-primary-action">{L.navCta}</Link>
-        </div>
-      </nav>
-
-      <section className="morning-pricing" aria-labelledby="pricing-title">
-        <div className="morning-pricing-heading">
-          <p className="morning-eyebrow">{L.pricingEyebrow}</p>
-          <h1 id="pricing-title">{L.pricingTitle}</h1>
-          <p>{L.pricingBody}</p>
+    <NotebookShell surface="paper">
+      <main className="nb-paper-main" id="main">
+        <div className="nb-pricing-head">
+          <span className="nb-kicker">{P.pricingKicker}</span>
+          <h1>{P.pricingTitle}</h1>
+          <p className="nb-body">{P.pricingBody}</p>
         </div>
 
-        <div className="morning-plan-grid">
-          {L.pricingPlans.map((plan, i) => (
-            <article key={plan.name} className={`morning-plan ${i === 1 ? "is-featured" : ""}`}>
-              <div className="morning-plan-head">
-                <span className="morning-plan-badge">{plan.badge}</span>
-                <h3>{plan.name}</h3>
-                <p>
-                  <strong>{plan.price}</strong>
-                  <small>{plan.cadence}</small>
-                </p>
-              </div>
-              <ul>
-                {plan.features.map((feature) => (
-                  <li key={feature}>{feature}</li>
-                ))}
-              </ul>
-              <Link href="/journal" className="morning-button morning-button-primary">
-                {plan.cta}
-              </Link>
-            </article>
-          ))}
+        <div className="nb-plans">
+          {L.pricingPlans.map((plan, i) => {
+            const [amount] = plan.price.match(/[\d.]+/) ?? ["0"];
+            const currency = plan.price.replace(amount, "");
+            return [
+              i === 1 && <span key="rule" className="nb-rule" />,
+              <section key={plan.name} className="nb-plan">
+                {i === 1 && <span className="nb-stamp">{P.recommended}</span>}
+                <div className="nb-plan-name">{plan.name}</div>
+                <div className="nb-price"><b><i className="nb-yen">{currency}</i>{amount}</b><span>{plan.cadence}</span></div>
+                <p className="nb-for">{fors[i]}</p>
+                <ul className="nb-items">
+                  {plan.items.map(([label, value]) => <li key={label}>{label}<span className="nb-lead" /><b>{value}</b></li>)}
+                  <li>{P.planAlways}<span className="nb-lead" /><b>{P.planAlwaysValue}</b></li>
+                </ul>
+                <Link className="nb-act" href={hrefs[i]}>{plan.cta} <span aria-hidden>→</span></Link>
+              </section>,
+            ];
+          })}
         </div>
-      </section>
-    </main>
+
+        <div className="nb-faq">
+          {P.faq.map((f) => <div key={f.q}><h3>{f.q}</h3><p>{f.a}</p></div>)}
+        </div>
+      </main>
+    </NotebookShell>
   );
 }

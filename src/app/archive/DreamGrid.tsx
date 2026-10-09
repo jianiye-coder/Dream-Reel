@@ -397,6 +397,8 @@ function DreamEditorModal({
   const savedRevisionRef = useRef(0);
   const [deleting, setDeleting] = useState(false);
   const [generatingImage, setGeneratingImage] = useState(false);
+  const [downloadingImage, setDownloadingImage] = useState(false);
+  const [downloadError, setDownloadError] = useState("");
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [followUpQuestions, setFollowUpQuestions] = useState<string[]>([]);
   const [followUpAnswers, setFollowUpAnswers] = useState<Record<number, string>>({});
@@ -437,6 +439,7 @@ function DreamEditorModal({
 
   useEffect(() => {
     formDirtyRef.current = false;
+    setDownloadError("");
     formRevisionRef.current = 0;
     savedRevisionRef.current = 0;
     if (!entry) {
@@ -793,6 +796,32 @@ function DreamEditorModal({
     setFollowUpAnswers((prev) => { const next = { ...prev }; delete next[index]; return next; });
   }
 
+  async function downloadImage() {
+    if (!form?.imageUrl || downloadingImage || !entry) return;
+    setDownloadingImage(true);
+    setDownloadError("");
+    try {
+      // Cross-origin image links ignore `download`; a local blob URL saves the file.
+      const response = await fetch(form.imageUrl, { signal: AbortSignal.timeout(30_000) });
+      if (!response.ok) throw new Error("Image download failed");
+      const blob = await response.blob();
+      if (!blob.size || !blob.type.startsWith("image/")) throw new Error("Invalid image");
+      const extension = ({ "image/jpeg": "jpg", "image/webp": "webp", "image/gif": "gif", "image/avif": "avif" } as Record<string, string>)[blob.type] ?? "png";
+      const href = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = href;
+      anchor.download = `${(form.title || dreamDisplayTitle(entry) || "dream").replace(/[\\/:*?"<>|]/g, "_")}.${extension}`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      window.setTimeout(() => URL.revokeObjectURL(href), 10_000);
+    } catch {
+      setDownloadError(lang === "zh" ? "图片下载失败，请重试。" : "Could not download the image. Please try again.");
+    } finally {
+      setDownloadingImage(false);
+    }
+  }
+
   return (
     <div
       className="archive-editor-overlay fixed inset-0 z-50 flex items-end justify-center bg-[rgba(232,225,242,0.58)] backdrop-blur-xl sm:items-center"
@@ -1037,7 +1066,7 @@ function DreamEditorModal({
               <p className="archive-editor-section-title text-sm font-medium text-[#8f82bc]">{M.imageTitle}</p>
               <p className="mist-soft mt-1 text-xs">{M.imageHint}</p>
 
-              <div className="archive-editor-image-frame group relative mt-4 overflow-hidden rounded-[1.5rem]">
+              <div className={`archive-editor-image archive-editor-image-frame group relative mt-4 overflow-hidden rounded-[1.5rem] ${form.imageUrl ? "" : "archive-image-empty"}`}>
                 {form.imageUrl ? (
                   <>
                     <Image
@@ -1048,15 +1077,17 @@ function DreamEditorModal({
                       unoptimized
                       className="h-[18rem] w-full object-cover"
                     />
-                    <a
-                      href={form.imageUrl}
-                      download={`${(form.title || dreamDisplayTitle(entry)).replace(/[\\/:*?"<>|]/g, "_")}.png`}
-                      onClick={(e) => e.stopPropagation()}
-                      className="absolute bottom-3 right-3 flex h-9 w-9 items-center justify-center rounded-full bg-black/40 text-base text-white/90 opacity-0 backdrop-blur-sm transition-opacity duration-200 hover:bg-black/60 group-hover:opacity-100"
-                      title={M.downloadImage}
+                    <button
+                      type="button"
+                      onClick={(event) => { event.stopPropagation(); void downloadImage(); }}
+                      disabled={downloadingImage}
+                      aria-busy={downloadingImage}
+                      aria-label={downloadingImage ? (lang === "zh" ? "下载中…" : "Downloading…") : M.downloadImage}
+                      className="archive-image-download"
+                      title={downloadingImage ? (lang === "zh" ? "下载中…" : "Downloading…") : M.downloadImage}
                     >
-                      ↓
-                    </a>
+                      <span aria-hidden="true">{downloadingImage ? "…" : "↓"}</span>
+                    </button>
                   </>
                 ) : (
                   <div className="archive-editor-empty-image flex h-[18rem] items-center justify-center text-sm">
@@ -1064,6 +1095,7 @@ function DreamEditorModal({
                   </div>
                 )}
               </div>
+              {downloadError && <p role="alert" className="archive-image-download-error mt-2 text-sm">{downloadError}</p>}
 
               <label className="mt-4 grid gap-1.5">
                 <span className="mist-label text-xs font-medium">{M.promptLabel}</span>
@@ -2047,7 +2079,7 @@ export default function DreamGrid({
                 className="archive-recent-entry"
               >
                 <div className="archive-recent-entry-inner">
-                  <div className={`archive-recent-image ${moodGradient(entry.mood)}`}>
+                  <div className={`archive-recent-image ${entry.thumbnailUrl || entry.imageUrl ? moodGradient(entry.mood) : "archive-image-empty"}`}>
                     {entry.thumbnailUrl || entry.imageUrl ? (
                       <Image src={entry.thumbnailUrl || entry.imageUrl!} alt="dream" width={320} height={420} unoptimized className="h-full w-full object-cover" />
                     ) : null}
