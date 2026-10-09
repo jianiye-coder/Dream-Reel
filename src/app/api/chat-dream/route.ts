@@ -27,6 +27,7 @@ import {
 } from "@/lib/dreamAgentMetrics";
 import { API_ERROR_CODES } from "@/lib/apiErrors";
 import { safeErrorMetadata } from "@/lib/safeServerLog";
+import { buildDreamSupportPrompt, parseDreamSupportResponse, resolveDreamSupportResponse } from "@/lib/dreamSupport";
 
 export const runtime = "nodejs";
 
@@ -43,6 +44,7 @@ const msgSchema = z.object({
 const bodySchema = z.object({
   messages: z.array(msgSchema).min(1).max(30),
   lang: z.enum(["zh", "en"]).default("zh"),
+  goal: z.enum(["recall", "support"]).default("recall"),
   preSleepMeal: z.string().trim().max(200).optional(),
   preSleepActivity: z.string().trim().max(200).optional(),
 });
@@ -131,8 +133,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: API_ERROR_CODES.invalidRequest, details: parsed.error.flatten() }, { status: 400 });
   }
 
-  const { messages, lang, preSleepMeal, preSleepActivity } = parsed.data;
-  const policyVariant = selectDreamAgentPolicyVariant(userId, process.env.DREAM_AGENT_GUARDED_PERCENT);
+  const { messages, lang, goal, preSleepMeal, preSleepActivity } = parsed.data;
+  const policyVariant = goal === "support" ? "support-v1" : selectDreamAgentPolicyVariant(userId, process.env.DREAM_AGENT_GUARDED_PERCENT);
   const guardedRecall = policyVariant === "guarded-v2";
   const requestId = crypto.randomUUID();
   let requestOutcomeRecorded = false;
@@ -150,7 +152,14 @@ export async function POST(req: NextRequest) {
   }
   const contextLines = buildContextLines(lang, preSleepMeal, preSleepActivity);
   const conversationContext = deriveDreamAgentConversationContext(messages, lang, Boolean(contextLines));
-  const deterministicResponse = resolveDeterministicAgentResponse(conversationContext, lang, guardedRecall);
+  // Support controls concern the current turn; older stop/privacy requests must
+  // not permanently trap a user after they choose to continue.
+  const supportContext = goal === "support"
+    ? deriveDreamAgentConversationContext(messages.filter((message) => message.role === "user").slice(-1), lang)
+    : conversationContext;
+  const deterministicResponse = goal === "support"
+    ? resolveDreamSupportResponse(supportContext, lang)
+    : resolveDeterministicAgentResponse(conversationContext, lang, guardedRecall);
   if (deterministicResponse) {
     const meta = createDreamAgentResponseMeta(
       "deterministic-v1",
@@ -222,9 +231,11 @@ export async function POST(req: NextRequest) {
   consumedUsagePeriodId = usage.usagePeriodId;
 
   const userTurns = messages.filter((m) => m.role === "user").length;
-  const stage = inferAgentStageFromConversation(messages, lang, conversationContext, guardedRecall);
+  const stage = goal === "support" ? "deepening" : inferAgentStageFromConversation(messages, lang, conversationContext, guardedRecall);
   const variant = selectDreamAgentModelVariant(userId, process.env.DREAM_AGENT_JSON_SCHEMA_PERCENT);
-  const systemPrompt = buildDreamFollowUpAgentPrompt(lang, userTurns, stage, contextLines, conversationContext);
+  const systemPrompt = goal === "support"
+    ? buildDreamSupportPrompt(lang, contextLines)
+    : buildDreamFollowUpAgentPrompt(lang, userTurns, stage, contextLines, conversationContext);
   const upstreamMessages = messages.map((message) => {
     if (message.role === "user") return { role: message.role, content: message.content };
     const workingMemory = message.memory
@@ -285,7 +296,9 @@ export async function POST(req: NextRequest) {
         });
         continue;
       }
-      const result = parseDreamAgentContent(content, lang, stage, conversationContext, guardedRecall);
+      const result = goal === "support"
+        ? parseDreamSupportResponse(content, lang)
+        : parseDreamAgentContent(content, lang, stage, conversationContext, guardedRecall);
       const meta = createDreamAgentResponseMeta(
         variant,
         "model",
