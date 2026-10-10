@@ -378,14 +378,6 @@ export default function JournalPage() {
     .filter(Boolean);
   const dreamFragments = rawFragments.slice(-5);
   const currentAnalysis = analysis && lastAnalyzedText === activeDreamText ? analysis : null;
-  const memoryNodes = [
-    ...(currentAnalysis?.people ?? []).map((value) => ({ value, kind: J.analysis.people })),
-    ...(currentAnalysis?.locations ?? []).map((value) => ({ value, kind: J.analysis.locations })),
-    ...(currentAnalysis?.symbols ?? []).map((value) => ({ value, kind: J.analysis.symbols })),
-  ].slice(0, 9);
-  const previewNodes = memoryNodes.length
-    ? memoryNodes
-    : rawFragments.slice(-6).map((value) => ({ value, kind: J.memoryPreview.fragment }));
 
   useEffect(() => { isAnalyzingRef.current = isAnalyzing; }, [isAnalyzing]);
 

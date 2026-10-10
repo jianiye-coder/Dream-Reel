@@ -3,12 +3,11 @@
 import Image from "next/image";
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { LangToggle } from "@/components/LangToggle";
 import type { DreamEntry } from "@/lib/dreams";
-import { getApiErrorMessage } from "@/lib/apiErrors";
 
 const DreamGrid = dynamic(() => import("./DreamGrid"), {
   loading: () => (
@@ -18,7 +17,6 @@ const DreamGrid = dynamic(() => import("./DreamGrid"), {
   ),
 });
 
-type BillingStatus = { plan: "free" | "plus" };
 type ArchiveTab = "calendar" | "tags" | "recent";
 
 function isArchiveTab(value: string | null): value is ArchiveTab {
@@ -38,12 +36,9 @@ export default function ArchiveShell({
 }) {
   const { lang, T } = useLanguage();
   const { archive: A } = T;
-  const B = T.billing;
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const [billingStatus, setBillingStatus] = useState<BillingStatus | null>(null);
-  const [billingError, setBillingError] = useState("");
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState("");
   const requestedTab = searchParams.get("tab");
@@ -55,36 +50,6 @@ export default function ArchiveShell({
     else params.set("tab", tab);
     const query = params.toString();
     router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
-  }
-
-  useEffect(() => {
-    if (!user) return;
-    fetch("/api/billing/status", { cache: "no-store" })
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => {
-        if (data) setBillingStatus(data as BillingStatus);
-      })
-      .catch(() => undefined);
-  }, [user]);
-
-  async function openBilling() {
-    setBillingError("");
-    const endpoint = billingStatus?.plan === "plus" ? "/api/billing/portal" : "/api/billing/checkout";
-    const fallbackError = billingStatus?.plan === "plus" ? B.portalError : B.checkoutError;
-    try {
-      const res = await fetch(endpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ lang, currency: lang === "zh" ? "cny" : "usd" }),
-      });
-      const data = (await res.json()) as { url?: string; error?: string };
-      if (!res.ok || !data.url) {
-        throw new Error(getApiErrorMessage(data.error, lang, fallbackError));
-      }
-      window.location.href = data.url;
-    } catch (error) {
-      setBillingError(error instanceof Error ? error.message : fallbackError);
-    }
   }
 
   async function exportAllDreams() {
@@ -169,12 +134,6 @@ export default function ArchiveShell({
             <p className="text-sm font-medium text-[#aa8e67]">{A.dbErrorTitle}</p>
             <p className="mt-1 text-sm leading-relaxed text-[#8e7d66]">{dataError}</p>
             <p className="mt-2 text-xs text-[#9b8d78]">{A.dbErrorHint}</p>
-          </div>
-        ) : null}
-
-        {billingError ? (
-          <div className="mist-card mb-6 rounded-[1.8rem] p-4">
-            <p className="text-sm font-medium text-[#b88a95]">{billingError}</p>
           </div>
         ) : null}
 
