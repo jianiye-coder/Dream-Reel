@@ -22,6 +22,7 @@ export default function LandingPage() {
   const L = T.nbLanding;
   const [closed, setClosed] = useState(true);
   const [coverGone, setCoverGone] = useState(false);
+  const [opening, setOpening] = useState(false);
   const [lit, setLit] = useState(false);
   const [dateLine, setDateLine] = useState<string[]>([]);
   const entry = useRef<HTMLParagraphElement>(null);
@@ -65,10 +66,11 @@ export default function LandingPage() {
     if (opened.current) return;
     opened.current = true;
     sessionStorage.setItem("dr-cover-seen", "1");
-    if (!instant) { unlock(); pageTurn({ dur: 1.2, heavy: true }); } // a cover is stiffer and heavier than a page
+    if (!instant) { unlock(); pageTurn({ dur: 1.6, heavy: true }); } // a cover is stiffer and heavier than a page
     setClosed(false);
-    window.setTimeout(() => setCoverGone(true), instant ? 0 : 520);
-    await sleep(instant ? 250 : 1300);
+    if (instant) setCoverGone(true);
+    else setOpening(true); // the cover's animationend hands over to the real left page
+    await sleep(instant ? 250 : 1650);
     setLit(true);
     void writeDemo();
   }, [writeDemo]);
@@ -101,7 +103,7 @@ export default function LandingPage() {
   return (
     <NotebookShell>
       <main className="nb-stage" id="main">
-          <Book className={`${closed ? "nb-closed " : ""}nb-r-first`} pencil>
+          <Book className={`${closed ? "nb-closed " : ""}${opening ? "nb-opening " : ""}nb-r-first`} pencil>
             <BookPage side="l" ruled indent folio="p. 214">
               <div className="nb-date-line">{dateLine.map((d, i) => i === 0 ? <b key={i}>{d}</b> : <span key={i}>{d}</span>)}</div>
               <p className="nb-hand nb-entry" ref={entry} />
@@ -123,7 +125,24 @@ export default function LandingPage() {
             </BookPage>
 
             <div className="nb-thick nb-thick-b" /><div className="nb-thick nb-thick-r" />
-            <Cover open={!closed} past={coverGone} label={L.coverAria} onOpen={() => void open()} />
+            <div className="nb-turn-shadow nb-l" aria-hidden /><div className="nb-turn-shadow nb-r" aria-hidden />
+            <Cover
+              open={!closed}
+              gone={coverGone}
+              label={L.coverAria}
+              onOpen={() => void open()}
+              onLanded={() => { setOpening(false); setCoverGone(true); }}
+              inside={
+                <>
+                  <div className="nb-board nb-l" /><div className="nb-edges nb-l" />
+                  <section className="nb-page nb-page-l nb-ruled">
+                    <div className="nb-pad nb-indent">
+                      <div className="nb-date-line">{dateLine.map((d, i) => i === 0 ? <b key={i}>{d}</b> : <span key={i}>{d}</span>)}</div>
+                    </div>
+                  </section>
+                </>
+              }
+            />
             <span className="nb-open-hint" aria-hidden>{L.coverHint}</span>
           </Book>
       </main>
@@ -190,16 +209,19 @@ export default function LandingPage() {
 }
 
 /* Full leather, softly padded, worn at the edges; gilt only in the corners and the title. */
-function Cover({ open, past, label, onOpen }: { open: boolean; past: boolean; label: string; onOpen: () => void }) {
+function Cover({ open, gone, label, onOpen, onLanded, inside }: {
+  open: boolean; gone: boolean; label: string; onOpen: () => void; onLanded: () => void; inside: React.ReactNode;
+}) {
   return (
     <div
       role="button"
       tabIndex={open ? -1 : 0}
       aria-hidden={open || undefined}
-      className={`nb-cover${open ? " nb-open" : ""}${past ? " nb-past" : ""}`}
+      className={`nb-cover${open ? " nb-open" : ""}${gone ? " nb-gone" : ""}`}
       aria-label={label}
       onClick={onOpen}
       onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onOpen(); } }}
+      onAnimationEnd={(e) => { if (e.target === e.currentTarget && e.animationName.includes("nb-cover-open")) onLanded(); }}
     >
       <div className="nb-out">
         <span className="nb-spine-edge" /><span className="nb-hinge" />
@@ -242,7 +264,7 @@ function Cover({ open, past, label, onOpen }: { open: boolean; past: boolean; la
         </svg>
         <span className="nb-ribbon-tail" />
       </div>
-      <div className="nb-in" />
+      <div className="nb-in">{inside}</div>
     </div>
   );
 }
