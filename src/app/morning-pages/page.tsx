@@ -225,6 +225,14 @@ export default function MorningPages() {
           <div><p className={styles.eyebrow}>{M.eyebrow}</p><h1>{M.title}</h1></div>
           <span className={styles.privateLabel}>{M.privateLabel}</span>
         </header>
+        <details className={styles.about}>
+          <summary><span className={styles.aboutLead}>{M.aboutLead}</span> <span className={styles.aboutToggle}>{M.aboutToggle}</span></summary>
+          <div className={styles.aboutBody}>
+            <section><h2>{M.aboutWhatTitle}</h2><p>{M.aboutWhat}</p></section>
+            <section><h2>{M.aboutWhyTitle}</h2><ul>{M.aboutWhy.map((line) => <li key={line}>{line}</li>)}</ul></section>
+            <p className={styles.aboutHere}>{M.aboutHere} <a href="https://juliacameronlive.com/" target="_blank" rel="noreferrer">{M.aboutSource} ↗</a></p>
+          </div>
+        </details>
         <div className={styles.workspace}>
           <aside className={styles.history} aria-label={M.datesLabel}>
             <button className={styles.button} disabled={loading || switching} onClick={() => void selectDay(localDate())}>{M.today}</button>
