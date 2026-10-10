@@ -229,15 +229,12 @@ html[lang="en"] .nb-root {
 }
 
 /* a pencil resting beside the book */
+/* a pencil resting beside the book — modelled and rendered in Blender (assets/blender/pencil.py),
+   lit from the upper right with its own soft shadow, so it needs no CSS rotation */
 .nb-pencil {
-  position: absolute; right: -215px; top: 50%; width: 290px; height: 12px; z-index: 0;
-  transform: rotate(-72deg); transform-origin: center;
-  background:
-    linear-gradient(180deg, rgba(255,255,255,.35), transparent 35%, transparent 60%, rgba(0,0,0,.18)),
-    linear-gradient(90deg, #222 0 2.2%, #e4c9a0 2.2% 8.5%, #2f3a4a 8.5% 90%, #c8c1b3 90% 94.5%, #c99487 94.5%);
-  clip-path: polygon(0 50%, 8.5% 4%, 100% 0, 100% 100%, 8.5% 96%);
-  border-radius: 0 3px 3px 0;
-  filter: drop-shadow(-6px 9px 6px rgba(50, 34, 14, .35));
+  position: absolute; right: -158px; top: calc(50% - 150px); width: 127px; height: 320px; z-index: 0;
+  background: url("/images/desk-pencil.png") center / contain no-repeat;
+  pointer-events: none;
 }
 
 /* the turning page: a strip of segments that bend as it travels (driven by notebook.js) */
@@ -410,9 +407,12 @@ html[lang="en"] .nb-root {
      tilted just enough to show its thickness: two boards, gilt page edges between. */
   .nb-book { --T: 34px; transition: transform 1.3s cubic-bezier(.45, .05, .25, 1), transform-origin 1.3s cubic-bezier(.45, .05, .25, 1); }
   .nb-book.nb-closed { transform-origin: 75% 50%; transform: translateX(-25%) translateY(-14px) rotateX(30deg) rotateZ(-3deg) rotateY(-13deg); }
-  .nb-book .nb-board.nb-l, .nb-book .nb-page-l, .nb-book .nb-edges.nb-l, .nb-book .nb-spine, .nb-book .nb-ribbon { transition: opacity .5s ease .5s; }
-  .nb-book.nb-closed .nb-board.nb-l, .nb-book.nb-closed .nb-page-l, .nb-book.nb-closed .nb-edges.nb-l, .nb-book.nb-closed .nb-spine, .nb-book.nb-closed .nb-ribbon { opacity: 0; }
+  /* the left half travels on the back of the cover, so it is hidden until the cover lands */
+  .nb-book.nb-closed > .nb-board.nb-l, .nb-book.nb-closed > .nb-page-l, .nb-book.nb-closed > .nb-edges.nb-l, .nb-book.nb-closed > .nb-spine, .nb-book.nb-closed > .nb-ribbon,
+  .nb-book.nb-opening > .nb-board.nb-l, .nb-book.nb-opening > .nb-page-l, .nb-book.nb-opening > .nb-edges.nb-l, .nb-book.nb-opening > .nb-spine, .nb-book.nb-opening > .nb-ribbon { opacity: 0; }
   .nb-book.nb-closed::before { left: 50%; transform: translateZ(calc(var(--T) * -1)); }
+  /* the book's own shadow covers only what is on the desk: the right half until the cover lands */
+  .nb-book.nb-opening::before { left: 50%; }
   .nb-book .nb-pencil { transition: opacity .8s ease 1s; }
   .nb-book.nb-closed .nb-pencil { opacity: 0; }
 
@@ -442,7 +442,7 @@ html[lang="en"] .nb-root {
     position: absolute; top: 0; bottom: 0; right: 0; width: 50%; z-index: 40;
     transform-origin: left center; transform-style: preserve-3d;
     transform: translateZ(1px);
-    transition: transform 1.25s cubic-bezier(.5, .05, .25, 1), opacity .5s ease 1.15s;
+    transition: transform .6s cubic-bezier(.5, .05, .25, 1);
     cursor: pointer;
   }
   .nb-cover .nb-out, .nb-cover .nb-in { position: absolute; inset: 0; backface-visibility: hidden; -webkit-backface-visibility: hidden; border-radius: 3px 8px 8px 3px; overflow: hidden; }
@@ -474,15 +474,44 @@ html[lang="en"] .nb-root {
   .nb-cover .nb-ribbon-tail { position: absolute; bottom: -34px; left: 31%; width: 8px; height: 40px;
     background: linear-gradient(90deg, #5e2219, #7d3023 50%, #5e2219);
     clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 88%, 0 100%); transform: rotate(5deg); transform-origin: top; }
-  /* the inside of the cover: indigo endpaper scattered with tiny gilt stars */
-  .nb-cover .nb-in { transform: rotateY(180deg); border-radius: 6px 2px 2px 6px;
-    background:
-      url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='64' height='64'><g fill='%23c9a65e' opacity='.75'><circle cx='10' cy='12' r='1.1'/><circle cx='42' cy='28' r='.8'/><path d='M26 46 l1 2.6 2.6 1 -2.6 1 -1 2.6 -1 -2.6 -2.6 -1 2.6 -1z'/><circle cx='54' cy='54' r='1'/><circle cx='20' cy='30' r='.6'/></g></svg>"),
-      radial-gradient(ellipse at 40% 30%, #34405a, #252e40 70%);
-    box-shadow: inset -8px 0 14px -6px rgba(0,0,0,.5); }
+  /* The back of the cover is the left half of the spread (board, page block, ruled page), as when
+     you open a book in the middle: the cover and the pages before it turn as one. When it lands,
+     the real left page takes over in the same place, so nothing fades. */
+  .nb-cover .nb-in { transform: rotateY(180deg); border-radius: 7px 3px 3px 7px; overflow: visible; }
+  .nb-cover .nb-in > .nb-board.nb-l { width: 100%; }
+  .nb-cover .nb-in > .nb-page-l { width: calc(100% - 20px); }
+  .nb-cover .nb-out::after, .nb-cover .nb-in::after { content: ""; position: absolute; inset: 0; pointer-events: none; opacity: 0; z-index: 9; }
+  .nb-cover .nb-out::after { background: linear-gradient(90deg, rgba(8,10,18,.15), rgba(8,10,18,.55)); }
+  .nb-cover .nb-in::after { background: linear-gradient(270deg, rgba(40,26,10,.1), rgba(40,26,10,.5)); border-radius: inherit; }
   .nb-cover:hover { transform: translateZ(1px) rotateY(-4deg); transition-duration: .6s; }
-  .nb-cover.nb-past .nb-out { visibility: hidden; }
-  .nb-cover.nb-open { transform: translateZ(1px) rotateY(-178deg); transition-duration: 1.25s; opacity: 0; pointer-events: none; }
+  .nb-cover.nb-open { animation: nb-cover-open 1.6s forwards; pointer-events: none; }
+  .nb-cover.nb-open .nb-out::after { animation: nb-cover-front 1.6s forwards; }
+  .nb-cover.nb-open .nb-in::after { animation: nb-cover-back 1.6s forwards; }
+  .nb-cover.nb-gone { display: none; }
+  /* the spine resists for a moment, then the board falls open and settles with a small bounce */
+  @keyframes nb-cover-open {
+    0%   { transform: translateZ(1px) rotateY(0deg); animation-timing-function: cubic-bezier(.4, 0, .7, 1); }
+    14%  { transform: translateZ(1px) rotateY(-9deg); animation-timing-function: cubic-bezier(.33, 0, .25, 1); }
+    82%  { transform: translateZ(1px) rotateY(-182.5deg); animation-timing-function: ease-out; }
+    92%  { transform: translateZ(1px) rotateY(-178.8deg); animation-timing-function: ease-in-out; }
+    100% { transform: translateZ(1px) rotateY(-180deg); }
+  }
+  /* light from above: each face darkens as it stands up and turns away, and lightens as it lies down */
+  @keyframes nb-cover-front { 0% { opacity: 0; } 48% { opacity: .9; } 100% { opacity: .9; } }
+  @keyframes nb-cover-back { 0%, 45% { opacity: .85; } 82% { opacity: .08; } 100% { opacity: 0; } }
+  /* the shadow of the rising cover sweeps across the right page, then onto the desk on the left */
+  .nb-turn-shadow { position: absolute; top: 7px; bottom: 5px; pointer-events: none; opacity: 0; z-index: 35; }
+  .nb-turn-shadow.nb-r { left: 50%; right: 28px; transform-origin: left;
+    background: linear-gradient(90deg, rgba(40,26,10,.6), rgba(40,26,10,.18) 40%, rgba(40,26,10,0) 78%); }
+  .nb-turn-shadow.nb-l { right: 50%; left: -10%; transform-origin: right; top: 2%; bottom: -4%; z-index: 0; filter: blur(6px);
+    background: linear-gradient(270deg, rgba(40,26,10,.45), rgba(40,26,10,0)); }
+  .nb-book.nb-opening .nb-turn-shadow.nb-r { animation: nb-shadow-r 1.6s forwards; }
+  .nb-book.nb-opening .nb-turn-shadow.nb-l { animation: nb-shadow-l 1.6s forwards; }
+  @keyframes nb-shadow-r { 0% { opacity: 0; transform: scaleX(1); } 14% { opacity: .3; } 45% { opacity: .75; transform: scaleX(.55); } 70% { opacity: .2; transform: scaleX(.12); } 100% { opacity: 0; transform: scaleX(0); } }
+  @keyframes nb-shadow-l { 0%, 50% { opacity: 0; transform: scaleX(.1); } 75% { opacity: .8; transform: scaleX(.7); } 100% { opacity: 0; transform: scaleX(1); } }
+  @media (prefers-reduced-motion: reduce) {
+    .nb-cover.nb-open, .nb-cover.nb-open .nb-out::after, .nb-cover.nb-open .nb-in::after, .nb-book.nb-opening .nb-turn-shadow { animation-duration: .01s; }
+  }
   .nb-open-hint { position: absolute; left: 75%; bottom: -58px; transform: translateX(-50%); white-space: nowrap; font-family: var(--hand); font-size: 16px; color: var(--ink-soft); transition: opacity .4s; }
   .nb-book:not(.nb-closed) .nb-open-hint { opacity: 0; }
 
