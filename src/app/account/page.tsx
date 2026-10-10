@@ -21,7 +21,7 @@ export default function AccountPage() {
   const { lang, T } = useLanguage();
   const P = T.nbPaper;
   const B = T.billing;
-  const { data: session, update: updateSession } = useSession();
+  const { data: session, status, update: updateSession } = useSession();
 
   // ── Name ──────────────────────────────────────────────────────────────────
   const [name, setName] = useState("");
@@ -125,7 +125,7 @@ export default function AccountPage() {
 
   const rows: [string, keyof Quota][] = [[P.cardDreams, "dreamEntries"], [P.cardAnalysis, "analysis"], [P.cardImages, "imageGenerations"]];
   const planLabel = billing?.isUnlimited ? B.planAdmin : billing?.plan === "plus" ? B.planPlus : B.planFree;
-  const resetDate = billing ? new Date(billing.periodEnd).toLocaleDateString(lang === "zh" ? "zh-CN" : "en-US", { month: "long", day: "numeric" }) : "";
+  const resetDate = billing ? new Date(billing.periodEnd).toLocaleDateString(lang === "zh" ? "zh-CN" : "en-US", { month: "long", day: "numeric", timeZone: "UTC" }) : "";
 
   return (
     <NotebookShell surface="paper">
@@ -133,7 +133,7 @@ export default function AccountPage() {
         <div className="nb-account">
           <section>
             <span className="nb-kicker">{P.accountKicker}</span>
-            <div className="nb-owner">{session?.user?.name || P.accountUnnamed}</div>
+            <div className="nb-owner">{status === "loading" ? "\u3000" : session?.user?.name || P.accountUnnamed}</div>
             <dl className="nb-facts">
               {session?.user?.email && <><dt>{P.email}</dt><dd>{session.user.email}<small>{P.emailFixed}</small></dd></>}
               <dt>{P.language}</dt><dd><LangToggle className="nb-act-quiet" /></dd>

@@ -71,18 +71,27 @@ html[lang="en"] .nb-root {
   display: flex; justify-content: space-between; align-items: baseline;
   padding: 26px 48px 0;
 }
-.nb-brand { font-family: var(--latin); font-style: italic; font-size: 25px; letter-spacing: -.01em; }
-.nb-nav { display: flex; gap: 30px; align-items: baseline; }
-.nb-nav a, .nb-nav button {
-  font-family: var(--mono); font-size: 11.5px; letter-spacing: .14em; color: var(--ink-soft);
-  position: relative; padding-bottom: 4px; transition: color .2s;
+.nb-brand { font-family: var(--latin); font-style: italic; font-size: 28px; letter-spacing: -.01em; color: var(--ink); }
+.nb-nav { display: flex; gap: 34px; align-items: baseline; }
+/* the links are set like a book's running head: the heading serif, in ink, with a red pencil
+   underline that draws in on hover and stays under the current page */
+.nb-nav a {
+  font-family: var(--serif); font-size: 16px; font-weight: 600; letter-spacing: .04em; color: var(--ink);
+  position: relative; padding-bottom: 5px; transition: color .2s;
 }
-.nb-nav a:hover { color: var(--ink); }
-.nb-nav a.nb-on { color: var(--ink); }
-.nb-nav a.nb-on::after, .nb-pencil-underline::after {
-  content: ""; position: absolute; left: -3px; right: -4px; bottom: -3px; height: 7px;
-  background: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 10' preserveAspectRatio='none'><path d='M1 6 C 30 3, 65 8, 99 4' stroke='%23b0432e' stroke-width='1.6' fill='none' stroke-linecap='round'/></svg>") no-repeat center / 100% 100%;
+.nb-nav a::after, .nb-pencil-underline::after {
+  content: ""; position: absolute; left: -3px; right: -4px; bottom: -4px; height: 8px;
+  background: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 10' preserveAspectRatio='none'><path d='M1 6 C 30 3, 65 8, 99 4' stroke='%23b0432e' stroke-width='1.8' fill='none' stroke-linecap='round'/></svg>") no-repeat center / 100% 100%;
+  transform: scaleX(0); transform-origin: left; transition: transform .35s cubic-bezier(.6, .1, .2, 1);
 }
+.nb-nav a:hover::after, .nb-nav a.nb-on::after, .nb-pencil-underline::after { transform: scaleX(1); }
+.nb-nav a.nb-on { color: var(--pencil); }
+.nb-nav button {
+  font-family: var(--mono); font-size: 11px; letter-spacing: .12em; color: var(--ink-soft);
+  border: 1px solid rgba(31, 28, 23, .35); border-radius: 3px; padding: 3px 7px; transition: color .2s, border-color .2s;
+}
+.nb-nav button:hover { color: var(--ink); border-color: var(--ink); }
+@media (prefers-reduced-motion: reduce) { .nb-nav a::after { transition: none; } }
 
 /* ── the book: seen from above, lying on the desk ─────────
    A cloth cover board, two page blocks, pages that bend into
@@ -315,7 +324,6 @@ html[lang="en"] .nb-root {
 .nb-sound.nb-on i b { animation: eq 1.1s ease-in-out infinite; }
 .nb-sound.nb-on i b:nth-child(2) { animation-delay: .2s; } .nb-sound.nb-on i b:nth-child(3) { animation-delay: .45s; }
 @keyframes eq { 50% { height: 100%; } }
-.nb-hint { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); z-index: 95; font-family: var(--hand); font-size: 16px; color: var(--ink-soft); transition: opacity .5s; }
 
 /* ── paper pages: the site itself is the sheet (login, pricing, account, blog) ── */
 .nb-root.nb-paper {

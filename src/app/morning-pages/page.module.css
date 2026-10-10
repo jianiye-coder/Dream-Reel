@@ -66,3 +66,18 @@
   .actions { justify-content: flex-start; }
 }
 @media (prefers-reduced-motion: reduce) { .page button, .navigation a { transition: none; } }
+/* What Morning Pages are (Julia Cameron) — one visible line, details on demand */
+.about { margin: -12px 0 32px; border-left: 2px solid var(--morning-primary); padding: 2px 0 2px 16px; color: var(--morning-ink); }
+.about summary { cursor: pointer; list-style: none; line-height: 1.8; font-size: 15px; }
+.about summary::-webkit-details-marker { display: none; }
+.aboutLead { color: var(--morning-ink); }
+.aboutToggle { color: var(--morning-primary); font-weight: 600; text-decoration: underline; text-underline-offset: 3px; white-space: nowrap; }
+.aboutToggle::after { content: " ▾"; text-decoration: none; display: inline-block; transition: transform .2s; }
+.about[open] .aboutToggle::after { transform: rotate(180deg); }
+.aboutBody { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 40px; margin-top: 16px; max-width: 920px; }
+.aboutBody h2 { font-size: 14px; font-weight: 600; color: var(--morning-primary); margin-bottom: 6px; }
+.aboutBody p, .aboutBody li { font-size: 15px; line-height: 1.85; color: var(--morning-muted); }
+.aboutBody ul { list-style: disc; padding-left: 1.1em; display: grid; gap: 4px; }
+.aboutHere { grid-column: 1 / -1; font-size: 13px !important; }
+.aboutHere a { color: var(--morning-primary); text-decoration: underline; text-underline-offset: 3px; white-space: nowrap; }
+@media (max-width: 760px) { .aboutBody { grid-template-columns: 1fr; } }

@@ -29,6 +29,7 @@ export default function LandingPage() {
   const indexEl = useRef<HTMLOListElement>(null);
   const [thread, setThread] = useState<{ top: number; height: number } | null>(null);
   const opened = useRef(false);
+  const writeDemoRef = useRef<() => Promise<void>>(async () => {});
   const run = useRef(0);
 
   useEffect(() => {
@@ -61,6 +62,8 @@ export default function LandingPage() {
     }
   }, [L]);
 
+  useEffect(() => { writeDemoRef.current = writeDemo; }, [writeDemo]);
+
   const open = useCallback(async (instant = false) => {
     if (opened.current) return;
     opened.current = true;
@@ -70,8 +73,8 @@ export default function LandingPage() {
     window.setTimeout(() => setCoverGone(true), instant ? 0 : 520);
     await sleep(instant ? 250 : 1300);
     setLit(true);
-    void writeDemo();
-  }, [writeDemo]);
+    void writeDemoRef.current();
+  }, []);
 
   useEffect(() => {
     if (sessionStorage.getItem("dr-cover-seen") || matchMedia("(max-width: 900px)").matches) void open(true);
@@ -149,7 +152,7 @@ export default function LandingPage() {
             <p className="nb-body nb-small">{L.laterSmall}</p>
             <figure className="nb-print">
               <span className="nb-tape" />
-              <Image src="/dream-photo-1.jpg" alt="" width={520} height={390} />
+              <Image src="/images/dream-doors.jpg" alt="" width={520} height={390} />
               <span className="nb-cap">{L.photoCaption}</span>
             </figure>
           </div>
