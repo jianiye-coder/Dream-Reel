@@ -75,13 +75,9 @@ test("keyboard focus is visible and mobile microcopy stays readable", async ({ p
   expect(Number.parseFloat(focusStyle.width)).toBeGreaterThanOrEqual(3);
   expect(focusStyle.style).not.toBe("none");
 
-  const caption = page.locator(".hero-film-caption");
-  if (await caption.count()) {
-    const typography = await caption.evaluate((element) => {
-      const style = getComputedStyle(element);
-      return { fontSize: Number.parseFloat(style.fontSize), color: style.color };
-    });
-    expect(typography.fontSize).toBeGreaterThanOrEqual(12);
-    expect(typography.color).not.toContain("0.42");
-  }
+  // the smallest copy on the landing page is the mono kicker above the headline
+  const kicker = page.locator(".nb-kicker").first();
+  await expect(kicker).toBeVisible();
+  const fontSize = await kicker.evaluate((element) => Number.parseFloat(getComputedStyle(element).fontSize));
+  expect(fontSize).toBeGreaterThanOrEqual(12);
 });

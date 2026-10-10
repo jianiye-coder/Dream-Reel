@@ -51,7 +51,7 @@ export async function POST(request: NextRequest) {
 }
 
 // GET /api/admin/credits/users — list all users with their credit state
-export async function PUT(request: NextRequest) {
+export async function PUT() {
   const admin = await requireAdmin();
   if (!admin) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
