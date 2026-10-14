@@ -1,7 +1,8 @@
 "use client";
 
 /* Paper sounds for the notebook.
-   - Pencil strokes are real recordings (public/sounds, CC0 — see CREDITS.md), sliced into grains.
+   - Writing strokes are a real fountain-pen recording (public/sounds, CC0 — see CREDITS.md), sliced
+     into grains. A nib glides rather than scratches, so attacks are soft and the top end is rolled off.
    - Eraser, tap and page turn are synthesised with Web Audio.
    Browsers only allow audio after a user gesture, so nothing plays until unlock() runs. */
 
@@ -86,8 +87,8 @@ async function loadPencil() {
   pencilLoading = true;
   try {
     const [buf, offsets] = await Promise.all([
-      fetch("/sounds/pencil-sprite.mp3").then((r) => r.arrayBuffer()),
-      fetch("/sounds/pencil-grains.json").then((r) => r.json() as Promise<[number, number][]>),
+      fetch("/sounds/pen-sprite.mp3").then((r) => r.arrayBuffer()),
+      fetch("/sounds/pen-grains.json").then((r) => r.json() as Promise<[number, number][]>),
     ]);
     pencil = await ctx.decodeAudioData(buf);
     grains = offsets;
@@ -126,13 +127,13 @@ function grain(when: number, strength: number, maxDur: number) {
   const g = ctx!.createGain();
   const lp = ctx!.createBiquadFilter();
   s.buffer = pencil;
-  s.playbackRate.value = 0.9 + Math.random() * 0.2;
+  s.playbackRate.value = 0.95 + Math.random() * 0.1;
   lp.type = "lowpass";
-  lp.frequency.value = 5200 + Math.random() * 1500;
+  lp.frequency.value = 3800 + Math.random() * 800;
   const peak = (0.55 + Math.random() * 0.3) * strength;
   g.gain.setValueAtTime(0.0001, t);
-  g.gain.exponentialRampToValueAtTime(peak, t + 0.006);
-  g.gain.setValueAtTime(peak, t + Math.max(0.01, dur - 0.03));
+  g.gain.exponentialRampToValueAtTime(peak, t + 0.015);
+  g.gain.setValueAtTime(peak, t + Math.max(0.02, dur - 0.04));
   g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
   s.connect(lp).connect(g);
   out(g);
@@ -146,24 +147,24 @@ function synthStroke(when: number, strength: number) {
   const s = noiseSource();
   const hp = ctx!.createBiquadFilter();
   hp.type = "highpass";
-  hp.frequency.value = 1200;
+  hp.frequency.value = 300;
   const bp = ctx!.createBiquadFilter();
   bp.type = "bandpass";
-  bp.frequency.value = 2200 + Math.random() * 1400;
-  bp.Q.value = 1;
+  bp.frequency.value = 900 + Math.random() * 700;
+  bp.Q.value = 0.8;
   const g = ctx!.createGain();
-  const peak = (0.06 + Math.random() * 0.05) * strength;
+  const peak = (0.05 + Math.random() * 0.04) * strength;
   g.gain.setValueAtTime(0.0001, t);
-  g.gain.exponentialRampToValueAtTime(peak, t + 0.006);
+  g.gain.exponentialRampToValueAtTime(peak, t + 0.015);
   g.gain.exponentialRampToValueAtTime(0.0001, t + dur + 0.02);
   s.connect(hp).connect(bp).connect(g).connect(master!);
   s.start(t, Math.random() * 2.5, dur + 0.05);
 }
 
-/** A short pencil mark (annotations, ticks). */
+/** A short pen mark (annotations, ticks). */
 export function stroke(strength = 1, when = 0) {
   if (!audio()) return;
-  if (pencil) grain(when, strength * 0.8, 0.11 + Math.random() * 0.06);
+  if (pencil) grain(when, strength * 0.8, 0.14 + Math.random() * 0.08);
   else synthStroke(when, strength);
 }
 
@@ -173,10 +174,10 @@ export function writeChar(ch: string, when = 0): number {
   const punct = PUNCT.test(ch);
   const cjk = CJK.test(ch);
   if (pencil) {
-    if (punct) return grain(when, 0.45, 0.07);
-    // one or two strokes of real graphite, slightly overlapping
-    let d = grain(when, 1, cjk ? 0.24 : 0.14);
-    if (cjk && Math.random() < 0.55) d = Math.max(d, 0.07 + grain(when + 0.07 + Math.random() * 0.05, 0.8, 0.16));
+    if (punct) return grain(when, 0.45, 0.09);
+    // a character is one or two gliding strokes of the nib, slightly overlapping
+    let d = grain(when, 1, cjk ? 0.3 : 0.18);
+    if (cjk && Math.random() < 0.5) d = Math.max(d, 0.09 + grain(when + 0.09 + Math.random() * 0.05, 0.75, 0.2));
     return d;
   }
   const n = punct ? 1 : cjk ? 2 + Math.floor(Math.random() * 3) : 1;
