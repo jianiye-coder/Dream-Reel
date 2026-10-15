@@ -154,14 +154,14 @@ world.node_tree.nodes["Background"].inputs["Strength"].default_value = 0.45
 scene.world = world
 
 w = total * math.cos(ANGLE) + 0.028
-h = total * math.sin(ANGLE) + 0.02
+h = total * math.sin(ANGLE) + 0.032   # room for the edge feather below
 bpy.ops.object.camera_add(location=(-0.002, -0.003, 1), rotation=(0, 0, 0))
 cam = bpy.context.object
 cam.data.type = "ORTHO"
 cam.data.ortho_scale = max(w, h)
 scene.camera = cam
 
-PX_PER_M = 600 / 0.19  # ~2x the on-screen size (116 x 252 CSS px)
+PX_PER_M = 600 / 0.19  # ~2x the on-screen size (116 x 271 CSS px)
 scene.render.resolution_x = int(w * PX_PER_M)
 scene.render.resolution_y = int(h * PX_PER_M)
 scene.render.engine = "CYCLES"

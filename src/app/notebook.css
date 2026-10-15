@@ -233,7 +233,7 @@ html[lang="en"] .nb-root {
 /* a fountain pen resting beside the book — modelled and rendered in Blender (assets/blender/pen.py),
    lit from the upper right with its own soft shadow, so it needs no CSS rotation */
 .nb-pen {
-  position: absolute; right: -146px; top: calc(50% - 120px); width: 116px; height: 252px; z-index: 0;
+  position: absolute; right: -146px; top: calc(50% - 130px); width: 116px; height: 271px; z-index: 0;
   background: url("/images/desk-pen.png") center / contain no-repeat;
   pointer-events: none;
 }
