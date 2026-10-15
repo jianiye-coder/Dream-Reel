@@ -2,20 +2,14 @@ import type { Metadata } from "next";
 import "./globals.css";
 import "./notebook.css";
 import "lxgw-wenkai-webfont/lxgwwenkai-regular.css";
-import { IBM_Plex_Mono, Instrument_Serif, Noto_Serif, Noto_Serif_SC, Outfit, Pinyon_Script, Work_Sans } from "next/font/google";
+import { IBM_Plex_Mono, Instrument_Serif, Noto_Serif, Noto_Serif_SC, Pinyon_Script, Work_Sans } from "next/font/google";
 import { SessionProvider } from "next-auth/react";
 import { LanguageProvider } from "@/contexts/LanguageContext";
 
-const outfit = Outfit({
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
-  variable: "--font-serif",
-  display: "swap",
-});
-
+// only the skip link (outside the notebook) still uses it
 const workSans = Work_Sans({
   subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
+  weight: ["700"],
   variable: "--font-sub",
   display: "swap",
 });
@@ -42,7 +36,7 @@ export default function RootLayout({
   return (
     <html
       lang="zh-CN"
-      className={`h-full antialiased ${outfit.variable} ${workSans.variable} ${nbSerif.variable} ${nbSerifLatin.variable} ${nbLatin.variable} ${nbMono.variable} ${nbScript.variable}`}
+      className={`h-full antialiased ${workSans.variable} ${nbSerif.variable} ${nbSerifLatin.variable} ${nbLatin.variable} ${nbMono.variable} ${nbScript.variable}`}
       suppressHydrationWarning
     >
       <head>
