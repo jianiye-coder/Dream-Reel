@@ -74,14 +74,26 @@ function edgeFade(el: HTMLElement | null) {
   };
   update();
   el.addEventListener("scroll", update, { passive: true });
-  el.addEventListener("load", update, true);   // images arriving change the height without a mutation
+  // the content can grow without the pane resizing or the DOM changing: images arriving, a <details>
+  // opening, a textarea dragged taller, a web font swapping in — watch the pane and its children
+  el.addEventListener("load", update, true);
+  el.addEventListener("toggle", update, true);
   const resized = new ResizeObserver(update);
-  resized.observe(el);
-  const changed = new MutationObserver(update);
+  const watch = () => {
+    resized.disconnect();
+    resized.observe(el);
+    for (const child of Array.from(el.children)) resized.observe(child);
+  };
+  watch();
+  const changed = new MutationObserver(() => { watch(); update(); });
   changed.observe(el, { childList: true, subtree: true, characterData: true });
+  let live = true;
+  void document.fonts?.ready.then(() => { if (live) update(); });
   return () => {
+    live = false;
     el.removeEventListener("scroll", update);
     el.removeEventListener("load", update, true);
+    el.removeEventListener("toggle", update, true);
     resized.disconnect();
     changed.disconnect();
   };
@@ -268,8 +280,9 @@ export default function JournalPage() {
   const latestAgentInteractionIdRef = useRef<string | null>(null);
 
   const messagesAreaRef = useRef<HTMLElement>(null);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
   const replyFormRef = useRef<HTMLFormElement>(null);
+  const followRef = useRef({ count: 0, id: "", typing: false });
+  const nearReplyRef = useRef(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const undoStack = useRef<string[]>([]);
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
@@ -296,6 +309,10 @@ export default function JournalPage() {
     const t = getTodayDate();
     setToday(t);
     setDreamDate((current) => current || t);
+    // a page left open past midnight: "today" (the date input's max) moves on when it is looked at again
+    const refresh = () => { if (document.visibilityState === "visible") setToday(getTodayDate()); };
+    document.addEventListener("visibilitychange", refresh);
+    return () => document.removeEventListener("visibilitychange", refresh);
   }, []);
 
   useEffect(() => {
@@ -482,14 +499,35 @@ export default function JournalPage() {
     preSleepActivity,
   ]);
 
+  // phones: is the reader at the reply line? measured on scroll, so content growing below doesn't change it
+  useEffect(() => {
+    const check = () => {
+      const form = replyFormRef.current;
+      nearReplyRef.current = !!form && form.getBoundingClientRect().bottom <= window.innerHeight + 160;
+    };
+    check();
+    window.addEventListener("scroll", check, { passive: true });
+    window.addEventListener("resize", check);
+    return () => {
+      window.removeEventListener("scroll", check);
+      window.removeEventListener("resize", check);
+    };
+  }, [mode]);
+
   // Follow the chat inside the message pane without moving the whole page.
   useEffect(() => {
     if (!hasContent) return;
     const messagesArea = messagesAreaRef.current;
     if (!messagesArea) return;
-    // on phones the thread is part of the page (not its own scroll box): bring the reply line into view
+    // on phones the thread is part of the page (not its own scroll box): bring the reply line back into
+    // view — but only when the conversation moved on (a message added or removed, or it started typing),
+    // not when one was rewritten (feedback, goal, language), and not if the reader scrolled up to read
+    const last = { count: messages.length, id: messages.at(-1)?.id ?? "", typing: isTyping };
+    const before = followRef.current;
+    followRef.current = last;
     if (getComputedStyle(messagesArea).overflowY === "visible") {
-      replyFormRef.current?.scrollIntoView({ block: "end", behavior: "smooth" });
+      const movedOn = last.count !== before.count || last.id !== before.id || (last.typing && !before.typing);
+      if (movedOn && nearReplyRef.current) replyFormRef.current?.scrollIntoView({ block: "end", behavior: "smooth" });
       return;
     }
     messagesArea.scrollTo({
@@ -1098,9 +1136,14 @@ export default function JournalPage() {
   const roomOpenerRef = useRef<HTMLElement | null>(null);
   const sleepFirstRef = useRef<HTMLInputElement>(null);
   const promptRef = useRef<HTMLTextAreaElement>(null);
+  // React 19 ref callback with a cleanup: it is not called again with null, so the cleanup clears the ref
   const threadRef = useCallback((el: HTMLElement | null) => {
     messagesAreaRef.current = el;
-    return edgeFade(el);
+    const stopFade = edgeFade(el);
+    return () => {
+      stopFade?.();
+      messagesAreaRef.current = null;
+    };
   }, []);
 
   // the developing room is a native modal dialog: focus moves in, Tab stays inside, Esc closes,
@@ -1131,7 +1174,8 @@ export default function JournalPage() {
     });
   }
 
-  const page = dreamDate ? pageDate(dreamDate, lang) : null;
+  // a cleared date input still heads the page with today, as before; nothing until mount (server ≠ reader)
+  const page = dreamDate || today ? pageDate(dreamDate || today, lang) : null;
   const userStatements = messages.filter((m) => m.role === "user" && !m.isCommand).map((m) => m.content);
   const writtenCount = lang === "zh"
     ? activeDreamText.replace(/\s/g, "").length
@@ -1423,7 +1467,6 @@ export default function JournalPage() {
             </div>
           </div>
         )}
-        <div ref={messagesEndRef} />
       </section>
 
       {imagePanel}
@@ -1494,6 +1537,7 @@ export default function JournalPage() {
                 autoComplete="off"
                 value={dreamDate}
                 max={today || undefined}
+                onFocus={() => setToday(getTodayDate())}
                 onChange={(e) => setDreamDate(e.target.value)}
                 className={css.dateInput}
               />
