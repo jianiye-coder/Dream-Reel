@@ -125,7 +125,13 @@ export default function AccountPage() {
 
   const rows: [string, keyof Quota][] = [[P.cardDreams, "dreamEntries"], [P.cardAnalysis, "analysis"], [P.cardImages, "imageGenerations"]];
   const planLabel = billing?.isUnlimited ? B.planAdmin : billing?.plan === "plus" ? B.planPlus : B.planFree;
-  const resetDate = billing ? new Date(billing.periodEnd).toLocaleDateString(lang === "zh" ? "zh-CN" : "en-US", { month: "long", day: "numeric", timeZone: "UTC" }) : "";
+  // Free periods are UTC month boundaries, so show that calendar date; Plus periods end at the
+  // Stripe timestamp, which is best shown in the reader's own time zone.
+  const resetDate = billing
+    ? new Date(billing.periodEnd).toLocaleDateString(lang === "zh" ? "zh-CN" : "en-US", {
+      month: "long", day: "numeric", ...(billing.plan === "plus" ? {} : { timeZone: "UTC" }),
+    })
+    : "";
 
   return (
     <NotebookShell surface="paper">

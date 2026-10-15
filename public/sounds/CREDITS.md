@@ -8,7 +8,4 @@ The source preview is kept in `assets/sounds/fountain-pen-397282.mp3`.
 Processing: 34 segments of 120–320 ms taken where the nib is moving (taps skipped), levelled by RMS,
 15 ms eased attack, high-pass 150 Hz, −3 dB at 3.5 kHz, low-pass 6 kHz, +1.5 dB at 1.1 kHz.
 
-`assets/sounds/pencil-writing-32447.mp3` (Pixabay, freesound_community) was the previous, brighter
-pencil source; it is no longer used by the site.
-
 Page-turn, eraser and tap sounds are synthesised in `src/lib/notebookSound.ts` (Web Audio), not recorded.

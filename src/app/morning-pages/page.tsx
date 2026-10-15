@@ -230,7 +230,7 @@ export default function MorningPages() {
           <div className={styles.aboutBody}>
             <section><h2>{M.aboutWhatTitle}</h2><p>{M.aboutWhat}</p></section>
             <section><h2>{M.aboutWhyTitle}</h2><ul>{M.aboutWhy.map((line) => <li key={line}>{line}</li>)}</ul></section>
-            <p className={styles.aboutHere}>{M.aboutHere} <a href="https://juliacameronlive.com/" target="_blank" rel="noreferrer">{M.aboutSource} ↗</a></p>
+            <p className={styles.aboutHere}>{M.aboutHere} <a href="https://juliacameronlive.com/" target="_blank" rel="noreferrer">{M.aboutSource}<span aria-hidden> ↗</span><span className={styles.srOnly}>{M.opensNewTab}</span></a></p>
           </div>
         </details>
         <div className={styles.workspace}>

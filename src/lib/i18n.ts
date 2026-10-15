@@ -86,6 +86,7 @@ const zh = {
     ] as string[],
     aboutHere: "在这里，你可以手写，也可以打字；三页只是参考。以上是 Cameron 和很多练习者的体会，不是临床结论。",
     aboutSource: "Julia Cameron 的官方网站",
+    opensNewTab: "（在新标签页打开）",
     journalLink: "晨间自由书写",
     draw: {
       tools: "绘画工具",
@@ -710,6 +711,7 @@ const en: typeof zh = {
     ],
     aboutHere: "Here you can write by hand or type, and three pages is a guide, not a rule. These are Cameron’s and practitioners’ experiences, not clinical findings.",
     aboutSource: "Julia Cameron’s official site",
+    opensNewTab: " (opens in a new tab)",
     journalLink: "Morning Pages",
     draw: {
       tools: "Drawing tools",
