@@ -26,6 +26,9 @@ export function flipPage(book: HTMLElement, { back, dur = 850, onStart, onEnd }:
 
   const front = right.cloneNode(true) as HTMLElement;
   front.querySelectorAll("textarea,input,button,a,[tabindex]").forEach((el) => el.setAttribute("tabindex", "-1"));
+  // the snapshot is copied into every strip; ids would be duplicated dozens of times
+  front.removeAttribute("id");
+  front.querySelectorAll("[id]").forEach((el) => el.removeAttribute("id"));
   front.querySelector(".nb-curl")?.remove();
 
   const segs: { seg: HTMLElement; fShade: HTMLElement; bShade: HTMLElement }[] = [];
@@ -50,7 +53,10 @@ export function flipPage(book: HTMLElement, { back, dur = 850, onStart, onEnd }:
       const bs = document.createElement("div");
       bs.className = "nb-slice";
       bs.style.cssText = `left:${-(N - 1 - i) * sw}px;width:${W}px;`;
-      bs.appendChild(back.cloneNode(true));
+      const backCopy = back.cloneNode(true) as HTMLElement;
+      backCopy.removeAttribute("id");
+      backCopy.querySelectorAll("[id]").forEach((el) => el.removeAttribute("id"));
+      bs.appendChild(backCopy);
       b.appendChild(bs);
     }
     const bShade = document.createElement("i");

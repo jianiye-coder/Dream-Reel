@@ -79,7 +79,7 @@ export function BookPage({ side, ruled, indent, folio, curl, className, padClass
   return (
     <section className={["nb-page", `nb-page-${side}`, ruled && "nb-ruled", className].filter(Boolean).join(" ")} {...rest}>
       <div className={["nb-pad", indent && "nb-indent", padClassName].filter(Boolean).join(" ")}>{children}</div>
-      {folio && <span className="nb-folio">{folio}</span>}
+      {folio && <span className="nb-folio" aria-hidden>{folio}</span>}
       {curl && side === "r" && <span className="nb-curl" />}
     </section>
   );

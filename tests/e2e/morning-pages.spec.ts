@@ -111,7 +111,8 @@ for (const width of [390, 1440]) {
     await expect(page.getByRole("textbox", { name: "Morning page content" })).toBeVisible();
     await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await page.screenshot({ path: testInfo.outputPath(`morning-pages-${width}-en.png`), fullPage: true });
-    await page.getByRole("button", { name: "切换中文", exact: true }).click();
+    // the visible language switch: top bar on desktop, the page itself on phones (not the closed contents sheet)
+    await page.getByRole("button", { name: "切换中文", exact: true }).and(page.locator(":not(.nb-toc *)")).filter({ visible: true }).click();
     await expect(page.getByRole("heading", { name: "晨间自由书写" })).toBeVisible();
     await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await page.screenshot({ path: testInfo.outputPath(`morning-pages-${width}-zh.png`), fullPage: true });
