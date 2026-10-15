@@ -73,11 +73,14 @@
 
 /* ── right page: the ruled writing sheet ─────────────────────────── */
 :global(.nb-page).right { background-image: linear-gradient(90deg, transparent 44px, var(--margin) 44px 45px, transparent 45px); }
-:global(.nb-page).right:has(.editor:focus) { background-image: linear-gradient(90deg, transparent 44px, var(--red-ink) 44px 45px, transparent 45px); }
+/* writing focus: the margin line inks in red and doubles, with a faint wash either side */
+:global(.nb-page).right:has(.editor:focus-visible) {
+  background-image: linear-gradient(90deg, transparent 36px, rgba(176, 67, 46, .09) 43px, var(--red-ink) 43px 45px, rgba(176, 67, 46, .09) 45px, transparent 52px);
+}
 @media (min-width: 901px) {
   :global(.nb-page-r) .rightPad { padding: 40px 50px 38px 60px; }
 }
-.toolbar { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; padding-bottom: 12px; }
+.toolbar { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; padding-bottom: 6px; }
 .modes { gap: 26px; }
 .modes button { font-size: 15px; }
 .dot { display: inline-block; width: 4px; height: 4px; margin-left: 6px; border-radius: 50%; background: var(--hand-ink); vertical-align: middle; }
@@ -87,18 +90,23 @@
 .surface[hidden] { display: none; }
 .editor {
   flex: 1; min-height: 0; display: block; resize: none;
-  margin: 0 -50px 0 -60px; padding: 3px 50px 0 60px;
+  margin: 0 -50px 0 -60px; padding: 10px 50px 10px 60px;
   border: 0; border-radius: 0; outline: 0;
   background-color: transparent;
   background-image: repeating-linear-gradient(180deg, transparent 0 calc(var(--line) - 1px), var(--rule) calc(var(--line) - 1px) var(--line));
   background-attachment: local;
+  background-position: 0 7px;   /* each rule sits just under its line of text (rows start below the 10px top padding) */
   font-family: var(--hand); font-size: 21px; line-height: var(--line); color: var(--hand-ink);
   text-shadow: 0 0 .7px rgba(29, 42, 80, .45);
   caret-color: var(--red-ink);
-  /* lines scrolled up under the tabs fade out instead of being sliced */
-  mask-image: linear-gradient(180deg, transparent, #000 12px);
+  /* text scrolled past an edge fades into the paper over a full line instead of being sliced;
+     page.tsx marks the edges (data-edge) only while there is text beyond them */
+  --clear-top: 0px; --fade-top: 0px; --fade-bottom: 0px;
+  mask-image: linear-gradient(180deg, transparent var(--clear-top), #000 var(--fade-top), #000 calc(100% - var(--fade-bottom)), transparent 100%);
   scrollbar-width: thin; scrollbar-color: #cdbfa6 transparent;
 }
+.editor[data-edge~="top"] { --clear-top: 8px; --fade-top: calc(var(--line) + 6px); }
+.editor[data-edge~="bottom"] { --fade-bottom: 24px; }
 .book .editor:focus-visible { outline: none !important; }
 .editor::placeholder { color: #aaa293; opacity: 1; text-shadow: none; }
 .editor[readonly] { color: var(--ink-soft); }
@@ -171,10 +179,12 @@
   .tocLead { display: none; }
 
   :global(.nb-page).right { background-image: linear-gradient(90deg, transparent 22px, var(--margin) 22px 23px, transparent 23px); }
-  :global(.nb-page).right:has(.editor:focus) { background-image: linear-gradient(90deg, transparent 22px, var(--red-ink) 22px 23px, transparent 23px); }
+  :global(.nb-page).right:has(.editor:focus-visible) {
+    background-image: linear-gradient(90deg, transparent 15px, rgba(176, 67, 46, .09) 21px, var(--red-ink) 21px 23px, rgba(176, 67, 46, .09) 23px, transparent 29px);
+  }
   :global(.nb-page-r) .rightPad { padding: 22px 22px 40px 34px; }
   .modes button { font-size: 16px; min-height: 40px; }
-  .editor { flex: none; height: calc(var(--line) * 14 + 3px); margin: 0 -22px 0 -34px; padding: 3px 22px 0 34px; font-size: 19px; resize: vertical; }
+  .editor { flex: none; height: calc(var(--line) * 14 + 20px); margin: 0 -22px 0 -34px; padding: 10px 22px 10px 34px; font-size: 19px; resize: vertical; }
   .canvas { width: calc(100% + 33px); margin: 0 -22px 0 -11px; }
   .tool { width: 40px; height: 40px; }
   .swatch { width: 30px; height: 40px; }

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { LangToggle } from "@/components/LangToggle";
 import { Book, BookPage } from "@/components/notebook/Book";
@@ -21,10 +22,19 @@ function localDate() {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
 }
 
-// Cameron's three pages come to roughly 750 words; Chinese counts characters, other scripts count words
+// Cameron's three pages come to roughly 750 words; Chinese, Japanese kana and Hangul count per character,
+// other scripts count words
 const PAGE_WORDS = 250;
 function countWords(text: string) {
-  return (text.match(/[\u3400-\u9fff\uf900-\ufaff]|(?:(?![\u3400-\u9fff\uf900-\ufaff])[\p{L}\p{N}])(?:(?![\u3400-\u9fff\uf900-\ufaff])[\p{L}\p{N}'’-])*/gu) ?? []).length;
+  return (text.match(/[\u1100-\u11ff\u3040-\u30ff\u3130-\u318f\u3400-\u9fff\uac00-\ud7af\uf900-\ufaff]|(?:(?![\u1100-\u11ff\u3040-\u30ff\u3130-\u318f\u3400-\u9fff\uac00-\ud7af\uf900-\ufaff])[\p{L}\p{N}])(?:(?![\u1100-\u11ff\u3040-\u30ff\u3130-\u318f\u3400-\u9fff\uac00-\ud7af\uf900-\ufaff])[\p{L}\p{N}'’-])*/gu) ?? []).length;
+}
+
+// mark which edges of the sheet have text scrolled past them, so the CSS can fade just those edges
+function markEdges(el: HTMLTextAreaElement) {
+  const top = el.scrollTop > 1;
+  // more than the bottom padding still below: a line is actually cut off there
+  const bottom = el.scrollHeight - (el.scrollTop + el.clientHeight) > 20;
+  el.dataset.edge = [top && "top", bottom && "bottom"].filter(Boolean).join(" ");
 }
 
 // a date as you would write it at the top of a page: 十月十五日 周四 / October 15 Thursday
@@ -37,6 +47,7 @@ function cnNumber(n: number) {
 
 export default function MorningPages() {
   const { lang, T } = useLanguage();
+  const router = useRouter();
   const M = T.morningPages;
   const [date, setDate] = useState("");
   const [content, setContent] = useState("");
@@ -58,6 +69,8 @@ export default function MorningPages() {
   const editor = useRef<HTMLTextAreaElement>(null);
   const switchingNow = useRef(false);
   const passThrough = useRef(false);
+  const leaving = useRef(false);
+  const mounted = useRef(false);
   const composing = useRef(false);
   const lastSound = useRef(0);
 
@@ -164,8 +177,16 @@ export default function MorningPages() {
 
   useEffect(() => { switchingNow.current = switching; }, [switching]);
 
+  // keep the scroll-edge fades in step with the text (loaded pages, edits, switching back to the text tab)
+  useEffect(() => { if (editor.current) markEdges(editor.current); }, [content, mode, loading, finished]);
+
+  useEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; };
+  }, []);
+
   // Links in the notebook shell (top bar, contents, brand) leave only after the page is safely saved,
-  // exactly as the old header did. Once saved, the original click is replayed so book links still turn a page.
+  // as the old header did. Once saved, the original click is replayed so book links still turn a page.
   useEffect(() => {
     const intercept = (event: MouseEvent) => {
       if (passThrough.current || event.defaultPrevented || event.button !== 0) return;
@@ -175,20 +196,37 @@ export default function MorningPages() {
       const url = new URL(link.href, location.href);
       if (url.origin !== location.origin || url.pathname === location.pathname) return;
       const unsaved = draft.current.content !== draft.current.savedContent || draft.current.drawing !== draft.current.savedDrawing;
-      if (!switchingNow.current && !unsaved && !inFlight.current && !conflict.current) return;
+      if (!leaving.current && !switchingNow.current && !unsaved && !inFlight.current && !conflict.current) return;
       event.preventDefault();
-      event.stopPropagation();
-      if (switchingNow.current) return;
-      setSwitching(true);
-      void save().then((saved) => {
-        if (!saved) { setSwitching(false); return; }
+      // a link in the phone contents sheet still runs its own handler, which closes the sheet so the save
+      // status is in view; Next's <Link> skips navigating because the default was prevented
+      const inContents = Boolean(link.closest(".nb-toc"));
+      if (!inContents) event.stopPropagation();
+      if (leaving.current || switchingNow.current) return;
+      leaving.current = true;
+      const go = () => {
+        if (!mounted.current) return;
+        if (inContents) { router.push(url.pathname + url.search + url.hash); return; }
+        if (!link.isConnected) return;
         passThrough.current = true;
         try { link.click(); } finally { passThrough.current = false; }
+      };
+      if (conflict.current) {
+        // the other window's version is on the server; leaving only drops this window's edits
+        leaving.current = false;
+        if (window.confirm(M.leaveConfirm)) go();
+        return;
+      }
+      setSwitching(true);
+      void save().then((saved) => {
+        leaving.current = false;
+        if (!saved) { if (mounted.current) setSwitching(false); return; }
+        go();
       });
     };
     window.addEventListener("click", intercept, true);
     return () => window.removeEventListener("click", intercept, true);
-  }, [save]);
+  }, [save, router, M.leaveConfirm]);
 
   async function selectDay(next: string) {
     if (!next || next === date || switching || loading) return;
@@ -293,8 +331,8 @@ export default function MorningPages() {
     <NotebookShell lean>
       <main className="nb-stage" id="main">
         <Book className={styles.book} tilt={false}>
-          <BookPage side="l" padClassName={styles.leftPad} folio={dayOfYear ? `p. ${dayOfYear * 2}` : undefined}>
-            <header className={styles.head}>
+          <BookPage side="l" padClassName={styles.leftPad} folio={dayOfYear ? M.folio.replace("{n}", String(dayOfYear * 2)) : undefined}>
+            <header>
               <div className={styles.kickerRow}>
                 <span className="nb-kicker">{M.eyebrow}<span aria-hidden> · </span>{M.privateLabel}</span>
                 <LangToggle className={styles.phoneLang} />
@@ -308,7 +346,7 @@ export default function MorningPages() {
 
             <details className={styles.about}>
               <summary>
-                <span className={styles.aboutLead}>{M.aboutLead}</span>{" "}
+                <span>{M.aboutLead}</span>{" "}
                 <span className={styles.aboutToggle}>{M.aboutToggle}</span>
               </summary>
               <div className={styles.aboutBody}>
@@ -343,7 +381,7 @@ export default function MorningPages() {
             </aside>
           </BookPage>
 
-          <BookPage side="r" className={styles.right} padClassName={styles.rightPad} folio={dayOfYear ? `p. ${dayOfYear * 2 + 1}` : undefined} aria-label={M.writingLabel}>
+          <BookPage side="r" className={styles.right} padClassName={styles.rightPad} folio={dayOfYear ? M.folio.replace("{n}", String(dayOfYear * 2 + 1)) : undefined} aria-label={M.writingLabel}>
             {writable && (
               <div className={styles.toolbar}>
                 <div className={`nb-ink-tabs ${styles.modes}`} role="group" aria-label={M.modeLabel}>
@@ -369,6 +407,7 @@ export default function MorningPages() {
               <>
                 <div className={styles.surface} hidden={mode !== "text"}>
                   <textarea ref={editor} className={styles.editor} aria-label={M.contentLabel} placeholder={M.placeholder} value={content} maxLength={50000} readOnly={switching} spellCheck
+                    onScroll={(e) => markEdges(e.currentTarget)}
                     onCompositionStart={() => { composing.current = true; }}
                     onCompositionEnd={(e) => { composing.current = false; penSound(e.data); }}
                     onChange={(e) => {
