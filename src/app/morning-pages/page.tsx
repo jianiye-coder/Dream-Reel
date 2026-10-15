@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { LangToggle } from "@/components/LangToggle";
 import { Book, BookPage } from "@/components/notebook/Book";
 import { NotebookShell } from "@/components/notebook/NotebookShell";
@@ -178,7 +178,15 @@ export default function MorningPages() {
   useEffect(() => { switchingNow.current = switching; }, [switching]);
 
   // keep the scroll-edge fades in step with the text (loaded pages, edits, switching back to the text tab)
-  useEffect(() => { if (editor.current) markEdges(editor.current); }, [content, mode, loading, finished]);
+  // before paint, and with the sheet's size (window resizes, the phone resize handle, the tab becoming visible)
+  useLayoutEffect(() => { if (editor.current) markEdges(editor.current); }, [content, mode, loading, finished]);
+  useEffect(() => {
+    const el = editor.current;
+    if (!el) return;
+    const observer = new ResizeObserver(() => markEdges(el));
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [loading, loadError, finished]);
 
   useEffect(() => {
     mounted.current = true;
@@ -204,24 +212,29 @@ export default function MorningPages() {
       if (!inContents) event.stopPropagation();
       if (leaving.current || switchingNow.current) return;
       leaving.current = true;
+      // once leaving is decided, `leaving` stays set (and the editor read-only) until the page is gone
       const go = () => {
         if (!mounted.current) return;
-        if (inContents) { router.push(url.pathname + url.search + url.hash); return; }
-        if (!link.isConnected) return;
+        if (inContents || !link.isConnected) { router.push(url.pathname + url.search + url.hash); return; }
         passThrough.current = true;
         try { link.click(); } finally { passThrough.current = false; }
       };
-      if (conflict.current) {
-        // the other window's version is on the server; leaving only drops this window's edits
+      const stay = () => {
         leaving.current = false;
-        if (window.confirm(M.leaveConfirm)) go();
+        if (mounted.current) setSwitching(false);
+      };
+      if (conflict.current) {
+        // the other window's version is on the server; leaving only drops this window's unsaved edits,
+        // so ask only when there are some (a conflicting delete leaves nothing to lose)
+        if (unsaved && !window.confirm(M.leaveConfirm)) { leaving.current = false; return; }
+        setSwitching(true);
+        go();
         return;
       }
       setSwitching(true);
-      void save().then((saved) => {
-        leaving.current = false;
-        if (!saved) { if (mounted.current) setSwitching(false); return; }
-        go();
+      void save().catch(() => false).then((saved) => {
+        if (saved) go();
+        else stay();
       });
     };
     window.addEventListener("click", intercept, true);
