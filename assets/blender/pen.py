@@ -174,4 +174,21 @@ scene.render.image_settings.color_mode = "RGBA"
 scene.view_settings.view_transform = "Standard"
 scene.render.filepath = OUT
 bpy.ops.render.render(write_still=True)
-print("rendered", OUT, scene.render.resolution_x, scene.render.resolution_y)
+
+# the shadow catcher leaves a faint haze over the whole frame, which reads as a box on the desk
+# gradient: drop the haze and feather the alpha to zero at the frame edges
+import numpy as np
+img = bpy.data.images.load(OUT)
+w, h = img.size
+px = np.empty(w * h * 4, dtype=np.float32)
+img.pixels.foreach_get(px)
+px = px.reshape(h, w, 4)
+alpha = np.clip((px[..., 3] - 0.03) / 0.97, 0, 1)
+FEATHER = 14
+ramp = lambda n: np.clip(np.minimum(np.arange(n), np.arange(n)[::-1]) / FEATHER, 0, 1)
+px[..., 3] = alpha * np.outer(ramp(h), ramp(w))
+img.pixels.foreach_set(px.ravel())
+img.filepath_raw = OUT
+img.file_format = "PNG"
+img.save()
+print("rendered", OUT, w, h)
