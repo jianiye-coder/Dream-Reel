@@ -1,23 +1,17 @@
 "use client";
 
-import Image from "next/image";
 import dynamic from "next/dynamic";
-import Link from "next/link";
 import { useState } from "react";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { LangToggle } from "@/components/LangToggle";
+import { NotebookShell } from "@/components/notebook/NotebookShell";
 import type { DreamEntry } from "@/lib/dreams";
+import { ArchiveBookSkeleton } from "./ArchiveBookSkeleton";
+import type { ArchiveExporter, ArchiveTab } from "./DreamGrid";
 
 const DreamGrid = dynamic(() => import("./DreamGrid"), {
-  loading: () => (
-    <div className="mist-card mt-6 min-h-80 animate-pulse rounded-[1.8rem] p-6" aria-busy="true" aria-live="polite">
-      <p className="text-sm font-medium text-[#6b6282]">正在加载梦境档案…</p>
-    </div>
-  ),
+  loading: () => <ArchiveBookSkeleton />,
 });
-
-type ArchiveTab = "calendar" | "tags" | "recent";
 
 function isArchiveTab(value: string | null): value is ArchiveTab {
   return value === "calendar" || value === "tags" || value === "recent";
@@ -27,16 +21,13 @@ export default function ArchiveShell({
   entries,
   nextCursor,
   dataError,
-  user,
 }: {
   entries: DreamEntry[];
   nextCursor: string | null;
   dataError: string;
-  user: { name?: string | null; email?: string | null; image?: string | null } | null;
 }) {
   const { lang, T } = useLanguage();
   const { archive: A } = T;
-  const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [exporting, setExporting] = useState(false);
@@ -49,14 +40,16 @@ export default function ArchiveShell({
     if (tab === "calendar") params.delete("tab");
     else params.set("tab", tab);
     const query = params.toString();
-    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+    // The native history API stays in sync with useSearchParams without re-running the server
+    // page, so dreams loaded with "load more" and photos fetched for the open night survive a tab turn.
+    window.history.replaceState(null, "", `${pathname}${query ? `?${query}` : ""}${window.location.hash}`);
   }
 
-  async function exportAllDreams() {
+  async function exportAllDreams(format: "markdown" | "json") {
     setExporting(true);
     setExportError("");
     try {
-      const response = await fetch(`/api/dreams/export?format=markdown&lang=${lang}`, {
+      const response = await fetch(`/api/dreams/export?format=${format}&lang=${lang}`, {
         cache: "no-store",
       });
       if (!response.ok) throw new Error(A.export.failed);
@@ -65,7 +58,7 @@ export default function ArchiveShell({
       const href = URL.createObjectURL(blob);
       const anchor = document.createElement("a");
       anchor.href = href;
-      anchor.download = `dream-reel-export-${new Date().toISOString().slice(0, 10)}.md`;
+      anchor.download = `dream-reel-export-${new Date().toISOString().slice(0, 10)}.${format === "json" ? "json" : "md"}`;
       document.body.appendChild(anchor);
       anchor.click();
       anchor.remove();
@@ -77,85 +70,22 @@ export default function ArchiveShell({
     }
   }
 
+  const exporter: ArchiveExporter = {
+    run: (format) => void exportAllDreams(format),
+    busy: exporting,
+    error: exportError,
+  };
+
   return (
-    <div className="mist-page archive-page">
-      <div className="mist-orb left-[-8rem] top-[-5rem] h-[20rem] w-[20rem] bg-[#d7c9ea]/80" aria-hidden />
-      <div className="mist-orb right-[-4rem] top-[6rem] h-[18rem] w-[18rem] bg-[#bfd2e6]/72" aria-hidden />
-
-      <nav className="site-header relative z-10 flex items-center justify-between px-6 py-5 sm:px-10">
-        <Link href="/" className="landing-logo site-brand">
-          <Image src="/dream-reel-logo.png" alt="" aria-hidden width={36} height={36} className="logo-img" />
-          <span>Dream Reel</span>
-        </Link>
-        <div className="site-nav-actions flex items-center gap-2">
-          <LangToggle className="site-language mist-button-secondary rounded-full px-3 py-1.5 text-xs font-medium transition hover:bg-white/48" />
-          <Link href="/pricing" className="site-nav-link archive-nav-link mist-button-secondary rounded-full px-3 py-1.5 text-xs font-medium transition hover:bg-white/48">
-            {lang === "zh" ? "订阅" : "Pricing"}
-          </Link>
-          <Link href="/journal" className="site-primary-action archive-record-link mist-button-secondary rounded-full px-3 py-1.5 text-xs font-medium transition hover:bg-white/48">
-            {A.recordBtn}
-          </Link>
-          {user && (
-            <Link href="/account" className="site-nav-link archive-nav-link mist-button-secondary rounded-full px-3 py-1.5 text-xs font-medium transition hover:bg-white/48">
-              {lang === "zh" ? "账号" : "Account"}
-            </Link>
-          )}
-        </div>
-      </nav>
-
-      <main className="relative z-10 mx-auto w-full max-w-5xl px-4 pb-20 pt-2 sm:px-8">
-        <div className="archive-page-heading mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-          <div>
-            <h1 className="text-3xl font-semibold tracking-[-0.03em] text-[#5d5471]">
-              {A.title}
-            </h1>
-            <p className="mist-muted mt-3 max-w-2xl text-sm leading-7">{A.desc}</p>
-          </div>
-          <div className="archive-export-panel shrink-0">
-            <Link href="/morning-pages" className="inline-flex min-h-11 items-center px-2 text-sm font-medium text-[#92400e] underline underline-offset-4">
-              {T.nav.morningPages}
-            </Link>
-            <div className="flex flex-wrap">
-              <button
-                type="button"
-                onClick={() => void exportAllDreams()}
-                disabled={exporting}
-                className="archive-export-action text-xs font-semibold transition disabled:opacity-50"
-              >
-                {exporting ? A.export.exporting : `↓ ${A.export.markdown}`}
-              </button>
-            </div>
-            {exportError ? <p className="px-2 pt-2 text-xs text-[#b8758f]">{exportError}</p> : null}
-          </div>
-        </div>
-
-        {dataError ? (
-          <div className="mist-card mb-6 rounded-[1.8rem] border-[#decdb2]/60 bg-[linear-gradient(180deg,rgba(255,250,239,0.72),rgba(247,239,223,0.56))] p-4">
-            <p className="text-sm font-medium text-[#aa8e67]">{A.dbErrorTitle}</p>
-            <p className="mt-1 text-sm leading-relaxed text-[#8e7d66]">{dataError}</p>
-            <p className="mt-2 text-xs text-[#9b8d78]">{A.dbErrorHint}</p>
-          </div>
-        ) : null}
-
-        {/* Full-page tab bar */}
-        <div className="archive-tabs mb-6">
-          {(["calendar", "tags", "recent"] as const).map((tab) => {
-            const label = tab === "calendar" ? A.grid.tabCalendar : tab === "tags" ? A.grid.tabTags : A.grid.tabRecent;
-            return (
-              <button
-                key={tab}
-                type="button"
-                onClick={() => setActiveTab(tab)}
-                className={`archive-tab ${activeTab === tab ? "archive-tab-active" : ""}`}
-              >
-                {label}
-              </button>
-            );
-          })}
-        </div>
-
-        <DreamGrid entries={entries} nextCursor={nextCursor} activeTab={activeTab} />
-      </main>
-    </div>
+    <NotebookShell lean>
+      <DreamGrid
+        entries={entries}
+        nextCursor={nextCursor}
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+        exporter={exporter}
+        dataError={dataError}
+      />
+    </NotebookShell>
   );
 }

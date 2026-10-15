@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { DreamEntry } from "@/lib/dreams";
@@ -11,8 +12,16 @@ import {
   type DreamExportFormat,
 } from "@/lib/dreamExport";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { formatDateTime, formatMonthLabel } from "@/lib/i18n";
+import { formatDateTime, formatMonthLabel, type Lang } from "@/lib/i18n";
 import { getApiErrorMessage } from "@/lib/apiErrors";
+import { Book, BookPage } from "@/components/notebook/Book";
+import { TurnLink } from "@/components/notebook/TurnLink";
+import { flipPage } from "@/lib/notebookFlip";
+import { pageTurn, tap, unlock } from "@/lib/notebookSound";
+import s from "./archive.module.css";
+
+export type ArchiveTab = "calendar" | "tags" | "recent";
+export type ArchiveExporter = { run: (format: "markdown" | "json") => void; busy: boolean; error: string };
 
 type DayBucket = {
   date: Date;
@@ -58,12 +67,63 @@ type KeywordArchiveItem = {
   symbols: { item: string; count: number }[];
 };
 
+const PHONE = "(max-width: 900px)";
+
+function ordinal(n: number): string {
+  const tens = n % 100;
+  if (tens >= 11 && tens <= 13) return `${n}th`;
+  return `${n}${["th", "st", "nd", "rd"][n % 10] ?? "th"}`;
+}
+
+/** "{count}" inserts a value; "{count:dream|dreams}" picks singular/plural; "{count:ord}" gives 1st, 2nd… */
+function fill(template: string, values: Record<string, string | number>): string {
+  return template.replace(/\{(\w+)(?::([^}|]*)(?:\|([^}]*))?)?\}/g, (match, key: string, one?: string, other?: string) => {
+    if (!(key in values)) return match;
+    const value = values[key];
+    if (one === undefined) return String(value);
+    if (one === "ord" && other === undefined) return ordinal(Number(value));
+    return Number(value) === 1 ? one : other ?? one;
+  });
+}
+
+/** The reader's own today, read after mount so server and browser render the same markup. */
+type Clock = { todayKey: string; todayUtc: number; year: number };
+function readClock(): Clock {
+  const now = new Date();
+  return { todayKey: localDayKey(now), todayUtc: Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()), year: now.getFullYear() };
+}
 
 function formatDayKey(date: Date): string {
   const year = date.getUTCFullYear();
   const month = String(date.getUTCMonth() + 1).padStart(2, "0");
   const day = String(date.getUTCDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
+}
+
+function localDayKey(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+/** "10.07" — dates are stored at UTC midnight, so read them in UTC. */
+function shortDate(value: string): string {
+  const date = new Date(value);
+  return `${String(date.getUTCMonth() + 1).padStart(2, "0")}.${String(date.getUTCDate()).padStart(2, "0")}`;
+}
+
+/** "10.07", or "2025.10.07" when the dream is from another year. */
+function dateLabel(value: string, thisYear: number): string {
+  const year = new Date(value).getUTCFullYear();
+  return year === thisYear ? shortDate(value) : `${year}.${shortDate(value)}`;
+}
+
+/** Date for list rows: the year (when it differs) sits small above the day. */
+function DateMark({ value, thisYear, className }: { value: string; thisYear: number; className?: string }) {
+  const year = new Date(value).getUTCFullYear();
+  return <span className={className}>{year !== thisYear ? <small>{year}</small> : null}{shortDate(value)}</span>;
+}
+
+function weekdayLabel(value: string, lang: Lang): string {
+  return new Intl.DateTimeFormat(lang === "zh" ? "zh-CN" : "en-US", { weekday: "short", timeZone: "UTC" }).format(new Date(value));
 }
 
 function truncate(value: string, length: number): string {
@@ -76,6 +136,10 @@ function dreamDisplayTitle(entry: Pick<DreamEntry, "title" | "cleanText" | "rawT
   if (explicitTitle) return explicitTitle;
   const text = (entry.cleanText || entry.rawText).replace(/\s+/g, " ").trim();
   return truncate(text, 32);
+}
+
+function dreamText(entry: Pick<DreamEntry, "cleanText" | "rawText">): string {
+  return (entry.cleanText || entry.rawText).replace(/\s+/g, " ").trim();
 }
 
 function downloadDreamFile(content: string, filename: string, format: DreamExportFormat) {
@@ -97,6 +161,10 @@ function splitCommaList(value: string): string[] {
     .split(",")
     .map((item) => item.trim())
     .filter(Boolean);
+}
+
+function splitMood(value: string): string[] {
+  return value.split(/[、,，/·;；]+/).map((item) => item.trim()).filter(Boolean);
 }
 
 function normalizeKeyword(value: string): string {
@@ -160,38 +228,15 @@ function buildKeywordArchive(entries: DreamEntry[], kind: KeywordArchiveKind, al
     .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
 }
 
-function moodAccent(mood: string): string {
-  if (!mood) return "from-white/75 via-white/30 to-transparent text-[#706786]";
-  const m = mood.toLowerCase();
-  if (/惊|恐|害怕|噩|fear|scar|terr|night/.test(m)) return "from-[#edd2dc] via-[#f7e7ed] to-transparent text-[#9a7180]";
-  if (/平|静|安|宁|calm|peace|serene|tranquil/.test(m)) return "from-[#d5e6df] via-[#edf6f2] to-transparent text-[#648475]";
-  if (/兴|奋|开心|快|excit|happy|joy|elat/.test(m)) return "from-[#eddcc8] via-[#f8efe6] to-transparent text-[#9c7e61]";
-  if (/怀旧|回忆|思|nostalgic|memor/.test(m)) return "from-[#e7ddd7] via-[#f5efea] to-transparent text-[#8e7c70]";
-  if (/压|重|绝|沉|depress|heavy|despair/.test(m)) return "from-[#dddcea] via-[#f1f0f8] to-transparent text-[#767287]";
-  if (/迷|惑|困|confus|uncertain|lost/.test(m)) return "from-[#ddd4ef] via-[#f2eef9] to-transparent text-[#7e719f]";
-  return "from-[#d7cdea] via-[#ebf0f7] to-transparent text-[#7b7295]";
-}
-
-function moodGradient(mood: string): string {
-  if (!mood) return "from-[#f6f0fb] via-[#efedf8] to-[#e6eef6]";
-  const m = mood.toLowerCase();
-  if (/惊|恐|害怕|噩|fear|scar|terr|night/.test(m)) return "from-[#f4dde4] via-[#f8ecef] to-[#f2edf4]";
-  if (/平|静|安|宁|calm|peace|serene|tranquil/.test(m)) return "from-[#ddece6] via-[#eef6f2] to-[#edf3f6]";
-  if (/兴|奋|开心|快|excit|happy|joy|elat/.test(m)) return "from-[#f0e3d3] via-[#faf2ea] to-[#f3eef6]";
-  if (/怀旧|回忆|思|nostalgic|memor/.test(m)) return "from-[#ece2dc] via-[#f8f1ed] to-[#f1edf3]";
-  if (/压|重|绝|沉|depress|heavy|despair/.test(m)) return "from-[#e7e4ef] via-[#f5f4f9] to-[#eceff5]";
-  if (/迷|惑|困|confus|uncertain|lost/.test(m)) return "from-[#e3daf1] via-[#f4f0fa] to-[#edf1f7]";
-  return "from-[#e6ddf1] via-[#f5f2fb] to-[#eaf1f8]";
-}
-
-function buildCalendarCells(monthKey: string, buckets: Map<string, DayBucket>): CalendarCell[] {
+function buildCalendarCells(monthKey: string, buckets: Map<string, DayBucket>, todayKey: string | null): CalendarCell[] {
   const [yearText, monthText] = monthKey.split("-");
   const year = Number(yearText);
   const month = Number(monthText) - 1;
-  const firstDay = new Date(year, month, 1);
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const leading = (firstDay.getDay() + 6) % 7;
-  const todayKey = formatDayKey(new Date());
+  // Dream dates are stored at UTC midnight; build the month in UTC so a reader east of UTC
+  // doesn't see every dream one square early.
+  const firstDay = new Date(Date.UTC(year, month, 1));
+  const daysInMonth = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+  const leading = (firstDay.getUTCDay() + 6) % 7;
   const cells: CalendarCell[] = [];
 
   for (let i = 0; i < leading; i += 1) {
@@ -199,7 +244,7 @@ function buildCalendarCells(monthKey: string, buckets: Map<string, DayBucket>): 
   }
 
   for (let day = 1; day <= daysInMonth; day += 1) {
-    const date = new Date(year, month, day);
+    const date = new Date(Date.UTC(year, month, day));
     const key = formatDayKey(date);
     cells.push({
       key,
@@ -247,15 +292,46 @@ function toEditForm(entry: DreamEntry): DreamEditForm {
   };
 }
 
+type UpdateBody = ReturnType<typeof updateBodyFor>;
+function updateBodyFor(id: number, currentForm: DreamEditForm, visualBrief: string | null) {
+  return {
+    id,
+    title: currentForm.title,
+    inputMode: "text" as const,
+    rawText: currentForm.rawText,
+    cleanText: currentForm.cleanText.trim() || currentForm.rawText.trim(),
+    mood: currentForm.mood,
+    stressScore: currentForm.stressScore ? Number(currentForm.stressScore) : null,
+    tags: splitCommaList(currentForm.tags),
+    people: splitCommaList(currentForm.people),
+    locations: splitCommaList(currentForm.locations),
+    symbols: splitCommaList(currentForm.symbols),
+    capturedAt: currentForm.dreamDate || undefined,
+    imageUrl: currentForm.imageUrl,
+    assetStatus: currentForm.imageUrl ? (currentForm.assetStatus ?? "generated") : null,
+    sleepStart: currentForm.sleepStart || null,
+    wakeTime: currentForm.wakeTime || null,
+    sleepQuality: currentForm.sleepQuality,
+    preSleepMeal: currentForm.preSleepMeal || null,
+    preSleepActivity: currentForm.preSleepActivity || null,
+    sleepInsight: currentForm.sleepInsight || null,
+    // saves only happen once the full entry is loaded (see `ready`), so this is never the list
+    // copy's missing value
+    visualBrief,
+  };
+}
+
+const SAVE_TIMEOUT_MS = 20_000;
+
 function getFocusableElements(container: HTMLElement): HTMLElement[] {
   return Array.from(
     container.querySelectorAll<HTMLElement>(
-      'a[href], button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      'a[href], button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), summary, [tabindex]:not([tabindex="-1"])',
     ),
-  ).filter((element) => !element.hasAttribute("hidden"));
+  ).filter((element) => !element.hasAttribute("hidden") && !element.closest("[inert]") && element.getClientRects().length > 0);
 }
 
-function useModalFocus(isOpen: boolean, onClose: () => void, initialFocusRef?: React.RefObject<HTMLElement | null>) {
+function useModalFocus(isOpen: boolean, onClose: () => void, initialFocusRef?: React.RefObject<HTMLElement | null>, restoreFocus?: () => void) {
   const dialogRef = useRef<HTMLDivElement>(null);
   const returnFocusRef = useRef<HTMLElement | null>(null);
 
@@ -268,8 +344,30 @@ function useModalFocus(isOpen: boolean, onClose: () => void, initialFocusRef?: R
 
     return () => {
       window.cancelAnimationFrame(focusFrame);
-      returnFocusRef.current?.focus();
+      if (restoreFocus) restoreFocus();
+      else returnFocusRef.current?.focus();
     };
+  }, [initialFocusRef, isOpen, restoreFocus]);
+
+  // A button that disables itself while it works (analyse, generate) drops focus to <body>, where the
+  // dialog's own key handler can't hear Escape or Tab. Catch those at the document and bring focus back.
+  const onCloseRef = useRef(onClose);
+  useEffect(() => { onCloseRef.current = onClose; }, [onClose]);
+  useEffect(() => {
+    if (!isOpen) return;
+    const onDocumentKey = (event: KeyboardEvent) => {
+      const dialog = dialogRef.current;
+      if (!dialog || dialog.contains(document.activeElement)) return;
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onCloseRef.current();
+      } else if (event.key === "Tab") {
+        event.preventDefault();
+        (initialFocusRef?.current ?? dialog).focus();
+      }
+    };
+    document.addEventListener("keydown", onDocumentKey);
+    return () => document.removeEventListener("keydown", onDocumentKey);
   }, [initialFocusRef, isOpen]);
 
   function onKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
@@ -301,6 +399,32 @@ function useModalFocus(isOpen: boolean, onClose: () => void, initialFocusRef?: R
   return { dialogRef, onKeyDown };
 }
 
+/* Tally marks the way you'd count on paper: 正 strokes in Chinese, gate-fives in English. */
+function Tally({ count, lang, label }: { count: number; lang: Lang; label: string }) {
+  if (count > 20) {
+    return <span className={s.tally} role="img" aria-label={label}><span className={s.tallyNum} aria-hidden>{count}</span></span>;
+  }
+  if (lang === "zh") {
+    const strokes = "一丅下止正";
+    const text = "正".repeat(Math.floor(count / 5)) + (count % 5 ? strokes[(count % 5) - 1] : "");
+    return <span className={s.tally} role="img" aria-label={label}><span aria-hidden>{text}</span></span>;
+  }
+  const groups: number[] = [];
+  for (let left = count; left > 0; left -= 5) groups.push(Math.min(5, left));
+  return (
+    <span className={s.tally} role="img" aria-label={label}>
+      {groups.map((n, g) => (
+        <svg key={g} viewBox="0 0 24 16" width="22" height="15" aria-hidden>
+          {Array.from({ length: Math.min(n, 4) }, (_, i) => (
+            <path key={i} d={`M${4 + i * 5} ${2 + (i % 2) * 0.6} L${4.4 + i * 5} 14.2`} />
+          ))}
+          {n === 5 ? <path d="M1.5 11.5 L22.5 4" /> : null}
+        </svg>
+      ))}
+    </span>
+  );
+}
+
 function TagChipInput({
   value,
   onChange,
@@ -314,6 +438,7 @@ function TagChipInput({
   name: string;
   ariaLabel: string;
 }) {
+  const { T } = useLanguage();
   const [inputValue, setInputValue] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
   const chips = value.split(",").map((s) => s.trim()).filter(Boolean);
@@ -339,18 +464,14 @@ function TagChipInput({
   }
 
   return (
-    <div className="archive-tag-chip-input mist-input flex min-h-[2.75rem] flex-wrap items-center gap-1.5 rounded-[1rem] px-3 py-2 transition">
+    <div className={s.chips} onClick={() => inputRef.current?.focus()}>
       {chips.map((chip, i) => (
-        <span
-          key={`${chip}-${i}`}
-          className="flex items-center gap-1 rounded-full bg-white/60 px-2.5 py-0.5 text-xs text-[#655c79]"
-        >
+        <span key={`${chip}-${i}`} className={s.chip}>
           {chip}
           <button
             type="button"
             onClick={(event) => { event.stopPropagation(); removeChip(i); }}
-            className="flex h-5 w-5 items-center justify-center rounded-full text-[#b0a0c8] hover:text-[#6b5f80] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#6b5f80]"
-            aria-label={`删除 ${chip}`}
+            aria-label={fill(T.modal.removeChip, { chip })}
           >
             ×
           </button>
@@ -366,7 +487,6 @@ function TagChipInput({
         onKeyDown={handleKeyDown}
         onBlur={() => { if (inputValue.trim()) addChip(inputValue); }}
         placeholder={chips.length === 0 ? placeholder : ""}
-        className="min-w-[80px] flex-1 bg-transparent text-sm text-[#5f5673] placeholder:text-[#b0a8c0]"
       />
     </div>
   );
@@ -374,11 +494,25 @@ function TagChipInput({
 
 function DreamEditorModal({
   entry,
+  ready,
+  loadError,
+  onRetry,
+  thisYear,
+  restoreFocus,
+  onNotice,
   onClose,
   onSaved,
   onDeleted,
 }: {
   entry: DreamEntry | null;
+  /** false until the full entry (with its image and visual brief) has arrived; editing waits for it */
+  ready: boolean;
+  loadError?: string;
+  onRetry: () => void;
+  thisYear: number;
+  restoreFocus: () => void;
+  /** a message about a dream that isn't open (e.g. its new picture couldn't be filed) */
+  onNotice: (message: string) => void;
   onClose: () => void;
   onSaved: (entry: DreamEntry) => void;
   onDeleted: (id: number) => void;
@@ -407,15 +541,115 @@ function DreamEditorModal({
   const [localVisualBrief, setLocalVisualBrief] = useState<string | null>(null);
   const titleId = useId();
   const closeButtonRef = useRef<HTMLButtonElement>(null);
+  // the dream the editor is showing, and the analysis / image requests running for it; both are
+  // dropped when another dream opens or the editor closes
+  const entryIdRef = useRef<number | null>(null);
+  const readyRef = useRef(ready);
+  useEffect(() => { readyRef.current = ready; }, [ready]);
+  const opsRef = useRef<{ analyze: object | null; image: object | null }>({ analyze: null, image: null });
+  const formRef = useRef<DreamEditForm | null>(null);
+  useEffect(() => { formRef.current = form; }, [form]);
+  // Pictures made for a dream after it was closed: still being filed in the background, or failed to
+  // file. Reopening that dream shows the picture; a failed one is saved again through the normal flow.
+  const pendingImagesRef = useRef(new Map<number, { imageUrl: string; failed: boolean }>());
+
+  // the brief is read from a ref so a save started in one render (e.g. after an image finished)
+  // still sends the newest one, even if an analysis replaced it meanwhile
+  const visualBriefRef = useRef<string | null>(null);
+  const setBrief = useCallback((value: string | null) => {
+    visualBriefRef.current = value;
+    setLocalVisualBrief(value);
+  }, []);
+  const buildUpdateBody = useCallback((currentForm: DreamEditForm) => (
+    entry ? updateBodyFor(entry.id, currentForm, visualBriefRef.current) : null
+  ), [entry]);
+
+  // Saves go out one at a time, in order, so an older PUT still in flight can never land after a
+  // newer one (autosave, close, flush) and overwrite it.
+  const saveChainRef = useRef<Promise<unknown>>(Promise.resolve());
+  const enqueueSave = useCallback(<T,>(task: () => Promise<T>): Promise<T> => {
+    const run = saveChainRef.current.then(task, task);
+    saveChainRef.current = run.catch(() => undefined);
+    return run;
+  }, []);
+
+  // one PUT; a request that hangs gives up after 20 s so the queue moves on and an error shows
+  const putNow = useCallback(async (body: UpdateBody): Promise<DreamEntry> => {
+    let response: Response;
+    try {
+      response = await fetch("/api/dreams", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(SAVE_TIMEOUT_MS),
+      });
+    } catch {
+      throw new Error(M.updateFailed);
+    }
+
+    const payload = (await response.json()) as {
+      entry?: DreamEntry;
+      error?: string;
+      details?: { fieldErrors?: Record<string, string[]>; formErrors?: string[] };
+    };
+
+    if (!response.ok || !payload.entry) {
+      const fieldErrors = Object.entries(payload.details?.fieldErrors ?? {})
+        .flatMap(([field, messages]) => messages.map((message) => `${field}: ${message}`));
+      const formErrors = payload.details?.formErrors ?? [];
+      const detailText = [...fieldErrors, ...formErrors].join("；");
+      const message = getApiErrorMessage(payload.error, lang, M.updateFailed);
+      throw new Error(detailText ? `${message}: ${detailText}` : message);
+    }
+
+    return payload.entry;
+  }, [lang, M.updateFailed]);
+  const putEntry = useCallback((body: UpdateBody) => enqueueSave(() => putNow(body)), [enqueueSave, putNow]);
+
+  const updateEntry = useCallback(async (currentForm: DreamEditForm): Promise<DreamEntry> => {
+    const body = buildUpdateBody(currentForm);
+    if (!body) throw new Error(M.updateFailed);
+    return putEntry(body);
+  }, [buildUpdateBody, putEntry, M.updateFailed]);
+
+  // the save queued by autosave, kept so it can be sent right away if the editor goes before it fires
+  const pendingBodyRef = useRef<ReturnType<typeof buildUpdateBody>>(null);
+  const cancelPendingSave = useCallback(() => {
+    if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+    autoSaveTimerRef.current = null;
+    pendingBodyRef.current = null;
+  }, []);
+  const flushPendingSave = useCallback((leavingPage = false) => {
+    const body = pendingBodyRef.current;
+    cancelPendingSave();
+    if (!body) return;
+    const json = JSON.stringify(body);
+    // keepalive lets the request outlive the page, but browsers cap its body at 64 KB
+    const send = () => fetch("/api/dreams", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: json,
+      keepalive: new Blob([json]).size < 60_000,
+      signal: AbortSignal.timeout(SAVE_TIMEOUT_MS),
+    }).then(() => undefined, () => undefined);
+    if (leavingPage) {
+      // The page is going away: a request queued behind one in flight would never be sent, so
+      // this one goes out now (keepalive). It is the newest edit; the rare reorder is accepted.
+      void send();
+    } else {
+      void enqueueSave(send);
+    }
+  }, [cancelPendingSave, enqueueSave]);
 
   const closeEditor = useCallback(async () => {
     if (!entry || !form || saving) return;
-    if (formRevisionRef.current === savedRevisionRef.current) {
+    // nothing can have been edited before the full entry arrived; never save the list copy
+    if (!ready || formRevisionRef.current === savedRevisionRef.current) {
       onClose();
       return;
     }
 
-    if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+    cancelPendingSave();
     setSaving(true);
     setAutoSaveStatus("saving");
     setError("");
@@ -431,13 +665,23 @@ function DreamEditorModal({
     } finally {
       setSaving(false);
     }
-  // updateEntry is intentionally defined below and only reads the current form state.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [entry, form, onClose, onSaved, saving]);
+  }, [entry, form, onClose, onSaved, saving, ready, cancelPendingSave, updateEntry, M.updateFailed]);
 
-  const { dialogRef, onKeyDown } = useModalFocus(Boolean(entry && form), () => void closeEditor(), closeButtonRef);
+  const { dialogRef, onKeyDown } = useModalFocus(Boolean(entry && form), () => void closeEditor(), closeButtonRef, restoreFocus);
 
   useEffect(() => {
+    // the entry changed under the editor (opened, closed, or its full copy arrived): a save still
+    // queued for the one before goes out now rather than being lost
+    flushPendingSave();
+    const id = entry?.id ?? null;
+    if (id !== entryIdRef.current) {
+      // Requests already running are not aborted: the server finishes (and charges) them anyway.
+      // Their results are routed by the dream they were started for (see generateImage / analyzeAndAsk).
+      opsRef.current = { analyze: null, image: null };
+      entryIdRef.current = id;
+      setIsAnalyzing(false);
+      setGeneratingImage(false);
+    }
     formDirtyRef.current = false;
     setDownloadError("");
     formRevisionRef.current = 0;
@@ -450,15 +694,42 @@ function DreamEditorModal({
       setError("");
       return;
     }
-    setForm(toEditForm(entry));
-    setLocalVisualBrief(entry.visualBrief ?? null);
+    const pendingImage = pendingImagesRef.current.get(entry.id);
+    setForm(pendingImage ? { ...toEditForm(entry), imageUrl: pendingImage.imageUrl, assetStatus: "generated" } : toEditForm(entry));
+    setBrief(entry.visualBrief ?? null);
     setImagePromptEdited(false);
     setFollowUpQuestions([]);
     setFollowUpAnswers({});
     setMessage("");
     setError("");
     setAutoSaveStatus("idle");
-  }, [entry]);
+  }, [entry, flushPendingSave, setBrief]);
+
+  useEffect(() => {
+    if (!ready || !entry) return;
+    const pendingImage = pendingImagesRef.current.get(entry.id);
+    if (!pendingImage?.failed) return;
+    pendingImagesRef.current.delete(entry.id);
+    formDirtyRef.current = true;
+    formRevisionRef.current += 1;
+    setForm((prev) => (prev ? { ...prev, imageUrl: pendingImage.imageUrl, assetStatus: "generated" } : prev));
+  }, [ready, entry]);
+
+  // leaving the page (Back, closing the tab) inside the 1.5 s autosave delay still saves the edit;
+  // coming back from the back/forward cache, a "Saving…" left from that moment is stale
+  useEffect(() => {
+    const onShow = (event: PageTransitionEvent) => {
+      if (event.persisted) setAutoSaveStatus((current) => (current === "saving" ? "idle" : current));
+    };
+    const onHide = () => flushPendingSave(true);
+    addEventListener("pagehide", onHide);
+    addEventListener("pageshow", onShow);
+    return () => {
+      removeEventListener("pagehide", onHide);
+      removeEventListener("pageshow", onShow);
+      flushPendingSave();
+    };
+  }, [flushPendingSave]);
 
   useEffect(() => {
     if (!entry || formRevisionRef.current === savedRevisionRef.current) return;
@@ -472,6 +743,7 @@ function DreamEditorModal({
   }, [entry, form]);
 
   function updateForm(patch: Partial<DreamEditForm>) {
+    if (!ready) return;
     formDirtyRef.current = true;
     formRevisionRef.current += 1;
     setForm((prev) => prev ? { ...prev, ...patch } : prev);
@@ -480,12 +752,17 @@ function DreamEditorModal({
   // Debounced auto-save: fires 1.5s after the last form change
   const triggerAutoSave = useCallback((currentForm: DreamEditForm) => {
     if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+    const body = buildUpdateBody(currentForm);
+    if (!body) return;
     setAutoSaveStatus("saving");
+    pendingBodyRef.current = body;
     const savingRevision = formRevisionRef.current;
     autoSaveTimerRef.current = setTimeout(() => {
+      autoSaveTimerRef.current = null;
+      pendingBodyRef.current = null;
       void (async () => {
         try {
-          const updatedEntry = await updateEntry(currentForm);
+          const updatedEntry = await putEntry(body);
           onSaved(updatedEntry);
           if (savingRevision === formRevisionRef.current) {
             savedRevisionRef.current = savingRevision;
@@ -498,10 +775,10 @@ function DreamEditorModal({
         }
       })();
     }, 1500);
-  }, [onSaved]);
+  }, [buildUpdateBody, putEntry, onSaved]);
 
   useEffect(() => {
-    if (!form || !formDirtyRef.current) return;
+    if (!form || !formDirtyRef.current || !ready) return;
     triggerAutoSave(form);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [form]);
@@ -531,64 +808,6 @@ function DreamEditorModal({
 
   if (!entry || !form) return null;
 
-  const inputCls = "mist-input w-full rounded-[1rem] px-3.5 py-2.5 text-sm transition";
-
-  function buildUpdateBody(currentForm: DreamEditForm) {
-    if (!entry) return null;
-
-    return {
-      id: entry.id,
-      title: currentForm.title,
-      inputMode: "text" as const,
-      rawText: currentForm.rawText,
-      cleanText: currentForm.cleanText.trim() || currentForm.rawText.trim(),
-      mood: currentForm.mood,
-      stressScore: currentForm.stressScore ? Number(currentForm.stressScore) : null,
-      tags: splitCommaList(currentForm.tags),
-      people: splitCommaList(currentForm.people),
-      locations: splitCommaList(currentForm.locations),
-      symbols: splitCommaList(currentForm.symbols),
-      capturedAt: currentForm.dreamDate || undefined,
-      imageUrl: currentForm.imageUrl,
-      assetStatus: currentForm.imageUrl ? (currentForm.assetStatus ?? "generated") : null,
-      sleepStart: currentForm.sleepStart || null,
-      wakeTime: currentForm.wakeTime || null,
-      sleepQuality: currentForm.sleepQuality,
-      preSleepMeal: currentForm.preSleepMeal || null,
-      preSleepActivity: currentForm.preSleepActivity || null,
-      sleepInsight: currentForm.sleepInsight || null,
-      visualBrief: entry?.visualBrief ?? null,
-    };
-  }
-
-  async function updateEntry(currentForm: DreamEditForm): Promise<DreamEntry> {
-    const body = buildUpdateBody(currentForm);
-    if (!body) throw new Error(M.updateFailed);
-
-    const response = await fetch("/api/dreams", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-
-    const payload = (await response.json()) as {
-      entry?: DreamEntry;
-      error?: string;
-      details?: { fieldErrors?: Record<string, string[]>; formErrors?: string[] };
-    };
-
-    if (!response.ok || !payload.entry) {
-      const fieldErrors = Object.entries(payload.details?.fieldErrors ?? {})
-        .flatMap(([field, messages]) => messages.map((message) => `${field}: ${message}`));
-      const formErrors = payload.details?.formErrors ?? [];
-      const detailText = [...fieldErrors, ...formErrors].join("；");
-      const message = getApiErrorMessage(payload.error, lang, M.updateFailed);
-      throw new Error(detailText ? `${message}: ${detailText}` : message);
-    }
-
-    return payload.entry;
-  }
-
   async function deleteEntry() {
     if (!entry || deleting) return;
     if (!window.confirm(M.deleteConfirm)) return;
@@ -606,6 +825,7 @@ function DreamEditorModal({
       const payload = (await response.json()) as { error?: string };
       if (!response.ok) throw new Error(getApiErrorMessage(payload.error, lang, M.updateFailed));
 
+      cancelPendingSave();
       onDeleted(entry.id);
     } catch (deleteError) {
       setError(deleteError instanceof Error ? deleteError.message : M.updateFailed);
@@ -621,13 +841,17 @@ function DreamEditorModal({
       return;
     }
 
+    const startedFor = entryIdRef.current;
+    const op = {};
+    opsRef.current.image = op;
+    const stillHere = () => entryIdRef.current === startedFor;
     setGeneratingImage(true);
     setMessage("");
     setError("");
 
     try {
       // Build gender context from people in this dream
-      const dreamPeople = form?.people ?? [];
+      const dreamPeople = splitCommaList(form?.people ?? "");
       const userGender = (() => { try { return localStorage.getItem("dreamReel_userGender") ?? ""; } catch { return ""; } })();
       const pgRaw = (() => { try { const s = localStorage.getItem("dreamReel_personGenders"); return s ? JSON.parse(s) as Record<string, string> : {}; } catch { return {}; } })();
       const genderParts: string[] = [];
@@ -644,29 +868,72 @@ function DreamEditorModal({
         body: JSON.stringify({
           prompt,
           size: "1024x1024",
-          visualBrief: localVisualBrief,
+          visualBrief: visualBriefRef.current,
           dreamText: form?.rawText ?? null,
           genderContext: genderContext || null,
         }),
       });
       const payload = (await response.json()) as { imageUrl?: string; revisedPrompt?: string | null; error?: string };
+      if (!stillHere()) {
+        // the picture was paid for and made for a dream that is no longer open: file it onto that
+        // dream (only its image fields change) without touching the form now on screen
+        if (response.ok && payload.imageUrl && startedFor != null) {
+          const imageUrl = payload.imageUrl;
+          const title = form?.title || entry?.title || "";
+          pendingImagesRef.current.set(startedFor, { imageUrl, failed: false });
+          void enqueueSave(async () => {
+            const res = await fetch(`/api/dreams?id=${startedFor}`, { cache: "no-store", signal: AbortSignal.timeout(SAVE_TIMEOUT_MS) });
+            const full = ((await res.json()) as { entry?: DreamEntry }).entry;
+            if (!res.ok || !full) throw new Error(M.updateFailed);
+            const saved = await putNow(updateBodyFor(full.id, { ...toEditForm(full), imageUrl, assetStatus: "generated" }, full.visualBrief));
+            onSaved(saved);
+            return saved;
+          }).then(
+            () => {
+              pendingImagesRef.current.delete(startedFor);
+              // reopened meanwhile: show the filed picture (already saved, so not an edit)
+              if (entryIdRef.current === startedFor) {
+                setForm((prev) => (prev ? { ...prev, imageUrl, assetStatus: "generated" } : prev));
+              }
+            },
+            () => {
+              if (entryIdRef.current === startedFor && readyRef.current) {
+                // open again: let the normal save (with its own error display) carry the picture
+                pendingImagesRef.current.delete(startedFor);
+                formDirtyRef.current = true;
+                formRevisionRef.current += 1;
+                setForm((prev) => (prev ? { ...prev, imageUrl, assetStatus: "generated" } : prev));
+              } else {
+                pendingImagesRef.current.set(startedFor, { imageUrl, failed: true });
+                onNotice(fill(T.archive.nb.imageFileFailed, { title }));
+              }
+            },
+          );
+        }
+        return;
+      }
       if (response.status === 402) { router.push("/pricing"); return; }
       if (!response.ok || !payload.imageUrl) {
         throw new Error(getApiErrorMessage(payload.error, lang, M.noImageError));
       }
 
-      if (!form) return;
-      const nextForm: DreamEditForm = { ...form, imageUrl: payload.imageUrl ?? null, assetStatus: "generated" };
+      // keep anything typed while the picture was being made
+      const latest = formRef.current;
+      if (!latest) return;
+      const nextForm: DreamEditForm = { ...latest, imageUrl: payload.imageUrl ?? null, assetStatus: "generated" };
       setForm(nextForm);
       setImagePrompt(payload.revisedPrompt ?? prompt);
       setImagePromptEdited(true);
       const updatedEntry = await updateEntry(nextForm);
       onSaved(updatedEntry);
-      setMessage(lang === "en" ? "New image generated and saved to this dream." : "新图片已经生成，并已保存到这条梦境档案。");
+      if (stillHere()) setMessage(M.imageSaved);
     } catch (generateError) {
-      setError(generateError instanceof Error ? generateError.message : M.noImageError);
+      if (stillHere()) setError(generateError instanceof Error ? generateError.message : M.noImageError);
     } finally {
-      setGeneratingImage(false);
+      if (opsRef.current.image === op) {
+        opsRef.current.image = null;
+        setGeneratingImage(false);
+      }
     }
   }
 
@@ -675,6 +942,12 @@ function DreamEditorModal({
       setError(M.dreamError);
       return;
     }
+    const startedFor = entryIdRef.current;
+    const op = {};
+    opsRef.current.analyze = op;
+    // Analysis rewrites the reader's own fields (title, mood, people…) as suggestions to look over,
+    // so a result for a dream that was closed meanwhile is dropped rather than written unseen.
+    const stillHere = () => entryIdRef.current === startedFor;
     setIsAnalyzing(true);
     setMessage("");
     setError("");
@@ -702,9 +975,13 @@ function DreamEditorModal({
         visualBrief?: string;
         error?: string;
       };
+      if (!stillHere()) return; // closed, or another dream opened: these findings aren't for it
       if (response.status === 402) { router.push("/pricing"); return; }
       if (!response.ok) throw new Error(getApiErrorMessage(payload.error, lang, M.analyzeError));
 
+      // the filled-in fields are an edit like any other: autosave them and save them on close
+      formDirtyRef.current = true;
+      formRevisionRef.current += 1;
       setForm((current) => {
         if (!current) return current;
         return {
@@ -719,16 +996,19 @@ function DreamEditorModal({
         };
       });
 
-      if (payload.visualBrief) setLocalVisualBrief(payload.visualBrief);
+      if (payload.visualBrief) setBrief(payload.visualBrief);
       if (payload.followUpQuestions?.length) {
         setFollowUpQuestions(payload.followUpQuestions);
         setFollowUpAnswers({});
       }
-      setMessage(lang === "en" ? "Analysis complete. Fields filled in — adjust as needed." : "分析完成，字段已自动填入，可手动调整。");
+      setMessage(M.analyzed);
     } catch (analyzeError) {
-      setError(analyzeError instanceof Error ? analyzeError.message : M.analyzeError);
+      if (stillHere()) setError(analyzeError instanceof Error ? analyzeError.message : M.analyzeError);
     } finally {
-      setIsAnalyzing(false);
+      if (opsRef.current.analyze === op) {
+        opsRef.current.analyze = null;
+        setIsAnalyzing(false);
+      }
     }
   }
 
@@ -799,17 +1079,31 @@ function DreamEditorModal({
       anchor.remove();
       window.setTimeout(() => URL.revokeObjectURL(href), 10_000);
     } catch {
-      setDownloadError(lang === "zh" ? "图片下载失败，请重试。" : "Could not download the image. Please try again.");
+      setDownloadError(M.downloadFailed);
     } finally {
       setDownloadingImage(false);
     }
   }
 
+  const dateIso = form.dreamDate ? `${form.dreamDate}T00:00:00.000Z` : entry.capturedAt;
+  const stress = form.stressScore ? Number(form.stressScore) : 0;
+  const charCount = Array.from(form.rawText.replace(/\s/g, "")).length;
+  const statusText = !ready ? (loadError ? "" : T.archive.nb.opening)
+    : autoSaveStatus === "saving" ? M.autoSaving
+    : autoSaveStatus === "saved" ? M.autoSaved
+    : autoSaveStatus === "error" ? M.autoSaveFailed : "";
+
   return (
     <div
-      className="archive-editor-overlay fixed inset-0 z-50 flex items-end justify-center bg-[rgba(232,225,242,0.58)] backdrop-blur-xl sm:items-center"
+      className={`${s.ar} ${s.editorLayer}`}
+      data-backdrop="true"
       onClick={(event) => {
-        if (event.target === event.currentTarget) void closeEditor();
+        // only the dimmed desk around the book closes it; on phones the sheet fills the screen.
+        // Clicks on the (inert, still loading) book fall through to the backdrop, so test the point too.
+        if (!(event.target as HTMLElement).dataset.backdrop || matchMedia(PHONE).matches) return;
+        const book = dialogRef.current?.querySelector(".nb-book")?.getBoundingClientRect();
+        if (book && event.clientX >= book.left && event.clientX <= book.right && event.clientY >= book.top && event.clientY <= book.bottom) return;
+        void closeEditor();
       }}
     >
       <div
@@ -819,79 +1113,90 @@ function DreamEditorModal({
         aria-labelledby={titleId}
         tabIndex={-1}
         onKeyDown={onKeyDown}
-        className="archive-editor-dialog mist-card relative max-h-[94vh] w-full max-w-4xl overflow-y-auto overscroll-y-contain rounded-t-[2rem] p-5 sm:rounded-[2rem] sm:p-6"
-        onClick={(event) => event.stopPropagation()}
+        className={s.editorDialog}
+        data-backdrop="true"
       >
-        {/* Modal header — full width, close button always visible */}
-        <div className="mb-6 flex items-start justify-between gap-4">
-          <div>
-            <p className="archive-editor-eyebrow text-xs font-semibold uppercase tracking-[0.22em] text-[#998db9]">{M.eyebrow}</p>
-            <h2 id={titleId} className="archive-editor-title mt-2 text-2xl font-semibold tracking-[-0.03em] text-[#5f5673]">{M.title}</h2>
-            <p className="mist-muted mt-2 text-sm leading-7">{M.desc}</p>
-          </div>
+        <div className={s.editorTop}>
+          {loadError ? (
+            <p className={s.loadFail} role="alert">
+              {loadError}
+              <button type="button" onClick={() => { closeButtonRef.current?.focus(); onRetry(); }}>{T.archive.nb.retry}</button>
+            </p>
+          ) : null}
           <button
             ref={closeButtonRef}
             type="button"
             onClick={() => void closeEditor()}
             disabled={saving}
-            className="mist-button-secondary shrink-0 flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-medium text-[#6b6282] transition hover:bg-white/55"
+            className={s.editorClose}
           >
-            <span aria-hidden>✕</span>
-            <span>{M.closeBtn}</span>
+            {M.closeBtn} <span aria-hidden>×</span>
           </button>
         </div>
 
-        <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
-          <div className="space-y-5">
+        <div className={s.bookWrap} inert={!ready} aria-busy={!ready}>
+        <Book tilt={false} className={s.editorBook}>
+          {/* ── left: the dream as written ── */}
+          <BookPage side="l" folio="p. 218" padClassName={s.scrollPad}>
+            <h2 id={titleId} className="nb-kicker">{M.spreadKicker} · {dateLabel(dateIso, thisYear)}</h2>
+            <input
+              name="dreamTitle"
+              aria-label={M.dreamTitle}
+              placeholder={M.dreamTitle}
+              autoComplete="off"
+              value={form.title}
+              onChange={(event) => updateForm({ title: event.target.value })}
+              className={s.titleInput}
+            />
+            <div className={s.metaRow}>
+              <label className={s.dateField}>
+                <span className={s.srOnly}>{M.date}</span>
+                <input
+                  type="date"
+                  name="dreamDate"
+                  autoComplete="off"
+                  value={form.dreamDate}
+                  onChange={(event) => updateForm({ dreamDate: event.target.value })}
+                />
+              </label>
+              <span>{weekdayLabel(dateIso, lang)}</span>
+              <span>{fill(M.wordCount, { count: charCount })}</span>
+              <span className={autoSaveStatus === "error" ? s.statusErr : s.status} aria-live="polite">{statusText}</span>
+            </div>
 
-            <label className="grid gap-2">
-              <span className="mist-label text-xs font-medium">{M.dreamTitle}</span>
-              <input
-                name="dreamTitle"
-                autoComplete="off"
-                value={form.title}
-                onChange={(event) => updateForm({ title: event.target.value })}
-                className={inputCls}
-              />
-            </label>
-
-            <label className="grid gap-2">
-              <span className="mist-label text-xs font-medium">{M.dreamContent}</span>
+            <label className={s.textField}>
+              <span className={s.srOnly}>{M.dreamContent}</span>
               <textarea
                 name="dreamText"
                 autoComplete="off"
                 value={form.rawText}
                 onChange={(event) => updateForm({ rawText: event.target.value, cleanText: event.target.value })}
                 rows={7}
-                className="mist-input min-h-[15rem] w-full rounded-[1.6rem] px-4 py-4 text-sm leading-7 transition"
+                className={`nb-hand ${s.dreamTextarea}`}
               />
-              <button
-                type="button"
-                onClick={analyzeAndAsk}
-                disabled={isAnalyzing || !form.rawText.trim() || saving}
-                className="mist-button-secondary inline-flex w-fit items-center gap-1.5 rounded-full px-4 py-2 text-sm font-medium text-[#7690a7] transition disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                {isAnalyzing ? M.analyzingBtn : M.analyzeBtn}
-              </button>
             </label>
+            <button
+              type="button"
+              onClick={analyzeAndAsk}
+              disabled={isAnalyzing || !form.rawText.trim() || saving}
+              className={s.redAct}
+            >
+              {isAnalyzing ? M.analyzingBtn : M.analyzeBtn}
+            </button>
 
             {followUpQuestions.length > 0 && (
-              <div className="mist-card rounded-[1.6rem] p-4">
-                <div className="flex items-center justify-between">
-                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#8f82bc]">{M.followUpTitle}</p>
-                  <button
-                    type="button"
-                    onClick={() => setFollowUpQuestions([])}
-                    className="mist-soft text-xs transition hover:text-[#695f80]"
-                  >
+              <div className={s.slip}>
+                <div className={s.slipHead}>
+                  <span className={s.slipLabel}>{M.slipLabel} · {M.followUpTitle}</span>
+                  <button type="button" onClick={() => setFollowUpQuestions([])} className={s.quiet}>
                     {M.followUpClose}
                   </button>
                 </div>
-                <p className="mist-soft mt-1 text-xs">{M.followUpHint}</p>
-                <div className="mt-3 grid gap-3">
+                <p className={s.slipHint}>{M.followUpHint}</p>
+                <ol className={s.questions}>
                   {followUpQuestions.map((q, i) => (
-                    <div key={i} className="rounded-[1.2rem] bg-white/30 p-3">
-                      <p className="text-sm leading-6 text-[#655c79]">{q}</p>
+                    <li key={i}>
+                      <p>{q}</p>
                       <textarea
                         name={`followUpAnswer-${i}`}
                         aria-label={`${q} ${M.answerPlaceholder}`}
@@ -900,248 +1205,174 @@ function DreamEditorModal({
                         onChange={(e) => setFollowUpAnswers((prev) => ({ ...prev, [i]: e.target.value }))}
                         placeholder={M.answerPlaceholder}
                         rows={2}
-                        className="mist-input mt-2 w-full resize-none rounded-[0.9rem] px-3 py-2 text-sm"
+                        className="nb-hand"
                       />
                       {followUpAnswers[i]?.trim() && (
-                        <button
-                          type="button"
-                          onClick={() => appendAnswer(i)}
-                          className="mist-button-secondary mt-2 rounded-full px-3 py-1 text-xs transition hover:bg-white/48"
-                        >
+                        <button type="button" onClick={() => appendAnswer(i)} className={s.redAct}>
                           {M.appendBtn}
                         </button>
                       )}
-                    </div>
+                    </li>
                   ))}
-                </div>
+                </ol>
               </div>
             )}
 
-            <div className="grid gap-3 sm:grid-cols-2">
-              <label className="grid gap-1.5">
-                <span className="mist-label text-xs font-medium">{M.date}</span>
-                <input
-                  type="date"
-                  name="dreamDate"
-                  autoComplete="off"
-                  value={form.dreamDate}
-                  onChange={(event) => updateForm({ dreamDate: event.target.value })}
-                  className={inputCls}
-                />
+            <fieldset className={s.sleepGrid}>
+              <legend className={s.srOnly}>{M.sleepTitle}</legend>
+              <label>
+                <span>{M.sleepStart}</span>
+                <input type="time" name="sleepStart" autoComplete="off" value={form.sleepStart} onChange={(event) => updateForm({ sleepStart: event.target.value })} />
               </label>
-              <label className="grid gap-1.5">
-                <span className="mist-label text-xs font-medium">{M.mood}</span>
-                <input
-                  name="mood"
-                  autoComplete="off"
-                  value={form.mood}
-                  onChange={(event) => updateForm({ mood: event.target.value })}
-                  className={inputCls}
-                />
+              <label>
+                <span>{M.wakeTime}</span>
+                <input type="time" name="wakeTime" autoComplete="off" value={form.wakeTime} onChange={(event) => updateForm({ wakeTime: event.target.value })} />
               </label>
-              <label className="grid gap-1.5">
-                <span className="mist-label text-xs font-medium">{M.stress}</span>
-                <input
-                  type="number"
-                  name="stressScore"
-                  min={1}
-                  max={5}
-                  value={form.stressScore}
-                  onChange={(event) => updateForm({ stressScore: event.target.value })}
-                  className={inputCls}
-                />
-              </label>
-              <label className="grid gap-1.5">
-                <span className="mist-label text-xs font-medium">{M.tags}</span>
-                <input
-                  name="tags"
-                  autoComplete="off"
-                  value={form.tags}
-                  onChange={(event) => updateForm({ tags: event.target.value })}
-                  className={inputCls}
-                />
-              </label>
-              <div className="grid gap-1.5">
-                <span className="mist-label text-xs font-medium">{M.people}</span>
-                <TagChipInput
-                  value={form.people}
-                  onChange={(value) => updateForm({ people: value })}
-                  placeholder={M.tagPlaceholder}
-                  name="people"
-                  ariaLabel={M.people}
-                />
+              <div className={s.dotsField}>
+                <span id={`${titleId}-quality`}>{M.sleepQuality}</span>
+                <div className={s.dots} role="group" aria-labelledby={`${titleId}-quality`}>
+                  {[1, 2, 3, 4, 5].map((value) => (
+                    <button
+                      key={value}
+                      type="button"
+                      aria-label={fill(M.qualityValue, { count: value })}
+                      aria-pressed={form.sleepQuality === value}
+                      className={form.sleepQuality != null && value <= form.sleepQuality ? s.dotOn : undefined}
+                      onClick={() => updateForm({ sleepQuality: form.sleepQuality === value ? null : value })}
+                    />
+                  ))}
+                </div>
               </div>
-              <div className="grid gap-1.5">
-                <span className="mist-label text-xs font-medium">{M.locations}</span>
-                <TagChipInput
-                  value={form.locations}
-                  onChange={(value) => updateForm({ locations: value })}
-                  placeholder={M.tagPlaceholder}
-                  name="locations"
-                  ariaLabel={M.locations}
-                />
-              </div>
-              <label className="grid gap-1.5 sm:col-span-2">
-                <span className="mist-label text-xs font-medium">{M.symbols}</span>
-                <input
-                  name="symbols"
-                  autoComplete="off"
-                  value={form.symbols}
-                  onChange={(event) => updateForm({ symbols: event.target.value })}
-                  className={inputCls}
-                />
+              <label className={s.span2}>
+                <span>{M.activity}</span>
+                <input name="preSleepActivity" autoComplete="off" value={form.preSleepActivity} onChange={(event) => updateForm({ preSleepActivity: event.target.value })} />
               </label>
-            </div>
+              <label>
+                <span>{M.meal}</span>
+                <input name="preSleepMeal" autoComplete="off" value={form.preSleepMeal} onChange={(event) => updateForm({ preSleepMeal: event.target.value })} />
+              </label>
+            </fieldset>
+          </BookPage>
 
-            <div className="mist-card rounded-[1.6rem] p-4">
-              <p className="archive-editor-section-title text-sm font-medium text-[#8f82bc]">{M.sleepTitle}</p>
-              <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                <label className="grid gap-1.5">
-                  <span className="mist-label text-xs font-medium">{M.sleepStart}</span>
-                  <input type="time" name="sleepStart" autoComplete="off" value={form.sleepStart} onChange={(event) => updateForm({ sleepStart: event.target.value })} className={inputCls} />
+          {/* ── right: what it read, the picture, and the AI's note ── */}
+          <BookPage side="r" folio="p. 219" padClassName={s.scrollPad}>
+            <p className="nb-kicker">{M.readKicker}</p>
+            <div className={s.readGrid}>
+              <div className={s.readFields}>
+                <label className={s.field}>
+                  <span>{M.mood}</span>
+                  <input name="mood" autoComplete="off" value={form.mood} onChange={(event) => updateForm({ mood: event.target.value })} />
                 </label>
-                <label className="grid gap-1.5">
-                  <span className="mist-label text-xs font-medium">{M.wakeTime}</span>
-                  <input type="time" name="wakeTime" autoComplete="off" value={form.wakeTime} onChange={(event) => updateForm({ wakeTime: event.target.value })} className={inputCls} />
-                </label>
-                <div className="grid gap-1.5">
-                  <span className="mist-label text-xs font-medium">{M.sleepQuality}</span>
-                  <div className="flex flex-wrap gap-2">
+                <div className={s.field}>
+                  <span id={`${titleId}-stress`}>{M.stress}</span>
+                  <div className={s.stress} role="group" aria-labelledby={`${titleId}-stress`}>
                     {[1, 2, 3, 4, 5].map((value) => (
                       <button
                         key={value}
                         type="button"
-                        onClick={() => updateForm({ sleepQuality: form.sleepQuality === value ? null : value })}
-                        className={form.sleepQuality === value
-                          ? "mist-button flex h-9 w-9 items-center justify-center rounded-full text-sm font-semibold"
-                          : "mist-button-secondary flex h-9 w-9 items-center justify-center rounded-full text-sm font-semibold text-[#726887]"}
-                      >
-                        {value}
-                      </button>
+                        aria-label={fill(M.stressValue, { count: value })}
+                        aria-pressed={stress === value}
+                        className={value <= stress ? s.dashOn : undefined}
+                        onClick={() => updateForm({ stressScore: stress === value ? "" : String(value) })}
+                      />
                     ))}
+                    <b aria-hidden>{stress ? `${stress} / 5` : ""}</b>
                   </div>
                 </div>
-                <label className="grid gap-1.5">
-                  <span className="mist-label text-xs font-medium">{M.meal}</span>
-                  <input name="preSleepMeal" autoComplete="off" value={form.preSleepMeal} onChange={(event) => updateForm({ preSleepMeal: event.target.value })} className={inputCls} />
+                <div className={s.field}>
+                  <span>{M.people}</span>
+                  <TagChipInput value={form.people} onChange={(value) => updateForm({ people: value })} placeholder={M.tagPlaceholder} name="people" ariaLabel={M.people} />
+                </div>
+                <div className={s.field}>
+                  <span>{M.locations}</span>
+                  <TagChipInput value={form.locations} onChange={(value) => updateForm({ locations: value })} placeholder={M.tagPlaceholder} name="locations" ariaLabel={M.locations} />
+                </div>
+                <label className={s.field}>
+                  <span>{M.symbols}</span>
+                  <input name="symbols" autoComplete="off" value={form.symbols} onChange={(event) => updateForm({ symbols: event.target.value })} />
                 </label>
-                <label className="grid gap-1.5 sm:col-span-2">
-                  <span className="mist-label text-xs font-medium">{M.activity}</span>
-                  <input name="preSleepActivity" autoComplete="off" value={form.preSleepActivity} onChange={(event) => updateForm({ preSleepActivity: event.target.value })} className={inputCls} />
-                </label>
-                <label className="grid gap-1.5 sm:col-span-2">
-                  <span className="mist-label text-xs font-medium">{M.insight}</span>
-                  <textarea
-                    name="sleepInsight"
-                    autoComplete="off"
-                    rows={4}
-                    value={form.sleepInsight}
-                    onChange={(event) => updateForm({ sleepInsight: event.target.value })}
-                    className="mist-input w-full rounded-[1.2rem] px-3.5 py-3 text-sm leading-7 transition"
-                  />
+                <label className={s.field}>
+                  <span>{M.tags}</span>
+                  <input name="tags" autoComplete="off" value={form.tags} onChange={(event) => updateForm({ tags: event.target.value })} />
                 </label>
               </div>
-            </div>
-          </div>
 
-          <div className="space-y-5">
-            <div className="mist-card rounded-[1.8rem] p-4">
-              <p className="archive-editor-section-title text-sm font-medium text-[#8f82bc]">{M.imageTitle}</p>
-              <p className="mist-soft mt-1 text-xs">{M.imageHint}</p>
-
-              <div className={`archive-editor-image archive-editor-image-frame group relative mt-4 overflow-hidden rounded-[1.5rem] ${form.imageUrl ? "" : "archive-image-empty"}`}>
+              <div className={s.photoCol}>
+                <figure className={`nb-print ${s.polaroid} ${form.imageUrl ? "" : s.polaroidEmpty}`}>
+                  <span className="nb-tape" aria-hidden />
+                  {form.imageUrl ? (
+                    <Image src={form.imageUrl} alt={M.imageAlt} width={1024} height={1024} unoptimized />
+                  ) : (
+                    <div className={s.noPhoto}>{M.noImage}</div>
+                  )}
+                  <figcaption className="nb-cap">{dateLabel(dateIso, thisYear)}{form.title ? ` — ${form.title}` : ""}</figcaption>
+                </figure>
                 {form.imageUrl ? (
-                  <>
-                    <Image
-                      src={form.imageUrl}
-                      alt="梦境图"
-                      width={1024}
-                      height={1024}
-                      unoptimized
-                      className="h-[18rem] w-full object-cover"
-                    />
-                    <button
-                      type="button"
-                      onClick={(event) => { event.stopPropagation(); void downloadImage(); }}
-                      disabled={downloadingImage}
-                      aria-busy={downloadingImage}
-                      aria-label={downloadingImage ? (lang === "zh" ? "下载中…" : "Downloading…") : M.downloadImage}
-                      className="archive-image-download"
-                      title={downloadingImage ? (lang === "zh" ? "下载中…" : "Downloading…") : M.downloadImage}
-                    >
-                      <span aria-hidden="true">{downloadingImage ? "…" : "↓"}</span>
-                    </button>
-                  </>
-                ) : (
-                  <div className="archive-editor-empty-image flex h-[18rem] items-center justify-center text-sm">
-                    {M.noImage}
-                  </div>
-                )}
-              </div>
-              {downloadError && <p role="alert" className="archive-image-download-error mt-2 text-sm">{downloadError}</p>}
-
-              <label className="mt-4 grid gap-1.5">
-                <span className="mist-label text-xs font-medium">{M.promptLabel}</span>
-                <textarea
-                  name="imagePrompt"
-                  autoComplete="off"
-                  rows={7}
-                  value={imagePrompt}
-                  onChange={(event) => {
-                    setImagePrompt(event.target.value);
-                    setImagePromptEdited(true);
-                  }}
-                  className="mist-input w-full rounded-[1.4rem] px-4 py-3 text-sm leading-7 transition"
-                />
-              </label>
-
-              <div className="mt-3 flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  onClick={generateImage}
-                  disabled={generatingImage}
-                  className="mist-button rounded-full px-4 py-2 text-sm font-medium disabled:opacity-50"
-                >
+                  <button
+                    type="button"
+                    onClick={(event) => { event.stopPropagation(); void downloadImage(); }}
+                    disabled={downloadingImage}
+                    aria-busy={downloadingImage}
+                    className={s.inkAct}
+                  >
+                    <span aria-hidden>↓</span> {downloadingImage ? M.downloading : M.downloadFrame}
+                  </button>
+                ) : null}
+                {downloadError && <p role="alert" className={s.err}>{downloadError}</p>}
+                <button type="button" onClick={generateImage} disabled={generatingImage} className={s.redAct}>
                   {generatingImage ? M.generating : form.imageUrl ? M.replaceImage : M.addImage}
                 </button>
-                <button
-                  type="button"
-                  onClick={() => setImagePromptEdited(false)}
-                  className="mist-button-secondary rounded-full px-4 py-2 text-sm font-medium transition hover:bg-white/48"
-                >
-                  {M.resetPrompt}
-                </button>
-
+                <details className={s.promptBox}>
+                  <summary>{M.promptLabel}</summary>
+                  <p>{M.imageHint}</p>
+                  <textarea
+                    name="imagePrompt"
+                    aria-label={M.promptLabel}
+                    autoComplete="off"
+                    rows={6}
+                    value={imagePrompt}
+                    onChange={(event) => {
+                      setImagePrompt(event.target.value);
+                      setImagePromptEdited(true);
+                    }}
+                  />
+                  <button type="button" onClick={() => setImagePromptEdited(false)} className={s.quiet}>
+                    {M.resetPrompt}
+                  </button>
+                </details>
               </div>
             </div>
 
-            <div className="mist-card rounded-[1.8rem] p-4">
-              <div className="flex flex-wrap items-center gap-3">
-                <button
-                  type="button"
-                  onClick={() => exportCurrentDream("markdown")}
-                  className="mist-button-secondary rounded-full px-4 py-2.5 text-sm font-medium text-[#756a90] transition hover:bg-white/55"
-                >
+            <label className={`${s.slip} ${s.insightSlip}`}>
+              <span className={s.slipLabel}>{M.slipLabel} · {M.insight}</span>
+              <textarea
+                name="sleepInsight"
+                autoComplete="off"
+                rows={3}
+                value={form.sleepInsight}
+                placeholder={M.insightPlaceholder}
+                onChange={(event) => updateForm({ sleepInsight: event.target.value })}
+              />
+            </label>
+
+            {message ? <p className={s.ok} aria-live="polite">{message}</p> : null}
+            {error ? <p className={s.err} role="alert">{error}</p> : null}
+
+            <div className={s.pageFoot}>
+              <button type="button" className="nb-act" onClick={() => void closeEditor()} disabled={saving}>
+                {saving ? M.saving : M.keepBtn} <span aria-hidden>→</span>
+              </button>
+              <div className={s.quietRow}>
+                <button type="button" onClick={() => exportCurrentDream("markdown")} className={s.quiet}>
                   ↓ {M.exportMarkdown}
                 </button>
-                <button
-                  type="button"
-                  onClick={deleteEntry}
-                  disabled={deleting}
-                  className="mist-button-secondary rounded-full border-[#b8758f]/40 px-5 py-2.5 text-sm font-medium text-[#c58aa0] transition hover:bg-[#4a1f34]/24 disabled:opacity-50"
-                >
+                <button type="button" onClick={deleteEntry} disabled={deleting} className={s.quietDanger}>
                   {deleting ? M.deleting : M.deleteBtn}
                 </button>
-                <span className="text-xs text-[#9d90b8]" aria-live="polite">
-                  {autoSaveStatus === "saving" ? (lang === "zh" ? "保存中…" : "Saving…") :
-                   autoSaveStatus === "saved" ? (lang === "zh" ? "已保存 ✓" : "Saved ✓") :
-                   autoSaveStatus === "error" ? (lang === "zh" ? "保存失败" : "Save failed") : ""}
-                </span>
               </div>
-              {message ? <p className="mt-4 text-sm font-medium text-[#7f9c8b]" aria-live="polite">{message}</p> : null}
-              {error ? <p className="mt-4 text-sm font-medium text-[#bb7f94]" role="alert">{error}</p> : null}
             </div>
-          </div>
+          </BookPage>
+        </Book>
         </div>
       </div>
     </div>
@@ -1163,28 +1394,40 @@ async function updateInBatches<T>(items: T[], update: (item: T) => Promise<void>
   }
 }
 
+/** Monday-to-Sunday week (UTC dates) that holds `date`. */
+function weekRange(date: Date): [number, number] {
+  const start = Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()) - ((date.getUTCDay() + 6) % 7) * 86_400_000;
+  return [start, start + 7 * 86_400_000];
+}
+
 export default function DreamGrid({
   entries,
   nextCursor: initialNextCursor,
   activeTab,
+  onTabChange,
+  exporter,
+  dataError,
 }: {
   entries: DreamEntry[];
   nextCursor: string | null;
-  activeTab: "calendar" | "tags" | "recent";
+  activeTab: ArchiveTab;
+  onTabChange: (tab: ArchiveTab) => void;
+  exporter: ArchiveExporter;
+  dataError: string;
 }) {
   const { lang, T } = useLanguage();
-  const G = T.archive.grid;
+  const A = T.archive;
+  const G = A.grid;
+  const N = A.nb;
   const [localEntries, setLocalEntries] = useState(entries);
   const [nextCursor, setNextCursor] = useState(initialNextCursor);
   const [loadingMore, setLoadingMore] = useState(false);
   const [loadMoreError, setLoadMoreError] = useState("");
   const [selected, setSelected] = useState<DreamEntry | null>(null);
   const [openingEntryId, setOpeningEntryId] = useState<number | null>(null);
-  const [selectedDay, setSelectedDay] = useState<{ label: string; entries: DreamEntry[] } | null>(null);
-  const dayDialogTitleId = useId();
-  const dayCloseButtonRef = useRef<HTMLButtonElement>(null);
-  const closeDayDialog = useCallback(() => setSelectedDay(null), []);
-  const { dialogRef: dayDialogRef, onKeyDown: onDayDialogKeyDown } = useModalFocus(Boolean(selectedDay), closeDayDialog, dayCloseButtonRef);
+  // The calendar's selected night (shown on the right-hand page) and which of its dreams is open there.
+  const [selectedDayKey, setSelectedDayKey] = useState<string | null>(null);
+  const [selectedDayEntryId, setSelectedDayEntryId] = useState<number | null>(null);
   const [activeKeyword, setActiveKeyword] = useState<KeywordArchiveItem | null>(null);
   const [editingTag, setEditingTag] = useState<EditingTag | null>(null);
   const [addingTag, setAddingTag] = useState<AddingTag | null>(null);
@@ -1192,7 +1435,25 @@ export default function DreamGrid({
   const [tagActionMenu, setTagActionMenu] = useState<string | null>(null);
   const [tagBusy, setTagBusy] = useState(false);
   const [tagError, setTagError] = useState("");
-
+  const bookRef = useRef<HTMLDivElement>(null);
+  // the fields list pages leave out (inline image, visual brief), per dream, once a full copy was seen;
+  // the editor can then open it straight away without a refetch
+  const fullCopies = useRef(new Map<number, Pick<DreamEntry, "imageUrl" | "thumbnailUrl" | "assetStatus" | "visualBrief">>());
+  const rememberFull = (full: DreamEntry) => {
+    fullCopies.current.set(full.id, { imageUrl: full.imageUrl, thumbnailUrl: full.thumbnailUrl, assetStatus: full.assetStatus, visualBrief: full.visualBrief });
+  };
+  // each open gets a number; a late reply for an earlier open is ignored
+  const openSeq = useRef(0);
+  const openerRef = useRef<HTMLElement | null>(null);
+  const turning = useRef(false);
+  const [readyId, setReadyId] = useState<number | null>(null);
+  const [openError, setOpenError] = useState("");
+  const [notice, setNotice] = useState("");
+  const [clock, setClock] = useState<Clock | null>(null);
+  const uid = useId();
+  const tabId = (tab: ArchiveTab) => `${uid}-tab-${tab}`;
+  const leftPageId = `${uid}-left`;
+  const rightPageId = `${uid}-right`;
 
   // Keyword aliases — when a keyword is merged into another, store the alias for future normalization
   const [keywordAliases, setKeywordAliasesState] = useState<KeywordAliases>({ people: {}, locations: {} });
@@ -1219,6 +1480,18 @@ export default function DreamGrid({
       if (stored) setKeywordAliasesState(JSON.parse(stored) as KeywordAliases);
     } catch {}
   }, []);
+
+  // a tag's action menu closes on Escape or a click anywhere else
+  useEffect(() => {
+    if (!tagActionMenu) return;
+    const onPointer = (event: PointerEvent) => {
+      if (!(event.target as HTMLElement).closest("[data-tag-menu]")) setTagActionMenu(null);
+    };
+    const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") setTagActionMenu(null); };
+    addEventListener("pointerdown", onPointer);
+    addEventListener("keydown", onKey);
+    return () => { removeEventListener("pointerdown", onPointer); removeEventListener("keydown", onKey); };
+  }, [tagActionMenu]);
 
   function saveKeywordAlias(kind: KeywordArchiveKind, fromLabel: string, intoLabel: string) {
     setKeywordAliasesState((prev) => {
@@ -1247,7 +1520,12 @@ export default function DreamGrid({
 
   useEffect(() => {
     setLocalEntries(entries);
+    fullCopies.current.clear();
   }, [entries]);
+
+  useEffect(() => {
+    setClock(readClock());
+  }, []);
 
   const { monthKeys, buckets, totalDays } = useMemo(() => {
     const dayBuckets = new Map<string, DayBucket>();
@@ -1288,19 +1566,20 @@ export default function DreamGrid({
     };
   }, [localEntries]);
 
-  const [activeMonth, setActiveMonth] = useState(monthKeys[0] ?? formatDayKey(new Date()).slice(0, 7));
+  const [activeMonth, setActiveMonth] = useState(monthKeys[0] ?? localDayKey(new Date()).slice(0, 7));
   const visibleMonth = activeMonth;
   const selectableMonths = Array.from(new Set([...monthKeys, visibleMonth])).sort().reverse();
 
   function changeMonth(offset: number) {
+    tap();
     setActiveMonth((current) => {
       const [year, month] = current.split("-").map(Number);
       return new Date(Date.UTC(year, month - 1 + offset, 1)).toISOString().slice(0, 7);
     });
   }
   const calendarCells = useMemo(
-    () => (visibleMonth ? buildCalendarCells(visibleMonth, buckets) : []),
-    [visibleMonth, buckets],
+    () => (visibleMonth ? buildCalendarCells(visibleMonth, buckets, clock?.todayKey ?? null) : []),
+    [visibleMonth, buckets, clock],
   );
   const keywordArchives = useMemo(
     () => ({
@@ -1309,35 +1588,108 @@ export default function DreamGrid({
     }),
     [localEntries, keywordAliases],
   );
-  const keywordLabels = lang === "en"
-    ? {
-        eyebrow: "Structured memory index",
-        title: "People & Places Archive",
-        desc: "Dream Reel groups the people and locations extracted from your dream text, so recurring figures and spaces become easier to revisit.",
-        people: "People",
-        locations: "Places",
-        appears: "appears",
-        dreams: "dreams",
-        mood: "mood",
-        themes: "themes",
-        related: "Related dreams",
-        emptyPeople: "No people have been extracted yet.",
-        emptyLocations: "No places have been extracted yet.",
+  const symbolCounts = useMemo(() => topCounts(localEntries.flatMap((entry) => Array.from(new Set(entry.symbols))), 8), [localEntries]);
+
+  // ── calendar: the month's nights, the one on the right-hand page, and the month's recurring image ──
+  const monthCells = calendarCells.filter((cell) => cell.entries.length > 0);
+  const monthEntryCount = monthCells.reduce((sum, cell) => sum + cell.entries.length, 0);
+  const dayKey = selectedDayKey && monthCells.some((cell) => cell.key === selectedDayKey)
+    ? selectedDayKey
+    : monthCells[monthCells.length - 1]?.key ?? null;
+  const dayEntries = dayKey ? buckets.get(dayKey)?.entries ?? [] : [];
+  const shownEntry = dayEntries.find((entry) => entry.id === selectedDayEntryId) ?? dayEntries[0] ?? null;
+  const monthTop = topCounts(monthCells.flatMap((cell) => cell.entries.flatMap((entry) => Array.from(new Set(entry.symbols)))), 1)[0];
+  const monthSymbol = monthTop && monthTop.count >= 2 ? monthTop.item : null;
+  const hasSymbol = (entry: DreamEntry, symbol: string) => entry.symbols.some((item) => normalizeKeyword(item) === normalizeKeyword(symbol));
+
+  // List pages leave out inline (data URL) images. Fetch them for the open night so its photo can be
+  // taped on, and merge only the image fields: anything edited meanwhile (autosave, rename, merge) stays.
+  const shownId = shownEntry?.id ?? null;
+  const shownOmitted = Boolean(shownEntry?.imageUrlOmitted) && activeTab === "calendar";
+  useEffect(() => {
+    if (shownId == null || !shownOmitted) return;
+    const controller = new AbortController();
+    fetch(`/api/dreams?id=${shownId}`, { cache: "no-store", signal: controller.signal })
+      .then((response) => (response.ok ? response.json() as Promise<{ entry?: DreamEntry }> : null))
+      .then((payload) => {
+        const full = payload?.entry;
+        if (!full || controller.signal.aborted) return;
+        setLocalEntries((current) => current.map((item) => (
+          // a newer full copy (e.g. from a save) already replaced the list version: leave it alone
+          item.id === full.id && item.imageUrlOmitted
+            ? { ...item, imageUrl: full.imageUrl, thumbnailUrl: full.thumbnailUrl, imageUrlOmitted: undefined, assetStatus: full.assetStatus, visualBrief: full.visualBrief }
+            : item
+        )));
+        rememberFull(full);
+      })
+      .catch(() => {}); // stays omitted; the next visit to this night tries again
+    return () => controller.abort();
+  }, [shownId, shownOmitted]);
+
+  /** How many times this symbol had appeared by this dream (inclusive), across the loaded archive. */
+  function symbolOrdinal(entry: DreamEntry, symbol: string): number {
+    const at = +new Date(entry.capturedAt);
+    return localEntries.filter((item) => +new Date(item.capturedAt) <= at && hasSymbol(item, symbol)).length;
+  }
+
+  // ── recent: newest first, and a recap of the week holding the newest dream ──
+  const recentEntries = useMemo(
+    () => [...localEntries].sort((a, b) => +new Date(b.capturedAt) - +new Date(a.capturedAt)),
+    [localEntries],
+  );
+  // the year shown dates are compared against: the reader's year once mounted, the newest dream's before
+  const thisYear = clock?.year ?? (recentEntries[0] ? new Date(recentEntries[0].capturedAt).getUTCFullYear() : 0);
+  const recap = useMemo(() => {
+    const latest = recentEntries[0];
+    if (!latest) return null;
+    const [start, end] = weekRange(new Date(latest.capturedAt));
+    const inRange = (from: number, to: number) => recentEntries.filter((entry) => {
+      const t = +new Date(entry.capturedAt);
+      return t >= from && t < to;
+    });
+    const week = inRange(start, end);
+    const previous = inRange(start - 7 * 86_400_000, start);
+    // the recap reads loaded dreams only; it is exact once they reach back past last week
+    const oldest = recentEntries[recentEntries.length - 1];
+    const complete = !nextCursor || +new Date(oldest.capturedAt) < start - 7 * 86_400_000;
+    const moods = topCounts(week.flatMap((entry) => splitMood(entry.mood)), 2);
+    const places = topCounts(week.flatMap((entry) => entry.locations), 2);
+    const symbols = topCounts(week.flatMap((entry) => Array.from(new Set(entry.symbols))), 1);
+    const person = topCounts(week.flatMap((entry) => Array.from(new Set(entry.people))), 1)[0];
+    // the symbol and place that shared the most nights this week
+    let pair: { a: string; b: string; n: number } | null = null;
+    const pairCounts = new Map<string, { a: string; b: string; n: number }>();
+    for (const entry of week) {
+      for (const symbol of new Set(entry.symbols)) {
+        for (const place of new Set(entry.locations)) {
+          const key = `${normalizeKeyword(symbol)}|${normalizeKeyword(place)}`;
+          const item = pairCounts.get(key) ?? { a: symbol, b: place, n: 0 };
+          item.n += 1;
+          pairCounts.set(key, item);
+          if (!pair || item.n > pair.n) pair = item;
+        }
       }
-    : {
-        eyebrow: "结构化记忆索引",
-        title: "人物与地点标签",
-        desc: "Dream Reel 会把梦境文本中识别出的人物和地点聚合起来，让反复出现的关系、空间和场景变得可以回看。",
-        people: "人物",
-        locations: "地点",
-        appears: "出现",
-        dreams: "个梦境",
-        mood: "情绪",
-        themes: "主题",
-        related: "相关梦境",
-        emptyPeople: "还没有识别到人物。",
-        emptyLocations: "还没有识别到地点。",
-      };
+    }
+    const slip = [
+      moods[0] ? fill(N.slipMood, { mood: moods[0].item }) : "",
+      pair && (pair as { n: number }).n >= 2
+        ? fill(N.slipPair, { a: (pair as { a: string }).a, b: (pair as { b: string }).b })
+        : person && person.count >= 2 ? fill(N.slipPerson, { person: person.item, count: person.count }) : "",
+    ].filter(Boolean);
+    if (slip.length === 0) slip.push(fill(N.slipCount, { count: week.length }));
+    return {
+      // "this week" means the week holding the reader's own today (as a UTC date, like the dreams)
+      current: clock ? clock.todayUtc >= start && clock.todayUtc < end : false,
+      complete,
+      range: `${dateLabel(new Date(start).toISOString(), thisYear)} – ${shortDate(new Date(end - 86_400_000).toISOString())}`,
+      count: week.length,
+      diff: week.length - previous.length,
+      moods,
+      places,
+      symbol: symbols[0] ?? null,
+      slip,
+    };
+  }, [recentEntries, N, clock, nextCursor, thisYear]);
 
   async function patchEntryTag(entry: DreamEntry, patch: { people?: string[]; locations?: string[] }) {
     const res = await fetch("/api/dreams", {
@@ -1351,19 +1703,41 @@ export default function DreamGrid({
     if (!res.ok) throw new Error("Update failed");
   }
 
-  async function openEntry(entry: DreamEntry) {
+  async function openEntry(entry: DreamEntry, retry = false) {
+    const seq = ++openSeq.current;
+    if (!retry) {
+      // remember who opened it before the button disables itself while loading
+      openerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      unlock();
+      pageTurn({ dur: 0.7 });
+    }
+    setOpenError("");
+    setOpeningEntryId(null);
+    const known = fullCopies.current.get(entry.id);
+    if (known) {
+      setSelected({ ...entry, ...known, imageUrlOmitted: undefined });
+      setReadyId(entry.id);
+      return;
+    }
+    // the list copy lacks inline images and the visual brief; the editor stays read-only until the
+    // full entry arrives, so no save can overwrite those fields with nulls
     setSelected(entry);
+    setReadyId(null);
     setOpeningEntryId(entry.id);
     try {
       const response = await fetch(`/api/dreams?id=${entry.id}`, { cache: "no-store" });
       const payload = (await response.json()) as { entry?: DreamEntry; error?: string };
-      if (!response.ok || !payload.entry) throw new Error(payload.error || "Could not load dream");
-      setSelected((current) => (current?.id === entry.id ? payload.entry! : current));
-      setLocalEntries((current) => current.map((item) => (item.id === payload.entry!.id ? payload.entry! : item)));
+      if (seq !== openSeq.current) return; // closed, or another dream was opened meanwhile
+      if (!response.ok || !payload.entry) throw new Error(getApiErrorMessage(payload.error, lang, N.openFailed));
+      const full = payload.entry;
+      rememberFull(full);
+      setSelected(full);
+      setReadyId(full.id);
+      setLocalEntries((current) => current.map((item) => (item.id === full.id ? full : item)));
     } catch (error) {
-      setLoadMoreError(error instanceof Error ? error.message : "Could not load dream");
+      if (seq === openSeq.current) setOpenError(error instanceof Error ? error.message : N.openFailed);
     } finally {
-      setOpeningEntryId((current) => (current === entry.id ? null : current));
+      if (seq === openSeq.current) setOpeningEntryId(null);
     }
   }
 
@@ -1389,16 +1763,14 @@ export default function DreamGrid({
       }));
       setEditingTag(null);
       if (activeKeyword?.kind === kind && normalizeKeyword(activeKeyword.label) === normalizeKeyword(oldLabel)) setActiveKeyword(null);
-    } catch (e) { console.error(e); setTagError(lang === "zh" ? "部分标签更新失败，请重试。" : "Some tag updates failed. Please try again."); } finally { setTagBusy(false); }
+    } catch (e) { console.error(e); setTagError(N.tagFailed); } finally { setTagBusy(false); }
   }
 
   async function handleMergeTag(kind: KeywordArchiveKind, fromLabel: string, intoLabel: string) {
     if (normalizeKeyword(fromLabel) === normalizeKeyword(intoLabel)) { setMergingTag(null); return; }
     const item = keywordArchives[kind].find((i) => normalizeKeyword(i.label) === normalizeKeyword(fromLabel));
     if (!item) { setMergingTag(null); return; }
-    const msg = lang === "zh"
-      ? `将「${fromLabel}」的 ${item.count} 条梦境合并到「${intoLabel}」？此操作无法撤销。`
-      : `Merge "${fromLabel}" (${item.count} dreams) into "${intoLabel}"? This cannot be undone.`;
+    const msg = fill(N.mergeConfirm, { from: fromLabel, count: item.count, into: intoLabel });
     if (!window.confirm(msg)) return;
     setTagBusy(true);
     setTagError("");
@@ -1423,13 +1795,11 @@ export default function DreamGrid({
       }
       setMergingTag(null);
       if (activeKeyword?.kind === kind && normalizeKeyword(activeKeyword.label) === normalizeKeyword(fromLabel)) setActiveKeyword(null);
-    } catch (e) { console.error(e); setTagError(lang === "zh" ? "部分标签更新失败，请重试。" : "Some tag updates failed. Please try again."); } finally { setTagBusy(false); }
+    } catch (e) { console.error(e); setTagError(N.tagFailed); } finally { setTagBusy(false); }
   }
 
   async function handleDeleteTag(item: KeywordArchiveItem) {
-    const msg = lang === "zh"
-      ? `从 ${item.count} 个梦境中移除"${item.label}"？`
-      : `Remove "${item.label}" from ${item.count} dreams?`;
+    const msg = fill(N.deleteTagConfirm, { count: item.count, label: item.label });
     if (!window.confirm(msg)) return;
     setTagBusy(true);
     setTagError("");
@@ -1444,7 +1814,7 @@ export default function DreamGrid({
         return { ...entry, [item.kind]: field.filter((t) => normalizeKeyword(t) !== normalizeKeyword(item.label)) };
       }));
       if (activeKeyword?.kind === item.kind && normalizeKeyword(activeKeyword.label) === normalizeKeyword(item.label)) setActiveKeyword(null);
-    } catch (e) { console.error(e); setTagError(lang === "zh" ? "部分标签更新失败，请重试。" : "Some tag updates failed. Please try again."); } finally { setTagBusy(false); }
+    } catch (e) { console.error(e); setTagError(N.tagFailed); } finally { setTagBusy(false); }
   }
 
   async function handleAddTag() {
@@ -1467,10 +1837,11 @@ export default function DreamGrid({
         return { ...entry, [kind]: [...field, newLabel] };
       }));
       setAddingTag(null);
-    } catch (e) { console.error(e); setTagError(lang === "zh" ? "部分标签更新失败，请重试。" : "Some tag updates failed. Please try again."); } finally { setTagBusy(false); }
+    } catch (e) { console.error(e); setTagError(N.tagFailed); } finally { setTagBusy(false); }
   }
 
   function handleSaved(updatedEntry: DreamEntry) {
+    rememberFull(updatedEntry);
     setLocalEntries((current) => current.map((item) => (item.id === updatedEntry.id ? updatedEntry : item)));
   }
 
@@ -1497,7 +1868,7 @@ export default function DreamGrid({
         error?: string;
       };
       if (!response.ok || !payload.entries) {
-        throw new Error(payload.error || "Could not load more dreams");
+        throw new Error(getApiErrorMessage(payload.error, lang, N.loadMoreFailed));
       }
       setLocalEntries((current) => {
         const knownIds = new Set(current.map((entry) => entry.id));
@@ -1505,661 +1876,634 @@ export default function DreamGrid({
       });
       setNextCursor(payload.nextCursor ?? null);
     } catch (error) {
-      setLoadMoreError(error instanceof Error ? error.message : "Could not load more dreams");
+      setLoadMoreError(error instanceof Error ? error.message : N.loadMoreFailed);
     } finally {
       setLoadingMore(false);
     }
   }
 
+  // back to whatever opened the editor; if it is gone or still disabled, the open night, then the tab
+  const restoreFocus = useCallback(() => {
+    // Safari leaves activeElement on <body> after a mouse click, so body never counts as the opener
+    const usable = (el: HTMLElement | null | undefined): el is HTMLElement =>
+      Boolean(el && el !== document.body && el.isConnected && !(el as HTMLButtonElement).disabled);
+    const candidates = [
+      openerRef.current,
+      document.querySelector<HTMLElement>(".nb-stage [aria-current='true']"),
+      document.querySelector<HTMLElement>(".nb-stage [role='tab'][aria-selected='true']"),
+    ];
+    candidates.find(usable)?.focus();
+  }, []);
+
+  // ── turning between the bookmarks: the right-hand page lifts and turns on desktop ──
+  function turnTo(tab: ArchiveTab) {
+    if (tab === activeTab || turning.current) return;
+    const book = bookRef.current;
+    if (!book || matchMedia(PHONE).matches) { tap(); onTabChange(tab); return; }
+    unlock();
+    turning.current = true; // one sheet in the air at a time
+    flipPage(book, { dur: 720, onStart: () => onTabChange(tab), onEnd: () => { turning.current = false; } });
+  }
+
+  function onTabKeyDown(event: React.KeyboardEvent<HTMLButtonElement>, tab: ArchiveTab) {
+    const order: ArchiveTab[] = ["calendar", "tags", "recent"];
+    const at = order.indexOf(tab);
+    const target = event.key === "ArrowDown" || event.key === "ArrowRight" ? order[(at + 1) % order.length]
+      : event.key === "ArrowUp" || event.key === "ArrowLeft" ? order[(at + order.length - 1) % order.length]
+      : event.key === "Home" ? order[0]
+      : event.key === "End" ? order[order.length - 1]
+      : null;
+    if (!target) return;
+    event.preventDefault();
+    if (turning.current || target === tab) return;
+    document.getElementById(tabId(target))?.focus();
+    turnTo(target);
+  }
+
+  function selectDay(cell: CalendarCell) {
+    const lead = cell.entries[0];
+    if (!lead) return;
+    // a second tap on the open night turns to its page
+    if (cell.key === dayKey) { void openEntry(shownEntry ?? lead); return; }
+    tap();
+    setSelectedDayKey(cell.key);
+    setSelectedDayEntryId(null);
+    if (matchMedia(PHONE).matches) {
+      requestAnimationFrame(() => document.getElementById(rightPageId)?.scrollIntoView({ behavior: "smooth", block: "start" }));
+    }
+  }
+
+  const tabLabel = (tab: ArchiveTab) => tab === "calendar" ? G.tabCalendar : tab === "tags" ? G.tabTags : G.tabRecent;
+  const timesLabel = (count: number) => fill(N.timesAria, { count });
+  const oldestMonth = monthKeys[monthKeys.length - 1];
+
+  // ── small shared pieces ──
+  const exportLinks = (withJson: boolean) => (
+    <>
+      <button type="button" className={s.quiet} onClick={() => exporter.run("markdown")} disabled={exporter.busy}>
+        {exporter.busy ? A.export.exporting : `↓ ${A.export.markdown}`}
+      </button>
+      {withJson ? (
+        <button type="button" className={s.quiet} onClick={() => exporter.run("json")} disabled={exporter.busy}>
+          {A.export.json}
+        </button>
+      ) : null}
+    </>
+  );
+  const exportError = exporter.error ? <p className={s.err} role="alert">{exporter.error}</p> : null;
+  const loadMore = nextCursor || loadMoreError ? (
+    <div className={s.loadMore}>
+      {nextCursor ? (
+        <button type="button" onClick={() => void loadMoreEntries()} disabled={loadingMore} className={s.quiet}>
+          {loadingMore ? N.loadingMore : `↓ ${N.loadMore}`}
+        </button>
+      ) : null}
+      {loadMoreError ? <p className={s.err} role="alert">{loadMoreError}</p> : null}
+    </div>
+  ) : null;
+  const dataNotice = dataError ? (
+    <div className={s.notice} role="alert">
+      <p className={s.noticeTitle}>{A.dbErrorTitle}</p>
+      <p>{dataError}</p>
+      <p className={s.noticeHint}>{A.dbErrorHint}</p>
+    </div>
+  ) : null;
+
+  const tabs = (
+    <div className={s.bookmarks} role="tablist" aria-label={N.tabsLabel} aria-orientation="vertical">
+      {(["calendar", "tags", "recent"] as const).map((tab) => (
+        <button
+          key={tab}
+          id={tabId(tab)}
+          type="button"
+          role="tab"
+          aria-selected={activeTab === tab}
+          aria-controls={`${leftPageId} ${rightPageId}`}
+          tabIndex={activeTab === tab ? 0 : -1}
+          onClick={() => turnTo(tab)}
+          onKeyDown={(event) => onTabKeyDown(event, tab)}
+          className={activeTab === tab ? s.bookmarkOn : s.bookmark}
+        >
+          {tabLabel(tab)}
+        </button>
+      ))}
+    </div>
+  );
+
+  const pageProps = (side: "l" | "r") => ({
+    id: side === "l" ? leftPageId : rightPageId,
+    role: "tabpanel",
+    "aria-labelledby": tabId(activeTab),
+  });
+
+  // ── empty archive ──
   if (localEntries.length === 0) {
     return (
-      <div className="mist-card flex flex-col items-center justify-center rounded-[2rem] py-32 text-center">
-        <p className="text-5xl opacity-35">☾</p>
-        <p className="mist-soft mt-4 text-sm">{G.empty}</p>
+      <main className={`nb-stage ${s.ar}`} id="main">
+        <Book ref={bookRef} tilt={false}>
+          <BookPage side="l" folio="p. 1" padClassName={s.pad}>
+            <span className="nb-kicker">{N.emptyKicker}</span>
+            <h1 className={s.bigTitle}>{N.emptyTitle}</h1>
+            <p className={`nb-hand ${s.emptyBody}`}>{N.emptyBody}</p>
+            {dataNotice}
+          </BookPage>
+          <BookPage side="r" folio="p. 2" padClassName={s.pad}>
+            <p className={s.emptyNote}>{G.empty}</p>
+            <div className={s.pageFoot}>
+              <TurnLink href="/journal" className="nb-act">{N.newDream} <span aria-hidden>→</span></TurnLink>
+              <div className={s.quietRow}>
+                <TurnLink href="/morning-pages" className={s.quiet}>{T.nav.morningPages}</TurnLink>
+              </div>
+            </div>
+          </BookPage>
+        </Book>
+      </main>
+    );
+  }
+
+  // ── people / places row ──
+  function keywordRow(item: KeywordArchiveItem, items: KeywordArchiveItem[]) {
+    const menuKey = `${item.kind}-${item.label}`;
+    const isEditing = editingTag?.kind === item.kind && normalizeKeyword(editingTag.label) === normalizeKeyword(item.label);
+    const isActive = activeKeyword?.kind === item.kind && normalizeKeyword(activeKeyword.label) === normalizeKeyword(item.label);
+    const isMerging = mergingTag?.kind === item.kind && normalizeKeyword(mergingTag.label) === normalizeKeyword(item.label);
+    const personKey = normalizeKeyword(item.label);
+    const rel = item.kind === "people" ? personRelationships[personKey] : undefined;
+    const gender = item.kind === "people" ? personGenders[personKey] : undefined;
+    const genderOpts = [{ v: "male", label: N.genderMale }, { v: "female", label: N.genderFemale }, { v: "other", label: N.genderOther }];
+    const genderText = genderOpts.find((o) => o.v === gender)?.label;
+    const isEditingRel = item.kind === "people" && editingRelKey === personKey;
+
+    return (
+      <li key={menuKey} className={isActive ? s.rowOn : s.row}>
+        {isEditing ? (
+          <div className={s.inlineEdit}>
+            <input
+              value={editingTag.draft}
+              aria-label={N.renameLabel}
+              onChange={(e) => setEditingTag({ ...editingTag, draft: e.target.value })}
+              autoFocus
+              onKeyDown={(e) => {
+                if (e.key === "Enter") void handleRenameTag(item.kind, item.label, editingTag.draft);
+                if (e.key === "Escape") setEditingTag(null);
+              }}
+            />
+            <button type="button" className={s.redAct} onClick={() => void handleRenameTag(item.kind, item.label, editingTag.draft)} disabled={tagBusy}>
+              {tagBusy ? N.saving : N.save}
+            </button>
+            <button type="button" className={s.quiet} onClick={() => setEditingTag(null)}>{N.cancel}</button>
+          </div>
+        ) : (
+          <div className={s.rowMain}>
+            <button type="button" className={s.rowName} aria-pressed={isActive} onClick={() => setActiveKeyword(isActive ? null : item)}>
+              {item.label}
+              {rel || genderText ? <small>{[rel, genderText].filter(Boolean).join(" · ")}</small> : null}
+            </button>
+            <Tally count={item.count} lang={lang} label={timesLabel(item.count)} />
+            <div className={s.menuWrap} data-tag-menu>
+              <button
+                type="button"
+                className={s.menuBtn}
+                aria-label={fill(N.manage, { label: item.label })}
+                aria-expanded={tagActionMenu === menuKey}
+                onClick={() => setTagActionMenu((current) => current === menuKey ? null : menuKey)}
+                disabled={tagBusy}
+              >
+                <span aria-hidden>⋯</span>
+              </button>
+              {tagActionMenu === menuKey ? (
+                <div className={s.menu}>
+                  <button type="button" onClick={() => { setEditingTag({ kind: item.kind, label: item.label, draft: item.label }); setMergingTag(null); setTagActionMenu(null); }} disabled={tagBusy}>
+                    {N.rename}
+                  </button>
+                  <button type="button" onClick={() => { setMergingTag(isMerging ? null : { kind: item.kind, label: item.label }); setEditingTag(null); setTagActionMenu(null); }} disabled={tagBusy || items.length < 2}>
+                    {N.mergeInto}
+                  </button>
+                  {item.kind === "people" ? (
+                    <button type="button" onClick={() => { setRelDraft(rel ?? ""); setEditingRelKey(personKey); setTagActionMenu(null); }}>
+                      {N.relation}
+                    </button>
+                  ) : null}
+                  <button type="button" className={s.menuDanger} onClick={() => { setTagActionMenu(null); void handleDeleteTag(item); }} disabled={tagBusy}>
+                    {N.deleteTag}
+                  </button>
+                </div>
+              ) : null}
+            </div>
+          </div>
+        )}
+
+        {isMerging && !isEditing ? (
+          <div className={s.subPanel}>
+            <span className={s.subLabel}>{N.mergeLabel}</span>
+            <div className={s.wordList}>
+              {items
+                .filter((other) => normalizeKeyword(other.label) !== normalizeKeyword(item.label))
+                .map((other) => (
+                  <button key={other.label} type="button" onClick={() => void handleMergeTag(item.kind, item.label, other.label)} disabled={tagBusy}>
+                    {other.label}
+                  </button>
+                ))}
+            </div>
+            <button type="button" className={s.quiet} onClick={() => setMergingTag(null)}>{N.cancel}</button>
+          </div>
+        ) : null}
+
+        {isEditingRel && !isEditing ? (
+          <div className={s.subPanel}>
+            <span className={s.subLabel}>{N.relationLabel}</span>
+            <div className={s.wordList} role="group" aria-label={N.relationLabel}>
+              {N.relationOptions.map((opt) => (
+                <button key={opt} type="button" aria-pressed={relDraft === opt} onClick={() => setRelDraft(relDraft === opt ? "" : opt)}>{opt}</button>
+              ))}
+            </div>
+            <div className={s.inlineEdit}>
+              <input
+                value={relDraft}
+                aria-label={N.relationPlaceholder}
+                onChange={(e) => setRelDraft(e.target.value)}
+                placeholder={N.relationPlaceholder}
+                autoFocus
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") savePersonRelationship(personKey, relDraft);
+                  if (e.key === "Escape") setEditingRelKey(null);
+                }}
+              />
+            </div>
+            <span className={s.subLabel}>{N.genderLabel}</span>
+            <div className={s.wordList}>
+              {genderOpts.map(({ v, label }) => (
+                <button key={v} type="button" aria-pressed={gender === v} onClick={() => savePersonGender(personKey, gender === v ? "" : v)}>{label}</button>
+              ))}
+            </div>
+            <div className={s.inlineActions}>
+              <button type="button" className={s.redAct} onClick={() => savePersonRelationship(personKey, relDraft)}>{N.done}</button>
+              <button type="button" className={s.quiet} onClick={() => setEditingRelKey(null)}>{N.cancel}</button>
+            </div>
+          </div>
+        ) : null}
+      </li>
+    );
+  }
+
+  function addPanel(kind: KeywordArchiveKind) {
+    if (addingTag?.kind !== kind) return null;
+    return (
+      <div className={s.addPanel}>
+        <div className={s.inlineEdit}>
+          <input
+            value={addingTag.draft}
+            aria-label={N.newTagLabel}
+            onChange={(e) => setAddingTag({ ...addingTag, draft: e.target.value })}
+            placeholder={N.newTagPlaceholder}
+            autoFocus
+            onKeyDown={(e) => e.key === "Escape" && setAddingTag(null)}
+          />
+        </div>
+        {addingTag.draft.trim() && (
+          <>
+            <span className={s.subLabel}>{N.selectDreams}</span>
+            <ul className={s.pickList}>
+              {recentEntries.map((entry) => {
+                const on = addingTag.selectedIds.has(entry.id);
+                return (
+                  <li key={entry.id}>
+                    <button
+                      type="button"
+                      aria-pressed={on}
+                      onClick={() => {
+                        const next = new Set(addingTag.selectedIds);
+                        if (on) next.delete(entry.id); else next.add(entry.id);
+                        setAddingTag({ ...addingTag, selectedIds: next });
+                      }}
+                    >
+                      <i aria-hidden>{on ? "✓" : ""}</i>
+                      <DateMark value={entry.capturedAt} thisYear={thisYear} className={s.pickDate} />
+                      {dreamDisplayTitle(entry)}
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+            <div className={s.inlineActions}>
+              <button type="button" className={s.redAct} onClick={() => void handleAddTag()} disabled={tagBusy || addingTag.selectedIds.size === 0}>
+                {tagBusy ? N.saving : fill(N.addTo, { count: addingTag.selectedIds.size })}
+              </button>
+              <button type="button" className={s.quiet} onClick={() => setAddingTag(null)}>{N.cancel}</button>
+            </div>
+          </>
+        )}
       </div>
     );
   }
 
+  function keywordSection(kind: KeywordArchiveKind, kicker: string, empty: string, title?: string) {
+    const items = keywordArchives[kind];
+    return (
+      <section className={s.kwSection} aria-busy={tagBusy}>
+        <div className={s.secHead}>
+          <h2 className="nb-kicker">{kicker}</h2>
+          <button
+            type="button"
+            className={s.quietRed}
+            onClick={() => setAddingTag(addingTag?.kind === kind ? null : { kind, draft: "", selectedIds: new Set() })}
+            disabled={tagBusy}
+            aria-expanded={addingTag?.kind === kind}
+          >
+            {addingTag?.kind === kind ? N.closeAdd : N.add}
+          </button>
+        </div>
+        {title ? <p className={s.bigTitle} aria-hidden>{title}</p> : null}
+        {addPanel(kind)}
+        {items.length > 0
+          ? <ul className={s.tallyList}>{items.map((item) => keywordRow(item, items))}</ul>
+          : <p className={s.emptyNote}>{empty}</p>}
+      </section>
+    );
+  }
+
+  function entryList(list: DreamEntry[]) {
+    return (
+      <ul className={s.entryList}>
+        {list.map((entry) => (
+          <li key={entry.id}>
+            <button type="button" onClick={() => void openEntry(entry)} disabled={openingEntryId === entry.id}>
+              <DateMark value={entry.capturedAt} thisYear={thisYear} className={s.entryDate} />
+              <span className={s.entryBody}>
+                <span className={s.entryTitle}>{dreamDisplayTitle(entry)}</span>
+                <span className={s.entryExcerpt}>{dreamText(entry) || N.noText}</span>
+              </span>
+            </button>
+          </li>
+        ))}
+      </ul>
+    );
+  }
+
+  const folios = activeTab === "calendar" ? ["p. 246", "p. 247"] : activeTab === "tags" ? ["p. 248", "p. 249"] : ["p. 250", "p. 251"];
+  const [yearText, monthText] = visibleMonth.split("-");
+  const monthDisplay = lang === "en"
+    ? <>{new Date(Date.UTC(Number(yearText), Number(monthText) - 1, 1)).toLocaleDateString("en-US", { month: "long", timeZone: "UTC" })} {yearText}</>
+    : <>{yearText}<small>{N.yearMark}</small>{Number(monthText)}<small>{N.monthMark}</small></>;
+  const shownImage = shownEntry ? shownEntry.thumbnailUrl || shownEntry.imageUrl : null;
+
   return (
     <>
-      <div className="space-y-6">
-        {activeTab === "calendar" && (
-        <div className="archive-calendar-view">
-          <div className="flex flex-col gap-5 border-b border-[rgba(176,168,197,0.22)] pb-5 sm:flex-row sm:items-end sm:justify-between">
-            <div>
-              <p className="text-[10px] font-semibold uppercase tracking-[0.3em] text-[#9a8dbe]">{G.eyebrow}</p>
-              <h2 className="mt-2 text-xl font-semibold text-[#5f5673]">{G.title}</h2>
-              <p className="mist-muted mt-2 max-w-2xl text-sm leading-7">{G.desc}</p>
-            </div>
+      <main className={`nb-stage ${s.ar}`} id="main">
+        <Book ref={bookRef} tilt={false}>
+          {tabs}
 
-            <div className="archive-stat-list grid grid-cols-3 gap-4 text-xs sm:min-w-[280px]">
-              <div className="archive-stat px-1 py-1">
-                <p className="mist-soft">{G.total}</p>
-                <p className="mt-1 text-2xl font-semibold text-[#5f5673]">{localEntries.length}</p>
-              </div>
-              <div className="archive-stat px-1 py-1">
-                <p className="mist-soft">{G.dreamDays}</p>
-                <p className="mt-1 text-2xl font-semibold text-[#5f5673]">{totalDays}</p>
-              </div>
-              <div className="archive-stat px-1 py-1">
-                <p className="mist-soft">{G.months}</p>
-                <p className="mt-1 text-2xl font-semibold text-[#5f5673]">{monthKeys.length}</p>
-              </div>
-            </div>
-          </div>
+          {/* ═════════ left-hand page ═════════ */}
+          <BookPage side="l" folio={folios[0]} padClassName={s.pad} {...pageProps("l")}>
+            <h1 className={s.srOnly}>{A.title}</h1>
+            {dataNotice}
 
-          <div className="archive-month-controls mt-5 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => changeMonth(-1)}
-                className="mist-button-secondary rounded-full px-3 py-2 text-sm text-[#706786] transition disabled:cursor-not-allowed disabled:opacity-35"
-              >
-                {G.prev}
-              </button>
-              <label className="archive-month-filter">
-                <span className="sr-only">{G.monthFilter}</span>
-                <select
-                  value={visibleMonth}
-                  onChange={(event) => setActiveMonth(event.target.value)}
-                  aria-label={G.monthFilter}
-                >
-                  {selectableMonths.map((monthKey) => (
-                    <option key={monthKey} value={monthKey}>
-                      {formatMonthLabel(monthKey, lang)}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <button
-                type="button"
-                onClick={() => changeMonth(1)}
-                className="mist-button-secondary rounded-full px-3 py-2 text-sm text-[#706786] transition disabled:cursor-not-allowed disabled:opacity-35"
-              >
-                {G.next}
-              </button>
-            </div>
-          </div>
-
-          <div className="archive-calendar-grid mt-6 overflow-hidden rounded-[0.75rem] border border-[rgba(176,168,197,0.22)] bg-white">
-            <div className="grid grid-cols-7 border-b border-[rgba(176,168,197,0.2)]">
-              {G.weekLabels.map((label) => (
-                <div key={label} className="px-3 py-3 text-center text-[11px] font-semibold tracking-[0.18em] text-[#9b90ba]">
-                  {label}
-                </div>
-              ))}
-            </div>
-
-            <div className="grid grid-cols-7">
-              {calendarCells.map((cell) => {
-                if (!cell.date) {
-                  return (
-                    <div
-                      key={cell.key}
-                      className="min-h-14 border-b border-r border-[rgba(176,168,197,0.14)] bg-[#fcfaf8] sm:min-h-[110px]"
-                    />
-                  );
-                }
-
-                const lead = cell.entries[0] ?? null;
-                const extraCount = Math.max(0, cell.entries.length - 2);
-                const dayLabel = cell.date ? formatDateTime(cell.date.toISOString(), lang) : "";
-
-                return (
-                  <button
-                    key={cell.key}
-                    type="button"
-                    disabled={lead ? openingEntryId === lead.id : false}
-                    onClick={() => {
-                      if (!lead) return;
-                      if (cell.entries.length > 1) {
-                        setSelectedDay({ label: dayLabel, entries: cell.entries });
-                      } else {
-                        void openEntry(lead);
-                      }
-                    }}
-                    className={`archive-calendar-cell group min-h-14 border-b border-r border-[rgba(176,168,197,0.14)] p-1.5 text-left transition sm:min-h-[110px] sm:p-2 ${
-                      cell.entries.length > 0
-                        ? "bg-[linear-gradient(180deg,rgba(255,255,255,0.34),rgba(245,241,251,0.55))] hover:bg-white/65"
-                        : "bg-transparent hover:bg-white/30"
-                    }`}
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <div
-                        className={`flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-semibold sm:h-7 sm:w-7 sm:text-xs ${
-                          cell.isToday ? "bg-[rgba(205,196,229,0.9)] text-[#5f5673]" : "bg-white/52 text-[#7f7694]"
-                        }`}
-                      >
-                        {cell.date.getDate()}
-                      </div>
-                      {cell.entries.length > 0 ? (
-                        <span className="archive-calendar-count rounded-full border border-[rgba(176,168,197,0.18)] bg-white/45 px-1.5 py-0.5 text-[10px] text-[#847b98] sm:px-2 sm:py-1">
-                          {cell.entries.length}{G.countSuffix}
-                        </span>
-                      ) : null}
-                    </div>
-
-                    {lead ? (
-                      <div className={`archive-calendar-entry mt-2 hidden rounded-md p-2 sm:block ${moodAccent(lead.mood)}`}>
-                        <p className="text-[10px] font-medium">{lead.mood || G.noMood}</p>
-                        <p className="mt-0.5 line-clamp-1 text-xs font-semibold opacity-90">
-                          {dreamDisplayTitle(lead)}
-                        </p>
-
-                        <div className="mt-2 flex flex-wrap gap-1.5">
-                          {lead.symbols.slice(0, 2).map((item) => (
-                            <span key={item} className="rounded-full bg-white/45 px-2 py-0.5 text-[10px] opacity-80">
-                              {item}
-                            </span>
-                          ))}
-                          {extraCount > 0 ? (
-                            <span className="rounded-full bg-white/45 px-2 py-0.5 text-[10px] opacity-80">
-                              +{extraCount}{G.moreSuffix}
-                            </span>
-                          ) : null}
-                        </div>
-                      </div>
-                    ) : null}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-        )}
-
-        {activeTab === "tags" && (
-        <div className="archive-keyword-index">
-          <div className="flex flex-col gap-3 border-b border-[rgba(176,168,197,0.2)] pb-5 sm:flex-row sm:items-end sm:justify-between">
-            <div>
-              <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-[#9a8dbe]">
-                {keywordLabels.eyebrow}
-              </p>
-              <h2 className="mt-2 text-xl font-semibold text-[#5f5673]">{keywordLabels.title}</h2>
-              <p className="mist-muted mt-2 max-w-2xl text-sm leading-7">{keywordLabels.desc}</p>
-            </div>
-          </div>
-          {tagError ? <p className="mt-4 text-sm font-medium text-[#bb7f94]" role="alert">{tagError}</p> : null}
-
-          <div className="mt-5 grid gap-4 lg:grid-cols-2">
-            {([
-              { title: keywordLabels.people, items: keywordArchives.people, empty: keywordLabels.emptyPeople, kind: "people" as KeywordArchiveKind },
-              { title: keywordLabels.locations, items: keywordArchives.locations, empty: keywordLabels.emptyLocations, kind: "locations" as KeywordArchiveKind },
-            ]).map((archive) => (
-              <section key={archive.title} className="archive-keyword-section rounded-lg border border-[rgba(176,168,197,0.2)] bg-white p-4">
-                {/* Section header */}
-                <div className="flex items-center justify-between gap-3">
-                  <h3 className="text-sm font-semibold text-[#665d7d]">{archive.title}</h3>
-                  <div className="flex items-center gap-2">
-                    <span className="mist-soft text-xs">{archive.items.length}</span>
-                    <button
-                      type="button"
-                      onClick={() => setAddingTag(addingTag?.kind === archive.kind ? null : { kind: archive.kind, draft: "", selectedIds: new Set() })}
-                      disabled={tagBusy}
-                      className="mist-button-secondary rounded-full px-2.5 py-1 text-xs transition hover:bg-white/55"
-                    >
-                      {addingTag?.kind === archive.kind ? "✕" : (lang === "zh" ? "+ 添加" : "+ Add")}
-                    </button>
+            {activeTab === "calendar" && (
+              <>
+                <div className={s.monthHead}>
+                  <label className={s.monthPick}>
+                    <span className={s.monthTitle} aria-hidden>{monthDisplay}</span>
+                    <select value={visibleMonth} onChange={(event) => { tap(); setActiveMonth(event.target.value); }} aria-label={G.monthFilter}>
+                      {selectableMonths.map((monthKey) => (
+                        <option key={monthKey} value={monthKey}>{formatMonthLabel(monthKey, lang)}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <div className={s.monthArrows}>
+                    <button type="button" onClick={() => changeMonth(-1)} aria-label={G.prev}>←</button>
+                    <button type="button" onClick={() => changeMonth(1)} aria-label={G.next}>→</button>
                   </div>
                 </div>
+                <p className={s.monthStats}>
+                  <span>{fill(N.monthStats, { count: monthEntryCount, days: monthCells.length })}</span>
+                  <span title={`${G.total} · ${G.dreamDays} · ${G.months}`}>{fill(N.totals, { total: localEntries.length, days: totalDays, months: monthKeys.length })}</span>
+                  {monthSymbol ? <span className={s.legend}><i aria-hidden />{fill(N.legend, { symbol: monthSymbol })}</span> : null}
+                </p>
+                {nextCursor && visibleMonth <= oldestMonth ? loadMore : null}
 
-                {/* Add panel */}
-                {addingTag?.kind === archive.kind && (
-                  <div className="mt-3 rounded-[1.25rem] border border-[rgba(143,130,188,0.28)] bg-white/50 p-3">
-                    <input
-                      value={addingTag.draft}
-                      onChange={(e) => setAddingTag({ ...addingTag, draft: e.target.value })}
-                      placeholder={lang === "zh" ? "新标签名称…" : "New tag name…"}
-                      autoFocus
-                      className="mist-input w-full rounded-[0.9rem] px-3 py-2 text-sm"
-                      onKeyDown={(e) => e.key === "Escape" && setAddingTag(null)}
-                    />
-                    {addingTag.draft.trim() && (
-                      <>
-                        <p className="mt-2 text-[11px] text-[#9a8dbe]">
-                          {lang === "zh" ? "选择要添加标签的梦境：" : "Select dreams to tag:"}
-                        </p>
-                        <div className="mt-1.5 flex max-h-36 flex-wrap gap-1.5 overflow-y-auto">
-                          {localEntries.map((entry) => {
-                            const selected = addingTag.selectedIds.has(entry.id);
-                            return (
-                              <button
-                                key={entry.id}
-                                type="button"
-                                onClick={() => {
-                                  const next = new Set(addingTag.selectedIds);
-                                  if (selected) next.delete(entry.id); else next.add(entry.id);
-                                  setAddingTag({ ...addingTag, selectedIds: next });
-                                }}
-                                className={`rounded-full px-2.5 py-1 text-[11px] transition ${
-                                  selected
-                                    ? "bg-[rgba(143,130,188,0.52)] text-[#3d3555] font-medium"
-                                    : "bg-white/55 text-[#7d7298] hover:bg-white/75"
-                                }`}
-                              >
-                                {dreamDisplayTitle(entry)}
-                              </button>
-                            );
-                          })}
-                        </div>
-                        <div className="mt-2.5 flex gap-2">
-                          <button
-                            type="button"
-                            onClick={() => void handleAddTag()}
-                            disabled={tagBusy || addingTag.selectedIds.size === 0}
-                            className="mist-button rounded-full px-3 py-1.5 text-xs font-medium disabled:opacity-40"
-                          >
-                            {tagBusy
-                              ? (lang === "zh" ? "保存中…" : "Saving…")
-                              : lang === "zh"
-                                ? `添加到 ${addingTag.selectedIds.size} 个梦境`
-                                : `Add to ${addingTag.selectedIds.size} dreams`}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setAddingTag(null)}
-                            className="mist-button-secondary rounded-full px-3 py-1.5 text-xs transition hover:bg-white/48"
-                          >
-                            {lang === "zh" ? "取消" : "Cancel"}
-                          </button>
-                        </div>
-                      </>
-                    )}
-                  </div>
-                )}
-
-                {/* Keyword cards */}
-                {archive.items.length > 0 ? (
-                  <div className="mt-4 grid gap-2 max-h-[32rem] overflow-y-auto pr-1" style={{ scrollbarWidth: "thin" }}>
-                    {archive.items.map((item) => {
-                      const isEditing = editingTag?.kind === item.kind && normalizeKeyword(editingTag.label) === normalizeKeyword(item.label);
-                      const isActive = activeKeyword?.kind === item.kind && normalizeKeyword(activeKeyword.label) === normalizeKeyword(item.label);
+                <div className={s.weekdays} aria-hidden>
+                  {G.weekLabels.map((label) => <span key={label}>{label}</span>)}
+                </div>
+                <div key={visibleMonth} className={s.calGrid}>
+                  {calendarCells.map((cell) => {
+                    if (!cell.date) return <div key={cell.key} className={s.cellBlank} />;
+                    const lead = cell.entries[0] ?? null;
+                    const day = cell.date.getUTCDate();
+                    if (!lead) {
                       return (
-                        <div
-                          key={`${item.kind}-${item.label}`}
-                          className={`archive-keyword-card group rounded-lg border p-3 transition ${
-                            isActive
-                              ? "border-[rgba(143,130,188,0.42)] bg-white/62"
-                              : "border-[rgba(176,168,197,0.16)] bg-white/34 hover:bg-white/54"
-                          }`}
-                        >
-                          {isEditing ? (
-                            <div className="flex items-center gap-2">
-                              <input
-                                value={editingTag.draft}
-                                onChange={(e) => setEditingTag({ ...editingTag, draft: e.target.value })}
-                                autoFocus
-                                className="mist-input min-w-0 flex-1 rounded-full px-3 py-1.5 text-sm"
-                                onKeyDown={(e) => {
-                                  if (e.key === "Enter") void handleRenameTag(item.kind, item.label, editingTag.draft);
-                                  if (e.key === "Escape") setEditingTag(null);
-                                }}
-                              />
-                              <button
-                                type="button"
-                                onClick={() => void handleRenameTag(item.kind, item.label, editingTag.draft)}
-                                disabled={tagBusy}
-                                className="mist-button shrink-0 rounded-full px-3 py-1.5 text-xs font-medium disabled:opacity-40"
-                              >
-                                {tagBusy ? "…" : (lang === "zh" ? "保存" : "Save")}
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => setEditingTag(null)}
-                                className="mist-button-secondary shrink-0 rounded-full px-3 py-1.5 text-xs transition hover:bg-white/48"
-                              >
-                                {lang === "zh" ? "取消" : "Cancel"}
-                              </button>
-                            </div>
-                          ) : (
-                            <div className="flex items-start justify-between gap-3">
-                              <button
-                                type="button"
-                                onClick={() => setActiveKeyword(isActive ? null : item)}
-                                className="min-w-0 flex-1 text-left"
-                              >
-                                <p className="text-sm font-semibold text-[#625976]">{item.label}</p>
-                                <p className="mist-soft mt-1 text-xs">
-                                  {keywordLabels.appears} {item.count} {keywordLabels.dreams}
-                                </p>
-                              </button>
-                              <div className="relative flex shrink-0 items-center gap-1">
-                                <span className="rounded-full bg-[rgba(205,196,229,0.68)] px-2.5 py-1 text-xs font-semibold text-[#655b7e]">
-                                  {item.count}
-                                </span>
-                                <button
-                                  type="button"
-                                  aria-label={lang === "zh" ? `管理标签 ${item.label}` : `Manage ${item.label}`}
-                                  aria-expanded={tagActionMenu === `${item.kind}-${item.label}`}
-                                  onClick={() => setTagActionMenu((current) => current === `${item.kind}-${item.label}` ? null : `${item.kind}-${item.label}`)}
-                                  disabled={tagBusy}
-                                  className="archive-tag-menu-trigger flex h-9 w-9 items-center justify-center rounded-md text-lg text-[#6b627f] transition disabled:cursor-not-allowed"
-                                >
-                                  <span aria-hidden>⋯</span>
-                                </button>
-                                {tagActionMenu === `${item.kind}-${item.label}` ? (
-                                  <div className="archive-tag-action-menu absolute right-0 top-10 z-10 w-28 rounded-md border bg-white p-1 shadow-sm">
-                                    <button type="button" onClick={() => { setEditingTag({ kind: item.kind, label: item.label, draft: item.label }); setMergingTag(null); setTagActionMenu(null); }} disabled={tagBusy}>
-                                      {lang === "zh" ? "重命名" : "Rename"}
-                                    </button>
-                                    <button type="button" onClick={() => { setMergingTag(mergingTag && normalizeKeyword(mergingTag.label) === normalizeKeyword(item.label) ? null : { kind: item.kind, label: item.label }); setEditingTag(null); setTagActionMenu(null); }} disabled={tagBusy || archive.items.length < 2}>
-                                      {lang === "zh" ? "合并到…" : "Merge into…"}
-                                    </button>
-                                    <button type="button" onClick={() => { setTagActionMenu(null); void handleDeleteTag(item); }} disabled={tagBusy} className="archive-tag-action-danger">
-                                      {lang === "zh" ? "删除" : "Delete"}
-                                    </button>
-                                  </div>
-                                ) : null}
-                              </div>
-                            </div>
-                          )}
-
-                          {!isEditing && (
-                            <>
-                              {/* Relationship editor — people only */}
-                              {item.kind === "people" && (() => {
-                                const relKey = normalizeKeyword(item.label);
-                                const rel = personRelationships[relKey];
-                                const isEditingRel = editingRelKey === relKey;
-                                const quickOpts = lang === "zh"
-                                  ? ["朋友", "家人", "恋人", "同事", "室友", "同学", "老师"]
-                                  : ["Friend", "Family", "Partner", "Colleague", "Roommate", "Classmate", "Teacher"];
-                                return isEditingRel ? (
-                                  <div className="mt-2.5" onClick={(e) => e.stopPropagation()}>
-                                    <div className="flex flex-wrap gap-1 mb-1.5">
-                                      {quickOpts.map((opt) => (
-                                        <button
-                                          key={opt}
-                                          type="button"
-                                          onClick={() => setRelDraft(opt)}
-                                          className={`rounded-full px-2.5 py-0.5 text-[10px] transition ${relDraft === opt ? "bg-[rgba(143,130,188,0.52)] text-[#3d3555] font-semibold" : "bg-white/50 text-[#7d7298] hover:bg-white/70"}`}
-                                        >
-                                          {opt}
-                                        </button>
-                                      ))}
-                                    </div>
-                                    <div className="flex items-center gap-1.5">
-                                      <input
-                                        value={relDraft}
-                                        onChange={(e) => setRelDraft(e.target.value)}
-                                        placeholder={lang === "zh" ? "自定义关系…" : "Custom…"}
-                                        autoFocus
-                                        className="mist-input min-w-0 flex-1 rounded-full px-3 py-1 text-xs"
-                                        onKeyDown={(e) => {
-                                          if (e.key === "Enter") savePersonRelationship(relKey, relDraft);
-                                          if (e.key === "Escape") setEditingRelKey(null);
-                                        }}
-                                      />
-                                      <button type="button" onClick={() => savePersonRelationship(relKey, relDraft)} className="mist-button rounded-full px-2.5 py-1 text-[10px]">✓</button>
-                                      <button type="button" onClick={() => setEditingRelKey(null)} className="mist-button-secondary rounded-full px-2 py-1 text-[10px]">✕</button>
-                                    </div>
-                                  </div>
-                                ) : (
-                                  <button
-                                    type="button"
-                                    onClick={(e) => { e.stopPropagation(); setRelDraft(rel ?? ""); setEditingRelKey(relKey); }}
-                                    className={`mt-1.5 inline-flex rounded-full px-2.5 py-0.5 text-[10px] transition ${rel ? "bg-[rgba(143,130,188,0.2)] text-[#7a6fa5] hover:bg-[rgba(143,130,188,0.32)]" : "text-[#b0a8c0] hover:text-[#7a6fa5]"}`}
-                                  >
-                                    {rel ?? (lang === "zh" ? "+ 标注关系" : "+ Add relation")}
-                                  </button>
-                                );
-                              })()}
-
-                              {/* Person gender */}
-                              {item.kind === "people" && (() => {
-                                const gKey = normalizeKeyword(item.label);
-                                const g = personGenders[gKey];
-                                const opts = lang === "zh"
-                                  ? [{ v: "male", label: "男" }, { v: "female", label: "女" }, { v: "other", label: "其他" }]
-                                  : [{ v: "male", label: "M" }, { v: "female", label: "F" }, { v: "other", label: "Other" }];
-                                return (
-                                  <div className="mt-1 flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-                                    {opts.map(({ v, label }) => (
-                                      <button
-                                        key={v}
-                                        type="button"
-                                        onClick={() => savePersonGender(gKey, g === v ? "" : v)}
-                                        className={`rounded-full px-2 py-0.5 text-[10px] transition ${g === v ? "bg-[rgba(143,130,188,0.52)] text-[#3d3555] font-semibold" : "bg-white/40 text-[#9d90b8] hover:bg-white/60"}`}
-                                      >
-                                        {label}
-                                      </button>
-                                    ))}
-                                  </div>
-                                );
-                              })()}
-                              {/* Merge picker */}
-                              {mergingTag && normalizeKeyword(mergingTag.label) === normalizeKeyword(item.label) && (
-                                <div className="mt-2.5" onClick={(e) => e.stopPropagation()}>
-                                  <p className="mb-1.5 text-[10px] font-semibold text-[#9a8dbe]">
-                                    {lang === "zh" ? "合并到：" : "Merge into:"}
-                                  </p>
-                                  <div className="flex flex-wrap gap-1 max-h-20 overflow-y-auto">
-                                    {archive.items
-                                      .filter((other) => normalizeKeyword(other.label) !== normalizeKeyword(item.label))
-                                      .map((other) => (
-                                        <button
-                                          key={other.label}
-                                          type="button"
-                                          onClick={() => void handleMergeTag(item.kind, item.label, other.label)}
-                                          disabled={tagBusy}
-                                          className="rounded-full bg-[rgba(143,130,188,0.18)] px-2.5 py-0.5 text-[10px] text-[#7a6fa5] transition hover:bg-[rgba(143,130,188,0.38)] hover:text-[#4a3d62] disabled:opacity-40"
-                                        >
-                                          {other.label}
-                                        </button>
-                                      ))}
-                                  </div>
-                                  <button
-                                    type="button"
-                                    onClick={() => setMergingTag(null)}
-                                    className="mt-1.5 text-[10px] text-[#b0a8c0] hover:text-[#7a6fa5]"
-                                  >
-                                    {lang === "zh" ? "取消" : "Cancel"}
-                                  </button>
-                                </div>
-                              )}
-
-                              <div className="mt-2 flex flex-wrap gap-1.5">
-                                {item.moods.slice(0, 2).map((mood) => (
-                                  <span key={mood.item} className="rounded-full bg-white/85 px-2 py-0.5 text-[10px] font-medium text-[#4a3d62]">
-                                    {mood.item}
-                                  </span>
-                                ))}
-                                {item.symbols.slice(0, 2).map((symbol) => (
-                                  <span key={symbol.item} className="rounded-full bg-[#e5d8f8] px-2 py-0.5 text-[10px] font-medium text-[#3d2e5a]">
-                                    {symbol.item}
-                                  </span>
-                                ))}
-                              </div>
-                            </>
-                          )}
+                        <div key={cell.key} className={s.cell}>
+                          <span className={cell.isToday ? s.dayToday : s.day}>{day}</span>
                         </div>
                       );
-                    })}
-                  </div>
-                ) : (
-                  <div className="mt-4 rounded-[1.25rem] border border-dashed border-[rgba(176,168,197,0.2)] px-4 py-8 text-center text-sm text-[#9b92ad]">
-                    {archive.empty}
-                  </div>
-                )}
-              </section>
-            ))}
-          </div>
-
-          {activeKeyword ? (
-            <div className="mt-5 rounded-[1.6rem] border border-[rgba(176,168,197,0.2)] bg-[rgba(255,255,255,0.38)] p-4">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                <div>
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-[#9a8dbe]">
-                    {activeKeyword.kind === "people" ? keywordLabels.people : keywordLabels.locations}
-                  </p>
-                  <h3 className="mt-2 text-2xl font-semibold text-[#5f5673]">{activeKeyword.label}</h3>
-                  <p className="mist-muted mt-2 text-sm">
-                    {keywordLabels.appears} {activeKeyword.count} {keywordLabels.dreams}
-                    {activeKeyword.moods.length ? ` · ${keywordLabels.mood}: ${activeKeyword.moods.map((mood) => mood.item).join(" / ")}` : ""}
-                    {activeKeyword.symbols.length ? ` · ${keywordLabels.themes}: ${activeKeyword.symbols.map((symbol) => symbol.item).join(" / ")}` : ""}
-                  </p>
+                    }
+                    const circled = monthSymbol ? cell.entries.some((entry) => hasSymbol(entry, monthSymbol)) : false;
+                    const dayLabel = formatDateTime(cell.date.toISOString(), lang);
+                    const isSel = cell.key === dayKey;
+                    return (
+                      <button
+                        key={cell.key}
+                        type="button"
+                        className={isSel ? s.cellOn : s.cellHas}
+                        aria-current={isSel ? "true" : undefined}
+                        aria-label={`${dayLabel} · ${cell.entries.map(dreamDisplayTitle).join(N.listSep)}${cell.entries.length > 1 ? ` · ${fill(N.dayCount, { count: cell.entries.length })}` : ""}`}
+                        disabled={openingEntryId === lead.id}
+                        onClick={() => selectDay(cell)}
+                      >
+                        <span className={`${cell.isToday ? s.dayToday : s.day} ${circled ? s.circled : ""}`}>{day}</span>
+                        <span className={s.cellTitle}>{dreamDisplayTitle(lead)}</span>
+                        {cell.entries.length > 1 ? <span className={s.cellMore}>+{cell.entries.length - 1}</span> : null}
+                        <i className={s.cellDot} aria-hidden />
+                      </button>
+                    );
+                  })}
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setActiveKeyword(null)}
-                  className="mist-button-secondary w-fit rounded-full px-3 py-1.5 text-xs transition hover:bg-white/48"
-                >
-                  ✕
-                </button>
-              </div>
+              </>
+            )}
 
-              <div className="mt-4 grid gap-3">
-                <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#9a8dbe]">
-                  {keywordLabels.related}
-                </p>
-                {activeKeyword.entries.map((entry) => (
-                  <button
-                    key={entry.id}
-                    type="button"
-                    onClick={() => void openEntry(entry)}
-                    disabled={openingEntryId === entry.id}
-                    className="rounded-2xl border border-[rgba(176,168,197,0.18)] bg-white/42 p-4 text-left transition hover:bg-white/58"
-                  >
-                    <div className="mist-soft flex flex-wrap items-center gap-2 text-xs">
-                      <span>{formatDateTime(entry.capturedAt, lang)}</span>
-                      {entry.mood ? <span className="rounded-full bg-white/62 px-2 py-0.5 text-[#7d7298]">{entry.mood}</span> : null}
-                      {entry.symbols.slice(0, 3).map((symbol) => (
-                        <span key={symbol} className="rounded-full bg-[#e5d8f8] px-2 py-0.5 text-[10px] font-medium text-[#3d2e5a]">
-                          {symbol}
-                        </span>
+            {activeTab === "tags" && (
+              <>
+                {tagError ? <p className={s.err} role="alert">{tagError}</p> : null}
+                {keywordSection("people", N.peopleKicker, N.emptyPeople, N.peopleTitle)}
+                {keywordArchives.people.length > 0 ? <p className={`nb-note ${s.hint}`}>{N.peopleHint}</p> : null}
+              </>
+            )}
+
+            {activeTab === "recent" && (
+              <>
+                <h2 className="nb-kicker">{N.recentKicker}</h2>
+                <div className={s.scrollList}>
+                  {entryList(recentEntries)}
+                  {loadMore}
+                </div>
+              </>
+            )}
+          </BookPage>
+
+          {/* ═════════ right-hand page ═════════ */}
+          <BookPage side="r" folio={folios[1]} curl padClassName={`${s.pad} ${s.padScroll}`} {...pageProps("r")}>
+            {activeTab === "calendar" && (
+              shownEntry ? (
+                <>
+                  <p className="nb-kicker">{dateLabel(shownEntry.capturedAt, thisYear)} · {weekdayLabel(shownEntry.capturedAt, lang)}</p>
+                  {dayEntries.length > 1 ? (
+                    <div className={s.dayPicker} role="group" aria-label={N.dayPicker}>
+                      {dayEntries.map((entry, i) => (
+                        <button key={entry.id} type="button" aria-pressed={entry.id === shownEntry.id} onClick={() => { tap(); setSelectedDayEntryId(entry.id); }}>
+                          {i + 1} · {dreamDisplayTitle(entry)}
+                        </button>
                       ))}
                     </div>
-                    <h4 className="mt-2 text-base font-semibold text-[#5f5673]">
-                      {dreamDisplayTitle(entry)}
-                    </h4>
-                    <p className="mt-2 line-clamp-2 text-sm leading-6 text-[#6b627f]">
-                      {truncate(entry.cleanText.replace(/\s+/g, " "), 150)}
+                  ) : null}
+                  <h2 className={s.dreamTitle}>{dreamDisplayTitle(shownEntry)}</h2>
+                  <p className={`nb-hand ${s.excerpt}`}>{dreamText(shownEntry) || N.noText}</p>
+                  {shownEntry.people.length || shownEntry.locations.length || shownEntry.symbols.length ? (
+                    <p className={`nb-note ${s.clues}`}>
+                      {shownEntry.people.length ? <span>{N.cluePeople} · {shownEntry.people.join(N.listSep)}</span> : null}
+                      {shownEntry.locations.length ? <span>{N.clueLocations} · {shownEntry.locations.join(N.listSep)}</span> : null}
+                      {shownEntry.symbols[0] ? (
+                        <span>
+                          {N.clueSymbols} · {shownEntry.symbols[0]}
+                          {symbolOrdinal(shownEntry, shownEntry.symbols[0]) > 1 ? fill(N.ordinal, { count: symbolOrdinal(shownEntry, shownEntry.symbols[0]) }) : ""}
+                        </span>
+                      ) : null}
                     </p>
-                  </button>
-                ))}
-              </div>
-            </div>
-          ) : null}
-        </div>
-        )}
-
-        {activeTab === "recent" && (
-        <div className="archive-recent-view">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-[#9a8dbe]">{G.recentEyebrow}</p>
-              <p className="mist-muted mt-2 text-sm">{G.recentDesc}</p>
-            </div>
-          </div>
-
-          <div className="archive-recent-list">
-            {localEntries.map((entry) => (
-              <button
-                key={entry.id}
-                type="button"
-                onClick={() => void openEntry(entry)}
-                disabled={openingEntryId === entry.id}
-                className="archive-recent-entry"
-              >
-                <div className="archive-recent-entry-inner">
-                  <div className={`archive-recent-image ${entry.thumbnailUrl || entry.imageUrl ? moodGradient(entry.mood) : "archive-image-empty"}`}>
-                    {entry.thumbnailUrl || entry.imageUrl ? (
-                      <Image src={entry.thumbnailUrl || entry.imageUrl!} alt="dream" width={320} height={420} unoptimized className="h-full w-full object-cover" />
-                    ) : null}
+                  ) : null}
+                  {shownImage ? (
+                    <figure className={`nb-print ${s.dayPhoto}`}>
+                      <span className="nb-tape" aria-hidden />
+                      <Image src={shownImage} alt={T.modal.imageAlt} width={320} height={240} unoptimized />
+                      <figcaption className="nb-cap">{dateLabel(shownEntry.capturedAt, thisYear)}</figcaption>
+                    </figure>
+                  ) : null}
+                  {exportError}
+                  <div className={s.pageFoot}>
+                    <button type="button" className="nb-act" onClick={() => void openEntry(shownEntry)} disabled={openingEntryId === shownEntry.id}>
+                      {openingEntryId === shownEntry.id ? N.opening : N.openPage} <span aria-hidden>→</span>
+                    </button>
+                    <div className={s.quietRow}>{exportLinks(false)}</div>
                   </div>
-                  <div className="archive-recent-copy">
-                    <span className="archive-recent-mood">{entry.mood || (lang === "zh" ? "无情绪" : "No mood")}</span>
-                    <p className="archive-recent-title">{dreamDisplayTitle(entry)}</p>
-                    <p className="archive-recent-date">{formatDateTime(entry.capturedAt, lang)}</p>
+                </>
+              ) : (
+                <>
+                  <p className="nb-kicker">{formatMonthLabel(visibleMonth, lang)}</p>
+                  <p className={s.emptyNote}>{N.emptyMonth}</p>
+                  {nextCursor && visibleMonth > oldestMonth ? loadMore : null}
+                  {exportError}
+                  <div className={s.pageFoot}>
+                    <TurnLink href="/journal" className="nb-act">{N.newDream} <span aria-hidden>→</span></TurnLink>
+                    <div className={s.quietRow}>{exportLinks(false)}</div>
+                  </div>
+                </>
+              )
+            )}
+
+            {activeTab === "tags" && (
+              <>
+                {activeKeyword ? (
+                  <section className={s.kwDetail} aria-live="polite">
+                    <div className={s.secHead}>
+                      <h2 className="nb-kicker">
+                        {activeKeyword.kind === "people" ? N.peopleKicker : N.locationsKicker} · {fill(N.keywordMeta, { count: activeKeyword.count })}
+                      </h2>
+                      <button type="button" className={s.quiet} onClick={() => setActiveKeyword(null)}>{N.closeDetail} ×</button>
+                    </div>
+                    <p className={s.bigTitle}>{activeKeyword.label}</p>
+                    {activeKeyword.moods.length || activeKeyword.symbols.length ? (
+                      <p className={s.kwMeta}>
+                        {activeKeyword.moods.length ? <span>{N.moodLabel} · {activeKeyword.moods.map((m) => m.item).join(" / ")}</span> : null}
+                        {activeKeyword.symbols.length ? <span>{N.themesLabel} · {activeKeyword.symbols.map((m) => m.item).join(" / ")}</span> : null}
+                      </p>
+                    ) : null}
+                    <h3 className={s.subLabel}>{N.relatedLabel}</h3>
+                    <div className={s.scrollList}>{entryList(activeKeyword.entries)}</div>
+                  </section>
+                ) : (
+                  <>
+                    {keywordSection("locations", N.locationsKicker, N.emptyLocations)}
+                    <section className={`${s.kwSection} ${s.symbolsSection}`}>
+                      <div className={s.secHead}><h2 className="nb-kicker">{N.symbolsKicker}</h2></div>
+                      {symbolCounts.length > 0 ? (
+                        <ul className={s.tallyList}>
+                          {symbolCounts.slice(0, 6).map((item) => (
+                            <li key={item.item} className={s.row}>
+                              <div className={s.rowMain}>
+                                <span className={s.rowName}>{item.item}</span>
+                                <Tally count={item.count} lang={lang} label={timesLabel(item.count)} />
+                              </div>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : <p className={s.emptyNote}>{N.emptySymbols}</p>}
+                    </section>
+                  </>
+                )}
+                {exportError}
+                <div className={s.pageFoot}>
+                  <span className={s.footStats}>
+                    {fill(N.footStats, { count: localEntries.length, month: formatMonthLabel(oldestMonth, lang) })}
+                    {loadMore}
+                  </span>
+                  <div className={s.quietRow}>{exportLinks(false)}</div>
+                </div>
+              </>
+            )}
+
+            {activeTab === "recent" && recap && (
+              <>
+                <h2 className="nb-kicker">{recap.current ? N.recapThisWeek : N.recapLatestWeek} · {recap.range}</h2>
+                <dl className={s.recap}>
+                  <dt>{N.recapEntries}</dt>
+                  <dd>
+                    {fill(N.recapCount, { count: recap.count })}
+                    {recap.diff > 0 ? fill(N.recapMore, { count: recap.diff }) : recap.diff < 0 ? fill(N.recapFewer, { count: -recap.diff }) : N.recapSame}
+                  </dd>
+                  <dt>{N.recapMoods}</dt>
+                  <dd>{recap.moods.length ? recap.moods.map((m) => m.item).join(N.listSep) : N.recapNone}</dd>
+                  <dt>{N.recapPlaces}</dt>
+                  <dd>{recap.places.length ? recap.places.map((m) => m.item).join(N.listSep) : N.recapNone}</dd>
+                  <dt>{N.recapSymbols}</dt>
+                  <dd>
+                    {recap.symbol ? recap.symbol.item : N.recapNone}
+                    {recap.symbol && recap.symbol.count > 1 ? <span className="nb-note">{fill(N.recapSymbolNote, { count: recap.symbol.count })}</span> : null}
+                  </dd>
+                </dl>
+                {!recap.complete ? (
+                  <p className={s.recapScope}>{fill(N.recapPartial, { count: localEntries.length })}</p>
+                ) : null}
+                <div className={`${s.slip} ${s.recapSlip}`}>
+                  <span className={s.slipLabel}>{T.modal.slipLabel}</span>
+                  {recap.slip.map((line) => <p key={line}>{line}</p>)}
+                </div>
+                {exportError}
+                <div className={s.pageFoot}>
+                  <TurnLink href="/journal" className="nb-act">{N.newDream} <span aria-hidden>→</span></TurnLink>
+                  <div className={s.quietRow}>
+                    <Link href="/morning-pages" className={s.quiet}>{T.nav.morningPages}</Link>
+                    {exportLinks(true)}
                   </div>
                 </div>
-              </button>
-            ))}
-          </div>
+              </>
+            )}
+          </BookPage>
+        </Book>
+      </main>
+
+      {notice ? (
+        <div className={`${s.ar} ${s.noticeSlip}`} role="alert">
+          <p>{notice}</p>
+          <button type="button" onClick={() => setNotice("")}>{N.closeDetail} ×</button>
         </div>
-        )}
-
-        {nextCursor ? (
-          <div className="text-center">
-            <button
-              type="button"
-              onClick={() => void loadMoreEntries()}
-              disabled={loadingMore}
-              className="mist-button-secondary rounded-full px-5 py-2.5 text-sm font-medium disabled:opacity-50"
-            >
-              {loadingMore
-                ? (lang === "zh" ? "加载中…" : "Loading…")
-                : (lang === "zh" ? "加载更早的梦境" : "Load older dreams")}
-            </button>
-            {loadMoreError ? <p className="mt-2 text-xs text-[#b88a95]">{loadMoreError}</p> : null}
-          </div>
-        ) : null}
-      </div>
-
-      {selectedDay && (
-        <div
-          className="archive-day-dialog-backdrop fixed inset-0 z-50 flex items-end justify-center sm:items-center"
-          onClick={(event) => {
-            if (event.target === event.currentTarget) closeDayDialog();
-          }}
-        >
-          <div
-            ref={dayDialogRef}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby={dayDialogTitleId}
-            tabIndex={-1}
-            onKeyDown={onDayDialogKeyDown}
-            className="archive-day-dialog relative max-h-[85vh] w-full max-w-xl overflow-y-auto overscroll-y-contain rounded-t-[2rem] p-5 sm:rounded-[2rem] sm:p-6"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="mb-5 flex items-center justify-between">
-              <div>
-                <p className="archive-day-dialog-count text-xs font-semibold uppercase tracking-[0.22em]">
-                  {selectedDay.entries.length}{lang === "zh" ? " 条梦境" : " dreams"}
-                </p>
-                <h2 id={dayDialogTitleId} className="archive-day-dialog-title mt-1 text-xl font-semibold">
-                  {selectedDay.label}
-                </h2>
-              </div>
-              <button
-                ref={dayCloseButtonRef}
-                type="button"
-                onClick={closeDayDialog}
-                aria-label={lang === "zh" ? "关闭日期详情" : "Close date details"}
-                className="archive-day-dialog-close flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-medium transition"
-              >
-                ✕
-              </button>
-            </div>
-
-            <div className="space-y-3">
-              {selectedDay.entries.map((entry) => (
-                <button
-                  key={entry.id}
-                  type="button"
-                  onClick={() => { setSelectedDay(null); void openEntry(entry); }}
-                  disabled={openingEntryId === entry.id}
-                  className="archive-day-dialog-entry w-full p-4 text-left transition"
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="archive-day-dialog-mood text-xs font-medium">{entry.mood || (lang === "zh" ? "无情绪标注" : "No mood")}</span>
-                    <span className="archive-day-dialog-date text-xs">{formatDateTime(entry.capturedAt, lang)}</span>
-                  </div>
-                  <p className="archive-day-dialog-entry-title mt-2 text-sm font-semibold">{dreamDisplayTitle(entry)}</p>
-                  <p className="archive-day-dialog-entry-body mt-1.5 line-clamp-2 text-xs leading-5">
-                    {truncate(entry.cleanText.replace(/\s+/g, " "), 100)}
-                  </p>
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
+      ) : null}
 
       <DreamEditorModal
         entry={selected}
-        onClose={() => setSelected(null)}
+        ready={selected != null && readyId === selected.id && !selected.imageUrlOmitted}
+        loadError={openError}
+        onRetry={() => { if (selected) void openEntry(selected, true); }}
+        thisYear={thisYear}
+        restoreFocus={restoreFocus}
+        onNotice={setNotice}
+        onClose={() => { openSeq.current += 1; setSelected(null); setReadyId(null); setOpenError(""); setOpeningEntryId(null); }}
         onSaved={handleSaved}
         onDeleted={handleDeleted}
       />
