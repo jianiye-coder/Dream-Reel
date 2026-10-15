@@ -318,6 +318,27 @@ function useModalFocus(isOpen: boolean, onClose: () => void, initialFocusRef?: R
     };
   }, [initialFocusRef, isOpen, restoreFocus]);
 
+  // A button that disables itself while it works (analyse, generate) drops focus to <body>, where the
+  // dialog's own key handler can't hear Escape or Tab. Catch those at the document and bring focus back.
+  const onCloseRef = useRef(onClose);
+  useEffect(() => { onCloseRef.current = onClose; }, [onClose]);
+  useEffect(() => {
+    if (!isOpen) return;
+    const onDocumentKey = (event: KeyboardEvent) => {
+      const dialog = dialogRef.current;
+      if (!dialog || dialog.contains(document.activeElement)) return;
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onCloseRef.current();
+      } else if (event.key === "Tab") {
+        event.preventDefault();
+        (initialFocusRef?.current ?? dialog).focus();
+      }
+    };
+    document.addEventListener("keydown", onDocumentKey);
+    return () => document.removeEventListener("keydown", onDocumentKey);
+  }, [initialFocusRef, isOpen]);
+
   function onKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
     if (event.key === "Escape") {
       event.preventDefault();
@@ -486,6 +507,12 @@ function DreamEditorModal({
   const [localVisualBrief, setLocalVisualBrief] = useState<string | null>(null);
   const titleId = useId();
   const closeButtonRef = useRef<HTMLButtonElement>(null);
+  // the dream the editor is showing, and the analysis / image requests running for it; both are
+  // dropped when another dream opens or the editor closes
+  const entryIdRef = useRef<number | null>(null);
+  const opsRef = useRef<{ analyze: AbortController | null; image: AbortController | null }>({ analyze: null, image: null });
+  const formRef = useRef<DreamEditForm | null>(null);
+  useEffect(() => { formRef.current = form; }, [form]);
 
   const buildUpdateBody = useCallback((currentForm: DreamEditForm) => {
     if (!entry) return null;
@@ -517,7 +544,21 @@ function DreamEditorModal({
     };
   }, [entry, localVisualBrief]);
 
-  const putEntry = useCallback(async (body: NonNullable<ReturnType<typeof buildUpdateBody>>): Promise<DreamEntry> => {
+  // Saves go out one at a time, in order, so an older PUT still in flight can never land after a
+  // newer one (autosave, close, flush) and overwrite it.
+  const saveChainRef = useRef<Promise<unknown>>(Promise.resolve());
+  const savesInFlightRef = useRef(0);
+  const counted = useCallback(<T,>(task: () => Promise<T>) => async (): Promise<T> => {
+    savesInFlightRef.current += 1;
+    try { return await task(); } finally { savesInFlightRef.current -= 1; }
+  }, []);
+  const enqueueSave = useCallback(<T,>(task: () => Promise<T>): Promise<T> => {
+    const run = saveChainRef.current.then(counted(task), counted(task));
+    saveChainRef.current = run.catch(() => undefined);
+    return run;
+  }, [counted]);
+
+  const putEntry = useCallback((body: NonNullable<ReturnType<typeof buildUpdateBody>>): Promise<DreamEntry> => enqueueSave(async () => {
     const response = await fetch("/api/dreams", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
@@ -540,7 +581,7 @@ function DreamEditorModal({
     }
 
     return payload.entry;
-  }, [lang, M.updateFailed]);
+  }), [enqueueSave, lang, M.updateFailed]);
 
   const updateEntry = useCallback(async (currentForm: DreamEditForm): Promise<DreamEntry> => {
     const body = buildUpdateBody(currentForm);
@@ -561,13 +602,20 @@ function DreamEditorModal({
     if (!body) return;
     const json = JSON.stringify(body);
     // keepalive lets the request outlive the page, but browsers cap its body at 64 KB
-    void fetch("/api/dreams", {
+    const send = () => fetch("/api/dreams", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: json,
       keepalive: new Blob([json]).size < 60_000,
-    }).catch(() => {});
-  }, [cancelPendingSave]);
+    }).then(() => undefined, () => undefined);
+    if (savesInFlightRef.current === 0) {
+      // nothing ahead of it: send synchronously, which is what a page being hidden needs
+      const run = counted(send)();
+      saveChainRef.current = run;
+    } else {
+      void enqueueSave(send);
+    }
+  }, [cancelPendingSave, counted, enqueueSave]);
 
   const closeEditor = useCallback(async () => {
     if (!entry || !form || saving) return;
@@ -601,6 +649,15 @@ function DreamEditorModal({
     // the entry changed under the editor (opened, closed, or its full copy arrived): a save still
     // queued for the one before goes out now rather than being lost
     flushPendingSave();
+    const id = entry?.id ?? null;
+    if (id !== entryIdRef.current) {
+      opsRef.current.analyze?.abort();
+      opsRef.current.image?.abort();
+      opsRef.current = { analyze: null, image: null };
+      entryIdRef.current = id;
+      setIsAnalyzing(false);
+      setGeneratingImage(false);
+    }
     formDirtyRef.current = false;
     setDownloadError("");
     formRevisionRef.current = 0;
@@ -623,11 +680,17 @@ function DreamEditorModal({
     setAutoSaveStatus("idle");
   }, [entry, flushPendingSave]);
 
-  // leaving the page (Back, closing the tab) inside the 1.5 s autosave delay still saves the edit
+  // leaving the page (Back, closing the tab) inside the 1.5 s autosave delay still saves the edit;
+  // coming back from the back/forward cache, a "Saving…" left from that moment is stale
   useEffect(() => {
+    const onShow = (event: PageTransitionEvent) => {
+      if (event.persisted) setAutoSaveStatus((current) => (current === "saving" ? "idle" : current));
+    };
     addEventListener("pagehide", flushPendingSave);
+    addEventListener("pageshow", onShow);
     return () => {
       removeEventListener("pagehide", flushPendingSave);
+      removeEventListener("pageshow", onShow);
       flushPendingSave();
     };
   }, [flushPendingSave]);
@@ -742,6 +805,11 @@ function DreamEditorModal({
       return;
     }
 
+    const startedFor = entryIdRef.current;
+    const op = new AbortController();
+    opsRef.current.image?.abort();
+    opsRef.current.image = op;
+    const stillHere = () => !op.signal.aborted && entryIdRef.current === startedFor;
     setGeneratingImage(true);
     setMessage("");
     setError("");
@@ -769,25 +837,32 @@ function DreamEditorModal({
           dreamText: form?.rawText ?? null,
           genderContext: genderContext || null,
         }),
+        signal: op.signal,
       });
       const payload = (await response.json()) as { imageUrl?: string; revisedPrompt?: string | null; error?: string };
+      if (!stillHere()) return; // closed, or another dream opened: this picture isn't for it
       if (response.status === 402) { router.push("/pricing"); return; }
       if (!response.ok || !payload.imageUrl) {
         throw new Error(getApiErrorMessage(payload.error, lang, M.noImageError));
       }
 
-      if (!form) return;
-      const nextForm: DreamEditForm = { ...form, imageUrl: payload.imageUrl ?? null, assetStatus: "generated" };
+      // keep anything typed while the picture was being made
+      const latest = formRef.current;
+      if (!latest) return;
+      const nextForm: DreamEditForm = { ...latest, imageUrl: payload.imageUrl ?? null, assetStatus: "generated" };
       setForm(nextForm);
       setImagePrompt(payload.revisedPrompt ?? prompt);
       setImagePromptEdited(true);
       const updatedEntry = await updateEntry(nextForm);
       onSaved(updatedEntry);
-      setMessage(M.imageSaved);
+      if (stillHere()) setMessage(M.imageSaved);
     } catch (generateError) {
-      setError(generateError instanceof Error ? generateError.message : M.noImageError);
+      if (stillHere()) setError(generateError instanceof Error ? generateError.message : M.noImageError);
     } finally {
-      setGeneratingImage(false);
+      if (opsRef.current.image === op) {
+        opsRef.current.image = null;
+        setGeneratingImage(false);
+      }
     }
   }
 
@@ -796,6 +871,11 @@ function DreamEditorModal({
       setError(M.dreamError);
       return;
     }
+    const startedFor = entryIdRef.current;
+    const op = new AbortController();
+    opsRef.current.analyze?.abort();
+    opsRef.current.analyze = op;
+    const stillHere = () => !op.signal.aborted && entryIdRef.current === startedFor;
     setIsAnalyzing(true);
     setMessage("");
     setError("");
@@ -810,6 +890,7 @@ function DreamEditorModal({
           preSleepMeal: form.preSleepMeal || undefined,
           preSleepActivity: form.preSleepActivity || undefined,
         }),
+        signal: op.signal,
       });
       const payload = (await response.json()) as {
         title?: string;
@@ -823,6 +904,7 @@ function DreamEditorModal({
         visualBrief?: string;
         error?: string;
       };
+      if (!stillHere()) return; // closed, or another dream opened: these findings aren't for it
       if (response.status === 402) { router.push("/pricing"); return; }
       if (!response.ok) throw new Error(getApiErrorMessage(payload.error, lang, M.analyzeError));
 
@@ -850,9 +932,12 @@ function DreamEditorModal({
       }
       setMessage(M.analyzed);
     } catch (analyzeError) {
-      setError(analyzeError instanceof Error ? analyzeError.message : M.analyzeError);
+      if (stillHere()) setError(analyzeError instanceof Error ? analyzeError.message : M.analyzeError);
     } finally {
-      setIsAnalyzing(false);
+      if (opsRef.current.analyze === op) {
+        opsRef.current.analyze = null;
+        setIsAnalyzing(false);
+      }
     }
   }
 
@@ -964,7 +1049,7 @@ function DreamEditorModal({
           {loadError ? (
             <p className={s.loadFail} role="alert">
               {loadError}
-              <button type="button" onClick={onRetry}>{T.archive.nb.retry}</button>
+              <button type="button" onClick={() => { closeButtonRef.current?.focus(); onRetry(); }}>{T.archive.nb.retry}</button>
             </p>
           ) : null}
           <button
@@ -1555,6 +1640,7 @@ export default function DreamGrid({
       pageTurn({ dur: 0.7 });
     }
     setOpenError("");
+    setOpeningEntryId(null);
     const known = fullCopies.current.get(entry.id);
     if (known) {
       setSelected({ ...entry, ...known, imageUrlOmitted: undefined });
@@ -1579,7 +1665,7 @@ export default function DreamGrid({
     } catch (error) {
       if (seq === openSeq.current) setOpenError(error instanceof Error ? error.message : N.openFailed);
     } finally {
-      setOpeningEntryId((current) => (current === entry.id ? null : current));
+      if (seq === openSeq.current) setOpeningEntryId(null);
     }
   }
 
@@ -2337,7 +2423,7 @@ export default function DreamGrid({
         onRetry={() => { if (selected) void openEntry(selected, true); }}
         thisYear={thisYear}
         restoreFocus={restoreFocus}
-        onClose={() => { openSeq.current += 1; setSelected(null); setReadyId(null); setOpenError(""); }}
+        onClose={() => { openSeq.current += 1; setSelected(null); setReadyId(null); setOpenError(""); setOpeningEntryId(null); }}
         onSaved={handleSaved}
         onDeleted={handleDeleted}
       />
