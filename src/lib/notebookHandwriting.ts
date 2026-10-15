@@ -11,15 +11,18 @@ export async function handwrite(
   parts: { text: string; strike?: boolean; pause?: number }[],
   { speed = 1, cancelled = () => false }: { speed?: number; cancelled?: () => boolean } = {},
 ) {
+  // reduced motion: the page is simply already written
+  const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
   const caret = document.createElement("span");
   caret.className = "nb-caret";
   el.appendChild(caret);
   for (const part of parts) {
     if (cancelled()) return;
-    if (part.pause) await sleep(part.pause);
+    if (part.pause && !still) await sleep(part.pause);
     const node = document.createElement("span");
     if (part.strike) node.className = "nb-struck";
     el.insertBefore(node, caret);
+    if (still) { node.textContent = part.text; continue; }
     for (const ch of part.text) {
       if (cancelled()) return;
       // each character lands wet and dries into the page (.nb-wet)
@@ -27,6 +30,8 @@ export async function handwrite(
       glyph.className = "nb-wet";
       glyph.textContent = ch;
       node.appendChild(glyph);
+      // once dry, fold it back into plain text so screen readers read words, not single characters
+      glyph.addEventListener("animationend", () => { glyph.replaceWith(ch); node.normalize(); }, { once: true });
       const d = writeChar(ch);
       await sleep((Math.max(d * 1000, 40) + 40 + Math.random() * 70) / speed);
     }
