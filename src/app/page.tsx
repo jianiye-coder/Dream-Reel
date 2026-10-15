@@ -23,6 +23,8 @@ export default function LandingPage() {
   const [closed, setClosed] = useState(true);
   const [coverGone, setCoverGone] = useState(false);
   const [opening, setOpening] = useState(false);
+  const heroTitle = useRef<HTMLHeadingElement>(null);
+  const coverHadFocus = useRef(false);
   const [lit, setLit] = useState(false);
   const [dateLine, setDateLine] = useState<string[]>([]);
   const entry = useRef<HTMLParagraphElement>(null);
@@ -62,18 +64,30 @@ export default function LandingPage() {
     }
   }, [L]);
 
+  // hand the left half over from the cover to the real page; safe to call more than once
+  const landed = useCallback(() => {
+    setOpening(false);
+    setCoverGone(true);
+    // the cover is about to disappear; keep a keyboard user's place instead of dropping to <body>
+    if (coverHadFocus.current) { coverHadFocus.current = false; heroTitle.current?.focus({ preventScroll: true }); }
+  }, []);
+
   const open = useCallback(async (instant = false) => {
     if (opened.current) return;
     opened.current = true;
+    coverHadFocus.current = document.activeElement?.classList.contains("nb-cover") ?? false;
     sessionStorage.setItem("dr-cover-seen", "1");
     if (!instant) { unlock(); pageTurn({ dur: 1.6, heavy: true }); } // a cover is stiffer and heavier than a page
     setClosed(false);
     if (instant) setCoverGone(true);
     else setOpening(true); // the cover's animationend hands over to the real left page
     await sleep(instant ? 250 : 1650);
+    // fallback: if the animation was cancelled (e.g. the layout switched to phone mid-turn),
+    // animationend never fires and the left page would stay hidden
+    landed();
     setLit(true);
     void writeDemo();
-  }, [writeDemo]);
+  }, [writeDemo, landed]);
 
   useEffect(() => {
     if (sessionStorage.getItem("dr-cover-seen") || matchMedia("(max-width: 900px)").matches) void open(true);
@@ -114,7 +128,7 @@ export default function LandingPage() {
             <BookPage side="r" folio="p. 215" curl padClassName={`nb-hero-r${lit ? " nb-lit" : ""}`}>
               <span className="nb-kicker">{L.heroKicker}</span>
               <div>
-                <h1>{L.heroTitleA}<br />{L.heroTitleB}<em>{L.heroTitleEm}</em>{L.heroTitleC}</h1>
+                <h1 ref={heroTitle} tabIndex={-1}>{L.heroTitleA}<br />{L.heroTitleB}<em>{L.heroTitleEm}</em>{L.heroTitleC}</h1>
                 <p className="nb-body">{L.heroBody}</p>
               </div>
               <div className="nb-cta-row">
@@ -131,7 +145,7 @@ export default function LandingPage() {
               gone={coverGone}
               label={L.coverAria}
               onOpen={() => void open()}
-              onLanded={() => { setOpening(false); setCoverGone(true); }}
+              onLanded={landed}
               inside={
                 <>
                   <div className="nb-board nb-l" /><div className="nb-edges nb-l" />

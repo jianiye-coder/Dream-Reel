@@ -521,6 +521,7 @@ html[lang="en"] .nb-root {
   .nb-clues .nb-note { font-size: 17px; line-height: var(--line); }
   .nb-margin-note { position: absolute; left: 6px; top: 136px; width: 50px; text-align: right; transform: rotate(-5deg); font-size: 14px; }
   .nb-hero-r { justify-content: space-between; }
+  .nb-hero-r h1:focus { outline: none; }   /* focused programmatically after the cover lands */
   .nb-hero-r h1 { font-weight: 900; font-size: clamp(32px, 3.4vw, 52px); line-height: 1.16; letter-spacing: -.02em; }
   .nb-hero-r h1 em { font-style: normal; position: relative; white-space: nowrap; }
   .nb-hero-r h1 em::after {
