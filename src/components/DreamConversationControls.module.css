@@ -28,5 +28,6 @@
   font-family: var(--mono); font-size: 11.5px; line-height: 1.7; color: var(--ink-soft);
   background: #fbf8f1; box-shadow: inset 0 0 0 1px rgba(31, 28, 23, .12);
 }
-.controls .notes textarea:focus { box-shadow: inset 0 0 0 1px var(--ink-soft); }
+/* a quiet ink frame; outline (not box-shadow) because globals.css strips focus shadows */
+.controls .notes textarea:focus-visible { outline: 1.5px solid var(--ink-soft) !important; outline-offset: 2px; box-shadow: none !important; }
 .controls .notes button { min-height: 0; padding: 0; border-radius: 0; }

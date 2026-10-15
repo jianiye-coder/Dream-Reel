@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Book, BookPage } from "@/components/notebook/Book";
 import { NotebookShell } from "@/components/notebook/NotebookShell";
 import { TurnLink } from "@/components/notebook/TurnLink";
@@ -61,6 +61,30 @@ function pageDate(value: string, lang: "zh" | "en") {
   return lang === "zh"
     ? { day: `${cnNum(date.getMonth() + 1)}月${cnNum(date.getDate())}日`, weekday: "周" + "日一二三四五六"[date.getDay()], short, folio: dayOfYear * 2 }
     : { day: date.toLocaleDateString("en-US", { month: "long", day: "numeric" }), weekday: date.toLocaleDateString("en-US", { weekday: "long" }), short, folio: dayOfYear * 2 };
+}
+
+/* Scroll panes on the page fade softly into the paper at whichever edge has more writing past it,
+   instead of slicing a slip in half. (React 19 ref callback: returns its own cleanup.) */
+function edgeFade(el: HTMLElement | null) {
+  if (!el) return;
+  const update = () => {
+    const pane = getComputedStyle(el).overflowY !== "visible" && el.scrollHeight - el.clientHeight > 1;
+    el.toggleAttribute("data-fade-top", pane && el.scrollTop > 1);
+    el.toggleAttribute("data-fade-bottom", pane && el.scrollTop + el.clientHeight < el.scrollHeight - 1);
+  };
+  update();
+  el.addEventListener("scroll", update, { passive: true });
+  el.addEventListener("load", update, true);   // images arriving change the height without a mutation
+  const resized = new ResizeObserver(update);
+  resized.observe(el);
+  const changed = new MutationObserver(update);
+  changed.observe(el, { childList: true, subtree: true, characterData: true });
+  return () => {
+    el.removeEventListener("scroll", update);
+    el.removeEventListener("load", update, true);
+    resized.disconnect();
+    changed.disconnect();
+  };
 }
 
 const MicIcon = () => (
@@ -150,7 +174,9 @@ export default function JournalPage() {
   const [inputMode, setInputMode] = useState<"text" | "voice">("text");
 
   // Sleep context
-  const [dreamDate, setDreamDate] = useState(getTodayDate);
+  // filled in after mount: the server's "today" (UTC) is not the reader's today
+  const [dreamDate, setDreamDate] = useState("");
+  const [today, setToday] = useState("");
   const [sleepStart, setSleepStart] = useState("");
   const [wakeTime, setWakeTime] = useState("");
   const [sleepQuality, setSleepQuality] = useState<number | null>(null);
@@ -243,6 +269,7 @@ export default function JournalPage() {
 
   const messagesAreaRef = useRef<HTMLElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const replyFormRef = useRef<HTMLFormElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const undoStack = useRef<string[]>([]);
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
@@ -264,6 +291,12 @@ export default function JournalPage() {
     setJournalMode(nextMode);
     window.requestAnimationFrame(() => document.getElementById(`journal-tab-${nextMode}`)?.focus());
   }
+
+  useEffect(() => {
+    const t = getTodayDate();
+    setToday(t);
+    setDreamDate((current) => current || t);
+  }, []);
 
   useEffect(() => {
     const syncModeFromUrl = () => {
@@ -454,6 +487,11 @@ export default function JournalPage() {
     if (!hasContent) return;
     const messagesArea = messagesAreaRef.current;
     if (!messagesArea) return;
+    // on phones the thread is part of the page (not its own scroll box): bring the reply line into view
+    if (getComputedStyle(messagesArea).overflowY === "visible") {
+      replyFormRef.current?.scrollIntoView({ block: "end", behavior: "smooth" });
+      return;
+    }
     messagesArea.scrollTo({
       top: messagesArea.scrollHeight,
       behavior: "smooth",
@@ -631,7 +669,7 @@ export default function JournalPage() {
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
     // Enter that commits an IME candidate (pinyin, kana…) is not a send
-    if (e.nativeEvent.isComposing) return;
+    if (e.nativeEvent.isComposing || e.keyCode === 229) return;
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       void sendMessage();
@@ -1060,6 +1098,10 @@ export default function JournalPage() {
   const roomOpenerRef = useRef<HTMLElement | null>(null);
   const sleepFirstRef = useRef<HTMLInputElement>(null);
   const promptRef = useRef<HTMLTextAreaElement>(null);
+  const threadRef = useCallback((el: HTMLElement | null) => {
+    messagesAreaRef.current = el;
+    return edgeFade(el);
+  }, []);
 
   // the developing room is a native modal dialog: focus moves in, Tab stays inside, Esc closes,
   // and focus goes back to whatever opened it
@@ -1089,7 +1131,7 @@ export default function JournalPage() {
     });
   }
 
-  const page = pageDate(dreamDate, lang);
+  const page = dreamDate ? pageDate(dreamDate, lang) : null;
   const userStatements = messages.filter((m) => m.role === "user" && !m.isCommand).map((m) => m.content);
   const writtenCount = lang === "zh"
     ? activeDreamText.replace(/\s/g, "").length
@@ -1098,11 +1140,12 @@ export default function JournalPage() {
     : autoSaveStatus === "saving" ? N.saving
       : autoSaveStatus === "saved" ? N.saved
         : hasContent ? N.autoSaving : "";
+  const canEnterChat = showNextStep && chatUnlocked && !!generatedImageUrl;
   const progress = !currentAnalysis ? 0 : !generatedImageUrl ? 1 : savedImageUrl === generatedImageUrl ? 3 : 2;
   const quota = billingStatus
     ? `${B.analysisLeft.replace("{count}", String(billingStatus.remaining.analysis))} · ${B.imagesLeft.replace("{count}", String(billingStatus.remaining.imageGenerations))}`
     : "";
-  const printCaption = `${page.short} — ${quickTitle || analysis?.title || N.room.untitled}`;
+  const printCaption = `${page ? `${page.short} — ` : ""}${quickTitle || analysis?.title || N.room.untitled}`;
   const imageFileName = `${(quickTitle || "dream").replace(/[\\/:*?"<>|]/g, "_")}.png`;
 
   function openImagePrompt() {
@@ -1189,7 +1232,7 @@ export default function JournalPage() {
   // ── quick mode, right page ──
   const quickRight = (
     <>
-      <div className={css.scroll}>
+      <div className={css.scroll} ref={edgeFade}>
         {!hasContent && slip(<p className={css.slipText}>{N.quickWelcome}</p>)}
 
         {hasContent && !currentAnalysis && slip(
@@ -1264,7 +1307,7 @@ export default function JournalPage() {
               <button type="button" className="nb-act" onClick={() => void analyzeDream()} disabled={isAnalyzing || isTyping || !hasContent}>
                 {isAnalyzing ? J.analyzingBtn : N.organize} <span aria-hidden>→</span>
               </button>
-            ) : chatUnlocked && generatedImageUrl ? (
+            ) : canEnterChat ? (
               <button type="button" className="nb-act" onClick={enterDreamChat}>
                 {J.quickFlow.enterChat} <span aria-hidden>→</span>
               </button>
@@ -1274,12 +1317,13 @@ export default function JournalPage() {
               </button>
             )}
             <span className={css.quietActs}>
-              {!currentAnalysis && (
-                <button type="button" className="nb-act-quiet" onClick={() => void startDirectDreamChat()} disabled={isAnalyzing || isTyping || !hasContent}>
-                  {N.chatAbout}
-                </button>
+              <button type="button" className="nb-act-quiet" onClick={() => void startDirectDreamChat()} disabled={isAnalyzing || isTyping || !hasContent}>
+                {N.chatAbout}
+              </button>
+              {canEnterChat && !currentAnalysis && (
+                <button type="button" className="nb-act-quiet" onClick={enterDreamChat}>{J.quickFlow.enterChat}</button>
               )}
-              {showNextStep && (!currentAnalysis || (chatUnlocked && generatedImageUrl)) && (
+              {showNextStep && (!currentAnalysis || canEnterChat) && (
                 <button type="button" className="nb-act-quiet" onClick={() => void generateImage()} disabled={isGeneratingImage || !hasContent}>
                   {isGeneratingImage ? J.image.genLoading : generatedImageUrl ? N.againImage : J.quickFlow.generateImage}
                 </button>
@@ -1302,7 +1346,7 @@ export default function JournalPage() {
   const feedbackReasons = ["repetitive", "irrelevant", "too_many_questions", "unsafe", "other"] as const;
   const chatRight = (
     <>
-      <section className={`${css.scroll} ${css.thread}`} ref={messagesAreaRef} aria-label={N.chatKicker}>
+      <section className={css.scroll} ref={threadRef} aria-label={N.chatKicker}>
         <DreamConversationControls
           goal={conversationGoal}
           onGoalChange={setConversationGoal}
@@ -1384,7 +1428,7 @@ export default function JournalPage() {
 
       {imagePanel}
 
-      <form className={css.reply} onSubmit={(e) => { e.preventDefault(); void sendMessage(); }}>
+      <form ref={replyFormRef} className={css.reply} onSubmit={(e) => { e.preventDefault(); void sendMessage(); }}>
         <span className={css.replyMark} aria-hidden>{N.replyMark}</span>
         <textarea
           ref={inputRef}
@@ -1417,9 +1461,9 @@ export default function JournalPage() {
   return (
     <NotebookShell lean>
       <main className={`nb-stage ${css.stage}`} id="main">
-        <Book className={css.book} tilt={false}>
+        <Book tilt={false}>
           {/* ── left page: the dreamer's own writing ── */}
-          <BookPage side="l" indent folio={`p. ${page.folio}`} className={css.left} padClassName={css.leftPad}>
+          <BookPage side="l" indent folio={page ? `p. ${page.folio}` : undefined} className={css.left} padClassName={css.leftPad}>
             <div className={css.leftHead}>
               <div className={`nb-ink-tabs ${css.tabs}`} role="tablist" aria-label={N.modeTabs}>
                 {(["quick", "chat"] as const).map((m) => (
@@ -1442,14 +1486,14 @@ export default function JournalPage() {
             </div>
 
             <div className={`nb-date-line ${css.dateLine}`}>
-              <b>{page.day}</b><span>{page.weekday}</span>
+              <b>{page?.day ?? "\u3000"}</b><span>{page?.weekday}</span>
               <input
                 type="date"
                 name="dreamDate"
                 aria-label={J.sleep.date}
                 autoComplete="off"
                 value={dreamDate}
-                max={getTodayDate()}
+                max={today || undefined}
                 onChange={(e) => setDreamDate(e.target.value)}
                 className={css.dateInput}
               />
@@ -1486,7 +1530,7 @@ export default function JournalPage() {
                 </div>
               </>
             ) : (
-              <div className={css.gathered}>
+              <div className={css.gathered} ref={edgeFade}>
                 <span className="nb-kicker">{N.gatheredKicker}</span>
                 {userStatements.length
                   ? userStatements.map((text, i) => <p key={i} className={`nb-hand${i > 0 ? ` ${css.later}` : ""}`}>{text}</p>)
@@ -1556,8 +1600,7 @@ export default function JournalPage() {
           {/* ── right page: what it read, or the conversation ── */}
           <BookPage
             side="r"
-            folio={`p. ${page.folio + 1}`}
-            className={css.right}
+            folio={page ? `p. ${page.folio + 1}` : undefined}
             padClassName={css.rightPad}
             id={`journal-panel-${mode}`}
             role="tabpanel"
@@ -1575,7 +1618,7 @@ export default function JournalPage() {
                   >
                     {isAnalyzing ? J.analyzingBtn : N.reanalyze}
                   </button>
-                  {currentAnalysis && <button type="button" className="nb-act-quiet" onClick={() => setAnalysis(null)}>{N.fold}</button>}
+                  {currentAnalysis && <button type="button" className="nb-act-quiet" onClick={() => setAnalysis(null)} title={N.clearTitle}>{N.clear}</button>}
                 </>)}
                 {billingStatus && !billingStatus.isUnlimited && (
                   <span className={css.billing}>

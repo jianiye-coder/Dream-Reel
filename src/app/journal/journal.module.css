@@ -13,7 +13,8 @@
   border-radius: 1px;
 }
 .room :where(a, button):focus-visible { outline-color: #efe4d0 !important; }
-.stage :is(textarea, input:not([type="range"])):focus-visible { outline: none !important; box-shadow: none !important; }
+/* :where keeps this reset weak, so a field can bring its own calm focus mark back */
+.stage :where(textarea, input:not([type="range"])):focus-visible { outline: none !important; box-shadow: none !important; }
 
 /* ── left page ─────────────────────────────── */
 /* the red margin rule; the ruling itself lives in the textarea so it scrolls with the writing */
@@ -47,11 +48,11 @@
 :global(.nb-root) .title {
   display: block; width: 100%; height: 40px; flex: none;
   font-family: var(--serif); font-weight: 600; font-size: 22px; letter-spacing: .01em; color: var(--ink);
-  background: transparent; border: 0; border-bottom: 1px solid transparent; outline: 0;
+  background: transparent; border: 0; border-bottom: 1.5px dotted rgba(31, 28, 23, .16); outline: 0;
   caret-color: var(--red-ink); transition: border-color .2s;
 }
 :global(.nb-root) .title::placeholder { color: #b0a796; font-weight: 400; font-size: 15px; letter-spacing: .04em; }
-:global(.nb-root) .title:focus { border-bottom-color: var(--ink); }
+:global(.nb-root) .title:focus { border-bottom: 1.5px solid var(--ink); }
 :global(.nb-root) .titleWaiting::placeholder { opacity: .55; }
 
 /* the ruled sheet: full page width, so the lines run from the edge to the gutter */
@@ -76,7 +77,11 @@
 :global(.nb-root) .writeWrap:focus-within .marginNote { opacity: 1; }
 
 /* chat mode: the left page gathers what you've said, as one entry */
-:global(.nb-root) .gathered { flex: 1; min-height: 0; overflow-y: auto; margin-top: 6px; scrollbar-width: thin; scrollbar-color: rgba(31, 28, 23, .18) transparent; }
+:global(.nb-root) .gathered {
+  flex: 1; min-height: 0; overflow-y: auto; margin-top: 6px; scrollbar-width: thin; scrollbar-color: rgba(31, 28, 23, .18) transparent;
+  --fade-top: 0px; --fade-bottom: 0px;
+  mask-image: linear-gradient(180deg, transparent calc(var(--fade-top) * .35), #000 var(--fade-top), #000 calc(100% - var(--fade-bottom)), transparent calc(100% - var(--fade-bottom) * .3));
+}
 :global(.nb-root) .gathered :global(.nb-kicker) { display: block; margin-bottom: 8px; }
 :global(.nb-root) .gathered :global(.nb-hand) { font-size: 19px; white-space: pre-line; }
 :global(.nb-root) .gathered :global(.nb-hand) + :global(.nb-hand) { margin-top: 6px; }
@@ -154,8 +159,12 @@
   display: flex; flex-direction: column; gap: 18px;
   margin: -10px -16px -10px -8px; padding: 10px 16px 10px 8px;   /* room for slip shadows */
   scrollbar-width: thin; scrollbar-color: rgba(31, 28, 23, .18) transparent;
-  mask-image: linear-gradient(180deg, transparent, #000 10px, #000 calc(100% - 18px), transparent);
+  /* fade into the paper only at an edge with more past it (data-fade-* set by edgeFade in page.tsx) */
+  --fade-top: 0px; --fade-bottom: 0px;
+  mask-image: linear-gradient(180deg, transparent calc(var(--fade-top) * .35), #000 var(--fade-top), #000 calc(100% - var(--fade-bottom)), transparent calc(100% - var(--fade-bottom) * .3));
 }
+:global(.nb-root) .scroll[data-fade-top], :global(.nb-root) .gathered[data-fade-top] { --fade-top: 56px; }
+:global(.nb-root) .scroll[data-fade-bottom], :global(.nb-root) .gathered[data-fade-bottom] { --fade-bottom: 36px; }
 
 /* Dream Reel's voice: a small slip of paper laid on the page */
 :global(.nb-root) .slip {
