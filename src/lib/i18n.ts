@@ -28,7 +28,6 @@ const zh = {
   },
 
   morningPages: {
-    mainNav: "主导航",
     eyebrow: "MORNING PAGES",
     title: "晨间自由书写",
     privateLabel: "私人日记",
@@ -39,7 +38,12 @@ const zh = {
     historyRetry: "列表加载失败，重试",
     noPages: "还没有记录",
     writingLabel: "晨间书写",
-    characters: "{count} 字",
+    words: "{count} 字",
+    progress: "三页约 750 字，已写到第 {page} 页",
+    progressDone: "三页写满了",
+    todayNote: "今天",
+    folio: "p. {n}",
+    leaveConfirm: "这一天的内容已在其他窗口更新。离开会丢下此页未保存的修改，确定离开？",
     modeLabel: "记录方式",
     modeText: "打字",
     modeDraw: "手写 / 涂画",
@@ -490,7 +494,6 @@ const en: typeof zh = {
   },
 
   morningPages: {
-    mainNav: "Main navigation",
     eyebrow: "YOUR MORNING",
     title: "Morning Pages",
     privateLabel: "Private journal",
@@ -501,7 +504,12 @@ const en: typeof zh = {
     historyRetry: "Retry loading history",
     noPages: "No pages yet",
     writingLabel: "Morning writing",
-    characters: "{count} characters",
+    words: "{count} words",
+    progress: "Three pages is about 750 words; you are on page {page}",
+    progressDone: "Three pages written",
+    todayNote: "today",
+    folio: "p. {n}",
+    leaveConfirm: "This page changed in another window. Leave and discard the unsaved changes on this page?",
     modeLabel: "Entry mode",
     modeText: "Text",
     modeDraw: "Write / Draw",

@@ -1,11 +1,13 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { LangToggle } from "@/components/LangToggle";
+import { Book, BookPage } from "@/components/notebook/Book";
+import { NotebookShell } from "@/components/notebook/NotebookShell";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { tap, writeChar } from "@/lib/notebookSound";
 import styles from "./page.module.css";
 import { DrawingBoard } from "./DrawingBoard";
 import type { DrawingStroke } from "@/lib/morningDrawing";
@@ -18,6 +20,29 @@ type SaveStatus = "idle" | "dirty" | "saving" | "saved" | "error" | "conflict";
 function localDate() {
   const now = new Date();
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+}
+
+// Cameron's three pages come to roughly 750 words; Chinese, Japanese kana and Hangul count per character,
+// other scripts count words
+const PAGE_WORDS = 250;
+function countWords(text: string) {
+  return (text.match(/[\u1100-\u11ff\u3040-\u30ff\u3130-\u318f\u3400-\u9fff\uac00-\ud7af\uf900-\ufaff]|(?:(?![\u1100-\u11ff\u3040-\u30ff\u3130-\u318f\u3400-\u9fff\uac00-\ud7af\uf900-\ufaff])[\p{L}\p{N}])(?:(?![\u1100-\u11ff\u3040-\u30ff\u3130-\u318f\u3400-\u9fff\uac00-\ud7af\uf900-\ufaff])[\p{L}\p{N}'’-])*/gu) ?? []).length;
+}
+
+// mark which edges of the sheet have text scrolled past them, so the CSS can fade just those edges
+function markEdges(el: HTMLTextAreaElement) {
+  const top = el.scrollTop > 1;
+  // more than the bottom padding still below: a line is actually cut off there
+  const bottom = el.scrollHeight - (el.scrollTop + el.clientHeight) > 20;
+  el.dataset.edge = [top && "top", bottom && "bottom"].filter(Boolean).join(" ");
+}
+
+// a date as you would write it at the top of a page: 十月十五日 周四 / October 15 Thursday
+const CN_DIGITS = "零一二三四五六七八九十";
+function cnNumber(n: number) {
+  if (n <= 10) return CN_DIGITS[n];
+  if (n < 20) return `十${CN_DIGITS[n - 10]}`;
+  return `${CN_DIGITS[Math.floor(n / 10)]}十${n % 10 ? CN_DIGITS[n % 10] : ""}`;
 }
 
 export default function MorningPages() {
@@ -42,6 +67,12 @@ export default function MorningPages() {
   const inFlight = useRef<Promise<boolean> | null>(null);
   const requestId = useRef(0);
   const editor = useRef<HTMLTextAreaElement>(null);
+  const switchingNow = useRef(false);
+  const passThrough = useRef(false);
+  const leaving = useRef(false);
+  const mounted = useRef(false);
+  const composing = useRef(false);
+  const lastSound = useRef(0);
 
   const refreshHistory = useCallback(async () => {
     try {
@@ -144,20 +175,77 @@ export default function MorningPages() {
     return () => window.removeEventListener("beforeunload", warn);
   }, []);
 
+  useEffect(() => { switchingNow.current = switching; }, [switching]);
+
+  // keep the scroll-edge fades in step with the text (loaded pages, edits, switching back to the text tab)
+  // before paint, and with the sheet's size (window resizes, the phone resize handle, the tab becoming visible)
+  useLayoutEffect(() => { if (editor.current) markEdges(editor.current); }, [content, mode, loading, finished]);
+  useEffect(() => {
+    const el = editor.current;
+    if (!el) return;
+    const observer = new ResizeObserver(() => markEdges(el));
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [loading, loadError, finished]);
+
+  useEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; };
+  }, []);
+
+  // Links in the notebook shell (top bar, contents, brand) leave only after the page is safely saved,
+  // as the old header did. Once saved, the original click is replayed so book links still turn a page.
+  useEffect(() => {
+    const intercept = (event: MouseEvent) => {
+      if (passThrough.current || event.defaultPrevented || event.button !== 0) return;
+      if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+      const link = (event.target as Element | null)?.closest?.("a[href]");
+      if (!(link instanceof HTMLAnchorElement) || link.target === "_blank" || link.hasAttribute("download")) return;
+      const url = new URL(link.href, location.href);
+      if (url.origin !== location.origin || url.pathname === location.pathname) return;
+      const unsaved = draft.current.content !== draft.current.savedContent || draft.current.drawing !== draft.current.savedDrawing;
+      if (!leaving.current && !switchingNow.current && !unsaved && !inFlight.current && !conflict.current) return;
+      event.preventDefault();
+      // a link in the phone contents sheet still runs its own handler, which closes the sheet so the save
+      // status is in view; Next's <Link> skips navigating because the default was prevented
+      const inContents = Boolean(link.closest(".nb-toc"));
+      if (!inContents) event.stopPropagation();
+      if (leaving.current || switchingNow.current) return;
+      leaving.current = true;
+      // once leaving is decided, `leaving` stays set (and the editor read-only) until the page is gone
+      const go = () => {
+        if (!mounted.current) return;
+        if (inContents || !link.isConnected) { router.push(url.pathname + url.search + url.hash); return; }
+        passThrough.current = true;
+        try { link.click(); } finally { passThrough.current = false; }
+      };
+      const stay = () => {
+        leaving.current = false;
+        if (mounted.current) setSwitching(false);
+      };
+      if (conflict.current) {
+        // the other window's version is on the server; leaving only drops this window's unsaved edits,
+        // so ask only when there are some (a conflicting delete leaves nothing to lose)
+        if (unsaved && !window.confirm(M.leaveConfirm)) { leaving.current = false; return; }
+        setSwitching(true);
+        go();
+        return;
+      }
+      setSwitching(true);
+      void save().catch(() => false).then((saved) => {
+        if (saved) go();
+        else stay();
+      });
+    };
+    window.addEventListener("click", intercept, true);
+    return () => window.removeEventListener("click", intercept, true);
+  }, [save, router, M.leaveConfirm]);
+
   async function selectDay(next: string) {
     if (!next || next === date || switching || loading) return;
     setSwitching(true);
     if (await save()) await loadDay(next);
     setSwitching(false);
-  }
-
-  async function leave(event: React.MouseEvent<HTMLAnchorElement>, href: string) {
-    if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-    event.preventDefault();
-    if (switching) return;
-    setSwitching(true);
-    if (await save()) router.push(href);
-    else setSwitching(false);
   }
 
   async function finish() {
@@ -205,82 +293,171 @@ export default function MorningPages() {
     return new Date(`${value}T12:00:00`).toLocaleDateString(lang === "zh" ? "zh-CN" : "en-US", { year: "numeric", month: "short", day: "numeric" });
   }
 
+  const locale = lang === "zh" ? "zh-CN" : "en-US";
+  function dateLine(value: string) {
+    const day = new Date(`${value}T12:00:00`);
+    return {
+      day: lang === "zh" ? `${cnNumber(day.getMonth() + 1)}月${cnNumber(day.getDate())}日` : day.toLocaleDateString(locale, { month: "long", day: "numeric" }),
+      weekday: day.toLocaleDateString(locale, { weekday: lang === "zh" ? "short" : "long" }),
+      year: String(day.getFullYear()),
+    };
+  }
+  function tocDate(value: string) {
+    const day = new Date(`${value}T12:00:00`);
+    const sameYear = value.slice(0, 4) === localDate().slice(0, 4);
+    return {
+      day: day.toLocaleDateString(locale, { month: "short", day: "numeric", ...(sameYear ? {} : { year: "numeric" }) }),
+      weekday: day.toLocaleDateString(locale, { weekday: "short" }),
+    };
+  }
+
+  // the pen sounds as each character lands; IME candidates are silent until committed
+  function penSound(text: string) {
+    const now = performance.now();
+    if (now - lastSound.current < 45) return;
+    lastSound.current = now;
+    let when = 0;
+    for (const ch of Array.from(text).slice(0, 4)) when += Math.max(writeChar(ch, when), 0.06);
+  }
+
   const statusText = M.status[status];
+  const alertStatus = status === "error" || status === "conflict";
+  const words = countWords(content);
+  const page = Math.min(3, Math.floor(words / PAGE_WORDS) + 1);
+  const progressText = words >= PAGE_WORDS * 3 ? M.progressDone : M.progress.replace("{page}", String(page));
+  // dates depend on the reader's clock, so they appear once the page has loaded on the client
+  const heading = date ? dateLine(date) : null;
+  const isToday = Boolean(date) && date === localDate();
+  const writable = !loading && !loadError && !finished;
+  // every morning is its own spread: folios follow the day of the year
+  const dayOfYear = date ? Math.round((Date.parse(`${date}T12:00:00`) - Date.parse(`${date.slice(0, 4)}-01-01T12:00:00`)) / 864e5) + 1 : 0;
+
+  const progress = (
+    <span className={styles.progress} title={progressText} aria-hidden>
+      {["i", "ii", "iii"].map((mark, index) => (
+        <span key={mark} className={words >= PAGE_WORDS * (index + 1) ? styles.pageDone : index + 1 === page ? styles.pageNow : undefined}>{mark}</span>
+      ))}
+    </span>
+  );
 
   return (
-    <div className={styles.page}>
-      <nav className={styles.header} aria-label={M.mainNav}>
-        <Link href="/" className={styles.brand} onClick={(e) => void leave(e, "/")}>
-          <Image src="/dream-reel-logo.png" alt="" width={36} height={36} />
-          <span>Dream Reel</span>
-        </Link>
-        <div className={styles.navigation}>
-          <LangToggle className={styles.button} />
-          <Link href="/journal" onClick={(e) => void leave(e, "/journal")}>{T.nav.journal}</Link>
-          <Link href="/archive" onClick={(e) => void leave(e, "/archive")}>{T.nav.archive}</Link>
-        </div>
-      </nav>
-      <main className={styles.main}>
-        <header className={styles.heading}>
-          <div><p className={styles.eyebrow}>{M.eyebrow}</p><h1>{M.title}</h1></div>
-          <span className={styles.privateLabel}>{M.privateLabel}</span>
-        </header>
-        <details className={styles.about}>
-          <summary><span className={styles.aboutLead}>{M.aboutLead}</span> <span className={styles.aboutToggle}>{M.aboutToggle}</span></summary>
-          <div className={styles.aboutBody}>
-            <section><h2>{M.aboutWhatTitle}</h2><p>{M.aboutWhat}</p></section>
-            <section><h2>{M.aboutWhyTitle}</h2><ul>{M.aboutWhy.map((line) => <li key={line}>{line}</li>)}</ul></section>
-            <p className={styles.aboutHere}>{M.aboutHere} <a href="https://juliacameronlive.com/" target="_blank" rel="noreferrer">{M.aboutSource}<span aria-hidden> ↗</span><span className={styles.srOnly}>{M.opensNewTab}</span></a></p>
-          </div>
-        </details>
-        <div className={styles.workspace}>
-          <aside className={styles.history} aria-label={M.datesLabel}>
-            <button className={styles.button} disabled={loading || switching} onClick={() => void selectDay(localDate())}>{M.today}</button>
-            <label className={styles.dateLabel}>{M.date}
-              <input type="date" value={date} disabled={loading || switching} onChange={(e) => void selectDay(e.target.value)} />
-            </label>
-            <h2>{M.recent}</h2>
-            {historyError ? <button className={styles.textButton} onClick={() => void refreshHistory()}>{M.historyRetry}</button> : null}
-            {!historyError && days.length === 0 && <p>{M.noPages}</p>}
-            <ul>{days.map((day) => <li key={day.date}><button aria-current={day.date === date ? "date" : undefined} disabled={loading || switching} onClick={() => void selectDay(day.date)}>{formatDate(day.date)}</button></li>)}</ul>
-          </aside>
-          <section className={styles.writing} aria-label={M.writingLabel}>
-            <div className={styles.toolbar}><h2>{date ? formatDate(date) : M.today}</h2><span>{M.characters.replace("{count}", String(Array.from(content).length))}</span></div>
-            {!loading && !loadError && !finished && <div className={styles.modes} role="group" aria-label={M.modeLabel}>
-              <button aria-pressed={mode === "text"} onClick={() => setMode("text")}>{M.modeText}{content ? " ·" : ""}</button>
-              <button aria-pressed={mode === "draw"} onClick={() => setMode("draw")}>{M.modeDraw}{drawing.length ? " ·" : ""}</button>
-            </div>}
+    <NotebookShell lean>
+      <main className="nb-stage" id="main">
+        <Book className={styles.book} tilt={false}>
+          <BookPage side="l" padClassName={styles.leftPad} folio={dayOfYear ? M.folio.replace("{n}", String(dayOfYear * 2)) : undefined}>
+            <header>
+              <div className={styles.kickerRow}>
+                <span className="nb-kicker">{M.eyebrow}<span aria-hidden> · </span>{M.privateLabel}</span>
+                <LangToggle className={styles.phoneLang} />
+              </div>
+              <h1 className={styles.title}>{M.title}</h1>
+              <p className={`nb-date-line ${styles.dateLine}`}>
+                {heading ? <><b>{heading.day}</b><span>{heading.weekday}</span><span className="nb-mono">{heading.year}</span></> : "\u00a0"}
+                {isToday && <span className={`nb-note ${styles.todayNote}`} aria-hidden>{M.todayNote}</span>}
+              </p>
+            </header>
+
+            <details className={styles.about}>
+              <summary>
+                <span>{M.aboutLead}</span>{" "}
+                <span className={styles.aboutToggle}>{M.aboutToggle}</span>
+              </summary>
+              <div className={styles.aboutBody}>
+                <section><h2>{M.aboutWhatTitle}</h2><p>{M.aboutWhat}</p></section>
+                <section><h2>{M.aboutWhyTitle}</h2><ul>{M.aboutWhy.map((line) => <li key={line}>{line}</li>)}</ul></section>
+                <p className={styles.aboutHere}>{M.aboutHere}{" "}
+                  <a href="https://juliacameronlive.com/" target="_blank" rel="noreferrer">{M.aboutSource}<span aria-hidden> ↗</span><span className={styles.srOnly}>{M.opensNewTab}</span></a>
+                </p>
+              </div>
+            </details>
+
+            <aside className={styles.dates} aria-label={M.datesLabel}>
+              <div className={styles.pick}>
+                <button type="button" className={styles.todayButton} disabled={loading || switching} onClick={() => void selectDay(localDate())}>{M.today}</button>
+                <label className={styles.dateField}><span>{M.date}</span>
+                  <input type="date" value={date} disabled={loading || switching} onChange={(e) => void selectDay(e.target.value)} />
+                </label>
+              </div>
+              <h2 className={`nb-kicker ${styles.recentTitle}`}>{M.recent}</h2>
+              {historyError ? <button type="button" className={`nb-act-quiet ${styles.quiet} ${styles.historyRetry}`} onClick={() => void refreshHistory()}>{M.historyRetry}</button> : null}
+              {!historyError && days.length === 0 && <p className={styles.noPages}>{M.noPages}</p>}
+              <ul className={styles.toc}>{days.map((day) => {
+                const label = tocDate(day.date);
+                return (
+                  <li key={day.date}>
+                    <button type="button" aria-label={formatDate(day.date)} aria-current={day.date === date ? "date" : undefined} disabled={loading || switching} onClick={() => void selectDay(day.date)}>
+                      <span className={styles.tocDay}>{label.day}</span><span className={styles.tocLead} aria-hidden /><span className={styles.tocWeekday} aria-hidden>{label.weekday}</span>
+                    </button>
+                  </li>
+                );
+              })}</ul>
+            </aside>
+          </BookPage>
+
+          <BookPage side="r" className={styles.right} padClassName={styles.rightPad} folio={dayOfYear ? M.folio.replace("{n}", String(dayOfYear * 2 + 1)) : undefined} aria-label={M.writingLabel}>
+            {writable && (
+              <div className={styles.toolbar}>
+                <div className={`nb-ink-tabs ${styles.modes}`} role="group" aria-label={M.modeLabel}>
+                  <button type="button" aria-pressed={mode === "text"} onClick={() => { setMode("text"); tap(); }}>{M.modeText}{content ? <i className={styles.dot} aria-hidden /> : null}</button>
+                  <button type="button" aria-pressed={mode === "draw"} onClick={() => { setMode("draw"); tap(); }}>{M.modeDraw}{drawing.length ? <i className={styles.dot} aria-hidden /> : null}</button>
+                </div>
+                <span className={`nb-mono ${styles.count}`}>{M.words.replace("{count}", String(words))}<span className={styles.srOnly}> · {progressText}</span></span>
+              </div>
+            )}
             {loading ? <p role="status" className={styles.empty}>{M.loading}</p> : loadError ? (
-              <div className={styles.empty} role="alert"><p>{M.loadError}</p><button className={styles.button} onClick={() => void loadDay(date)}>{M.retry}</button></div>
+              <div className={styles.empty} role="alert"><p>{M.loadError}</p><button type="button" className={`nb-act ${styles.finish}`} onClick={() => void loadDay(date)}>{M.retry}</button></div>
             ) : finished ? (
-              <div className={styles.empty}><h2>{M.finishedTitle}</h2><p>{M.finishedBody}</p><button className={styles.button} onClick={() => { setFinished(false); requestAnimationFrame(() => editor.current?.focus()); }}>{M.keepWriting}</button><Link href="/archive">{T.nav.archive}</Link></div>
+              <div className={styles.finished}>
+                <svg className={styles.tick} viewBox="0 0 40 30" aria-hidden><path d="M3 17 C 8 20, 11 24, 14 27 C 20 16, 28 8, 37 3" /></svg>
+                <h2>{M.finishedTitle}</h2>
+                <p className="nb-hand">{M.finishedBody}</p>
+                <div className={styles.finishedActions}>
+                  <button type="button" className={`nb-act ${styles.finish}`} onClick={() => { setFinished(false); requestAnimationFrame(() => editor.current?.focus()); }}>{M.keepWriting} <span aria-hidden>→</span></button>
+                  <Link className="nb-act-quiet" href="/archive">{T.nav.archive}</Link>
+                </div>
+              </div>
             ) : (
-              <><div hidden={mode !== "text"}><textarea ref={editor} aria-label={M.contentLabel} placeholder={M.placeholder} value={content} maxLength={50000} readOnly={switching} spellCheck onChange={(e) => {
-                draft.current.content = e.target.value;
-                setContent(e.target.value);
-                setStatus(conflict.current ? "conflict" : "dirty");
-              }} onBlur={() => { if (!conflict.current) void save(); }} /></div>
-              <div hidden={mode !== "draw"}><DrawingBoard key={canvasVersion} date={date} labels={M.draw} strokes={drawing} disabled={switching} onChange={(strokes) => {
-                draft.current.drawing = strokes;
-                setDrawing(strokes);
-                setStatus(conflict.current ? "conflict" : "dirty");
-              }} /></div></>
+              <>
+                <div className={styles.surface} hidden={mode !== "text"}>
+                  <textarea ref={editor} className={styles.editor} aria-label={M.contentLabel} placeholder={M.placeholder} value={content} maxLength={50000} readOnly={switching} spellCheck
+                    onScroll={(e) => markEdges(e.currentTarget)}
+                    onCompositionStart={() => { composing.current = true; }}
+                    onCompositionEnd={(e) => { composing.current = false; penSound(e.data); }}
+                    onChange={(e) => {
+                      const input = e.nativeEvent as InputEvent;
+                      if (!composing.current && !input.isComposing && input.inputType === "insertText" && input.data) penSound(input.data);
+                      draft.current.content = e.target.value;
+                      setContent(e.target.value);
+                      setStatus(conflict.current ? "conflict" : "dirty");
+                    }} onBlur={() => { if (!conflict.current) void save(); }} />
+                </div>
+                <div className={styles.surface} hidden={mode !== "draw"}>
+                  <DrawingBoard key={canvasVersion} date={date} labels={M.draw} strokes={drawing} disabled={switching} onChange={(strokes) => {
+                    draft.current.drawing = strokes;
+                    setDrawing(strokes);
+                    setStatus(conflict.current ? "conflict" : "dirty");
+                  }} />
+                </div>
+              </>
             )}
             {!loading && !loadError && <footer className={styles.footer}>
-              <div role={status === "error" || status === "conflict" ? "alert" : "status"} className={status === "error" || status === "conflict" ? styles.error : styles.saveStatus}>{statusText}</div>
+              <div className={styles.meta}>
+                <div role={alertStatus ? "alert" : "status"} className={alertStatus ? styles.error : styles.saveStatus}>{statusText}</div>
+                {progress}
+              </div>
               <div className={styles.actions}>
-                {status === "error" && <button className={styles.button} disabled={switching} onClick={() => void save()}>{M.retrySave}</button>}
-                {status === "conflict" && <button className={styles.button} onClick={() => {
+                {status === "error" && <button type="button" className={styles.fix} disabled={switching} onClick={() => void save()}>{M.retrySave}</button>}
+                {status === "conflict" && <button type="button" className={styles.fix} onClick={() => {
                   if (window.confirm(M.discardConfirm)) void loadDay(date);
                 }}>{M.loadLatest}</button>}
-                <button className={styles.textButton} disabled={!content} onClick={download}>{M.downloadText}</button>
-                {exists && <button className={styles.textButton} disabled={switching || status === "conflict"} onClick={() => void remove()}>{M.delete}</button>}
-                {!finished && <button className={styles.primary} disabled={switching || (!content.trim() && !drawing.length) || status === "conflict"} onClick={() => void finish()}>{M.finish}</button>}
+                <button type="button" className={`nb-act-quiet ${styles.quiet}`} disabled={!content} onClick={download}>{M.downloadText}</button>
+                {exists && <button type="button" className={`nb-act-quiet ${styles.quiet}`} disabled={switching || status === "conflict"} onClick={() => void remove()}>{M.delete}</button>}
+                {!finished && <button type="button" className={`nb-act ${styles.finish}`} disabled={switching || (!content.trim() && !drawing.length) || status === "conflict"} onClick={() => void finish()}>{M.finish} <span aria-hidden>→</span></button>}
               </div>
             </footer>}
-          </section>
-        </div>
+          </BookPage>
+        </Book>
       </main>
-    </div>
+    </NotebookShell>
   );
 }
