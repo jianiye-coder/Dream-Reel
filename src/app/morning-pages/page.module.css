@@ -1,84 +1,200 @@
-.page { min-height: 100vh; background: var(--morning-bg, #fffbeb); color: var(--morning-ink); letter-spacing: 0; }
-.page *, .page h1, .page h2 { letter-spacing: 0; }
-.header { display: flex; align-items: center; justify-content: space-between; gap: 20px; flex-wrap: wrap; padding: 20px 32px; border-bottom: 1px solid var(--morning-border); }
-.brand { display: inline-flex; align-items: center; gap: 12px; font-weight: 700; color: var(--morning-ink); }
-.navigation { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-.navigation a { display: inline-flex; align-items: center; min-height: 44px; padding: 8px 12px; color: var(--morning-ink); }
-.main { width: min(1120px, 100% - 48px); margin: 40px auto 0; padding-bottom: 64px; }
-.heading { display: flex; align-items: end; justify-content: space-between; flex-wrap: wrap; gap: 16px; margin-bottom: 32px; }
-.heading h1 { font-size: 32px; font-weight: 600; margin-top: 6px; color: var(--morning-ink); }
-.eyebrow { font-size: 12px; font-weight: 600; color: var(--morning-primary); }
-.privateLabel, .saveStatus { color: #3e6656; font-size: 14px; }
-.workspace { display: grid; grid-template-columns: 192px minmax(0, 1fr); gap: 32px; }
-.history { display: flex; flex-direction: column; gap: 20px; color: var(--morning-muted); font-size: 14px; }
-.history h2 { margin: 8px 0 -8px; color: var(--morning-ink); font-size: 14px; font-weight: 600; }
-.dateLabel { display: grid; gap: 8px; }
-.dateLabel input { min-width: 0; width: 100%; min-height: 44px; border: 1px solid var(--morning-border); border-radius: 6px; background: white; color: var(--morning-ink); padding: 8px; font-size: 16px; }
-.history ul { list-style: none; padding: 0; margin: 0; max-height: 480px; overflow: auto; }
-.history li button { width: 100%; text-align: left; min-height: 44px; padding: 10px 12px; border-left: 2px solid transparent; border-radius: 0; font-size: 14px; }
-.history li button[aria-current] { color: var(--morning-primary); border-left-color: var(--morning-primary); background: var(--morning-paper); font-weight: 600; }
-.writing { min-width: 0; background: var(--morning-paper); border: 1px solid var(--morning-border); border-radius: 8px; }
-.toolbar { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 12px; padding: 20px 28px; border-bottom: 1px solid var(--morning-border); color: var(--morning-muted); font-size: 13px; }
-.toolbar h2 { font-size: 15px; font-weight: 500; color: var(--morning-ink); }
-.writing textarea { display: block; width: 100%; min-height: 440px; resize: vertical; padding: 24px 28px; border: 0; border-radius: 0; background: transparent; color: var(--morning-ink); font-size: 18px; line-height: 1.9; }
-.writing textarea::placeholder { color: var(--morning-muted); opacity: 1; }
-.writing textarea:focus-visible { outline: 2px solid var(--morning-primary); outline-offset: -4px; }
-.footer { padding: 18px 28px; border-top: 1px solid var(--morning-border); display: grid; gap: 12px; }
-.actions { display: flex; justify-content: flex-end; align-items: center; gap: 8px; flex-wrap: wrap; }
-.button, .primary { min-height: 44px; padding: 10px 16px; border: 1px solid var(--morning-border); border-radius: 6px; color: var(--morning-primary); background: var(--morning-paper); font-size: 14px; font-weight: 500; }
-.primary { color: white; background: var(--morning-primary); border-color: var(--morning-primary); }
-.textButton { min-height: 44px; padding: 8px 10px; color: var(--morning-muted); font-size: 14px; }
-.page button, .navigation a { cursor: pointer; transition: background-color 160ms ease, color 160ms ease; }
-.page button:hover:not(:disabled), .navigation a:hover { background: #f4ece5; color: var(--morning-primary-hover); }
-.page .primary:hover:not(:disabled) { background: var(--morning-primary-hover); color: white; }
-.page button:disabled { cursor: not-allowed; opacity: .65; }
-.page button:focus-visible, .page a:focus-visible, .page input:focus-visible { outline: 3px solid var(--morning-primary); outline-offset: 3px; }
-.error { color: #9f2437; font-size: 14px; line-height: 1.6; }
-.empty { min-height: 440px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 20px; padding: 32px; color: var(--morning-muted); text-align: center; }
-.empty h2 { color: var(--morning-ink); font-size: 24px; }
-.empty a { color: var(--morning-primary); padding: 12px; }
-.modes { display: flex; gap: 8px; padding: 12px 24px; border-bottom: 1px solid var(--morning-border); }
-.modes button { min-height: 44px; padding: 8px 16px; border: 1px solid transparent; border-radius: 6px; color: var(--morning-muted); font-size: 14px; }
-.modes button[aria-pressed="true"] { color: var(--morning-primary); border-color: var(--morning-primary); background: var(--morning-soft); }
-.drawTools { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 12px; border-bottom: 1px solid var(--morning-border); }
-.iconButton, .swatch { width: 44px; height: 44px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid transparent; border-radius: 6px; color: var(--morning-ink); flex-shrink: 0; }
-.iconButton[aria-pressed="true"], .swatch[aria-pressed="true"] { border-color: var(--morning-primary); background: var(--morning-soft); }
-.swatches, .drawActions { display: flex; gap: 2px; }
-.swatch span { width: 20px; height: 20px; border-radius: 50%; }
-.brushSize { display: flex; align-items: center; gap: 8px; padding: 0 8px; min-height: 44px; font-size: 13px; color: var(--morning-muted); }
-.brushSize input { width: 70px; accent-color: var(--morning-primary); }
-.brushSize output { width: 16px; text-align: right; }
-.canvas { display: block; width: 100%; height: auto; aspect-ratio: 10 / 7; touch-action: none; background: white; cursor: crosshair; }
-.drawingLimit { padding: 12px 20px; font-size: 14px; color: var(--morning-primary); }
-@media (max-width: 720px) {
-  .header { padding: 16px; gap: 12px; }
-  .navigation { gap: 2px; }
-  .navigation a { padding: 8px; font-size: 14px; }
-  .main { width: calc(100% - 32px); margin-top: 28px; }
-  .heading h1 { font-size: 28px; }
-  .workspace { grid-template-columns: minmax(0, 1fr); gap: 20px; }
-  .history { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: end; gap: 12px; }
-  .history h2, .history p, .history ul { grid-column: 1 / -1; }
-  .history ul { display: flex; max-height: none; overflow-x: auto; }
-  .history li { flex-shrink: 0; }
-  .toolbar, .footer { padding: 16px; }
-  .writing textarea { padding: 20px 16px; min-height: 380px; font-size: 17px; }
-  .actions { justify-content: flex-start; }
+/* Morning Pages · 晨间书写 — an open notebook: the left page keeps the date, Julia Cameron's note
+   and a table of contents of earlier mornings; the right page is the empty ruled sheet you write on.
+   Notebook tokens (--paper, --hand, --hand-ink, --red-ink, --rule, --margin, --line …) come from .nb-root. */
+
+/* the hand-drawn red-ink underline used across the notebook */
+.book {
+  --red-underline: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 10' preserveAspectRatio='none'><path d='M1 6 C 30 3, 65 8, 99 4' stroke='%23b0432e' stroke-width='1.8' fill='none' stroke-linecap='round'/></svg>");
+  --dotted: #cfc5b2;
 }
-@media (prefers-reduced-motion: reduce) { .page button, .navigation a { transition: none; } }
-/* What Morning Pages are (Julia Cameron) — one visible line, details on demand */
-.about { margin: -12px 0 32px; border-left: 2px solid var(--morning-primary); padding: 2px 0 2px 16px; color: var(--morning-ink); }
-.about summary { cursor: pointer; list-style: none; line-height: 1.8; font-size: 15px; }
-.about summary::-webkit-details-marker { display: none; }
-.aboutLead { color: var(--morning-ink); }
-.aboutToggle { color: var(--morning-primary); font-weight: 600; text-decoration: underline; text-underline-offset: 3px; white-space: nowrap; }
-.aboutToggle::after { content: " ▾"; text-decoration: none; display: inline-block; transition: transform .2s; }
-.about[open] .aboutToggle::after { transform: rotate(180deg); }
-.aboutBody { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 40px; margin-top: 16px; max-width: 920px; }
-.aboutBody h2 { font-size: 14px; font-weight: 600; color: var(--morning-primary); margin-bottom: 6px; }
-.aboutBody p, .aboutBody li { font-size: 15px; line-height: 1.85; color: var(--morning-muted); }
-.aboutBody ul { list-style: disc; padding-left: 1.1em; display: grid; gap: 4px; }
-.aboutHere { grid-column: 1 / -1; font-size: 13px !important; }
-.aboutHere a { color: var(--morning-primary); text-decoration: underline; text-underline-offset: 3px; white-space: nowrap; }
-@media (max-width: 760px) { .aboutBody { grid-template-columns: 1fr; } }
+.book :is(button, a, input, summary):focus-visible {
+  outline: 1.5px solid var(--red-ink) !important;
+  outline-offset: 3px;
+  border-radius: 2px;
+}
+.book button:disabled { cursor: default; opacity: .45; }
 .srOnly { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+
+/* ── left page: date, about, contents ───────────────────────────── */
+.leftPad { overflow: hidden; }
+/* on the open book, reading Cameron's note takes the rest of the page for a moment; it scrolls if it must */
+@media (min-width: 901px) {
+  .leftPad:has(.about[open]) .dates { display: none; }
+  .about[open] { min-height: 0; overflow-y: auto; mask-image: linear-gradient(180deg, #000 calc(100% - 18px), transparent); scrollbar-width: thin; scrollbar-color: #cdbfa6 transparent; padding-right: 6px; margin-right: -6px; }
+}
+.kickerRow { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+.phoneLang { display: none; }
+.title { margin-top: 12px; font-weight: 900; font-size: 30px; line-height: 1.2; letter-spacing: -.01em; }
+.dateLine { margin-top: 6px; }
+.dateLine b { font-size: 23px; }
+.dateLine :global(.nb-mono) { font-size: 11px; color: var(--ink-faint); }
+.todayNote { display: inline-block; transform: rotate(-5deg) translateY(-2px); font-size: 15px; }
+
+/* What Morning Pages are — Cameron's credit always visible, the rest on demand */
+.about { margin-top: 10px; font-size: 13.5px; line-height: 1.85; color: var(--ink-soft); }
+.about summary { cursor: pointer; list-style: none; }
+.about summary::-webkit-details-marker { display: none; }
+.aboutToggle { position: relative; display: inline-block; color: var(--red-ink); white-space: nowrap; padding-bottom: 2px; }
+.aboutToggle::before { content: ""; position: absolute; left: -2px; right: 12px; bottom: -3px; height: 6px; background: var(--red-underline) no-repeat center / 100% 100%; opacity: .7; }
+.aboutToggle::after { content: "›"; display: inline-block; margin-left: 5px; transition: transform .25s ease; }
+.about[open] .aboutToggle::after { transform: rotate(90deg); }
+.about summary:hover .aboutToggle::before { opacity: 1; }
+.aboutBody { display: grid; gap: 12px; margin-top: 14px; padding-left: 14px; border-left: 1px solid var(--margin); }
+.aboutBody h2 { font-size: 13.5px; font-weight: 600; color: var(--ink); }
+.aboutBody ul { list-style: none; display: grid; gap: 4px; }
+.aboutBody li { position: relative; padding-left: 14px; }
+.aboutBody li::before { content: "–"; position: absolute; left: 0; color: var(--ink-faint); }
+.aboutHere { font-size: 12.5px; color: var(--ink-faint); }
+.aboutHere a { color: var(--red-ink); border-bottom: 1px solid rgba(176, 67, 46, .45); }
+.aboutHere a:hover { border-bottom-color: var(--red-ink); }
+
+.dates { display: flex; flex-direction: column; flex: 1 0 auto; margin-top: 22px; }
+.pick { display: flex; align-items: baseline; gap: 26px; flex-wrap: wrap; }
+.book button.todayButton { font-weight: 600; font-size: 16px; border-bottom: 1.5px solid var(--ink) !important; padding-bottom: 2px; }
+.dateField { display: inline-flex; align-items: baseline; gap: 10px; }
+.dateField span { font-family: var(--mono); font-size: 10.5px; letter-spacing: .16em; color: var(--ink-faint); }
+.dateField input {
+  height: 32px; padding: 0 2px; border: 0; border-bottom: 1px solid #d3c9b6; border-radius: 0; outline: 0;
+  background: transparent; color: var(--ink); font-family: var(--mono); font-size: 13px; letter-spacing: .04em; color-scheme: light;
+}
+.dateField input:hover:not(:disabled) { border-bottom-color: var(--ink-soft); }
+.dateField input::-webkit-calendar-picker-indicator { opacity: .45; cursor: pointer; }
+.recentTitle { margin-top: 26px; padding-bottom: 8px; border-bottom: 1px solid var(--ink); }
+.book button.historyRetry { align-self: flex-start; margin-top: 12px; color: var(--red-ink) !important; }
+.noPages { margin-top: 12px; font-family: var(--hand); font-size: 17px; color: var(--ink-faint); }
+.toc { list-style: none; flex: 1 1 0; min-height: calc(var(--line) * 3); overflow-y: auto; scrollbar-width: thin; scrollbar-color: #cdbfa6 transparent; }
+.toc button { width: 100%; height: 40px; display: flex; align-items: baseline; gap: 10px; padding-top: 9px; text-align: left; }
+.tocDay { position: relative; font-family: var(--hand); font-size: 18px; color: var(--hand-ink); transition: color .2s; }
+.tocLead { flex: 1; border-bottom: 1px dotted #b9ae99; transform: translateY(-4px); }
+.tocWeekday { font-family: var(--mono); font-size: 10.5px; letter-spacing: .12em; color: var(--ink-faint); text-transform: uppercase; }
+.toc button:hover:not(:disabled) .tocDay { color: var(--ink); }
+.toc button[aria-current] .tocDay { color: var(--red-ink); }
+.toc button[aria-current] .tocDay::after { content: ""; position: absolute; left: -3px; right: -4px; bottom: -4px; height: 7px; background: var(--red-underline) no-repeat center / 100% 100%; }
+
+/* ── right page: the ruled writing sheet ─────────────────────────── */
+:global(.nb-page).right { background-image: linear-gradient(90deg, transparent 44px, var(--margin) 44px 45px, transparent 45px); }
+/* writing focus: the margin line inks in red and doubles, with a faint wash either side */
+:global(.nb-page).right:has(.editor:focus-visible) {
+  background-image: linear-gradient(90deg, transparent 36px, rgba(176, 67, 46, .09) 43px, var(--red-ink) 43px 45px, rgba(176, 67, 46, .09) 45px, transparent 52px);
+}
+@media (min-width: 901px) {
+  :global(.nb-page-r) .rightPad { padding: 40px 50px 38px 60px; }
+}
+.toolbar { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; padding-bottom: 6px; }
+.modes { gap: 26px; }
+.modes button { font-size: 15px; }
+.dot { display: inline-block; width: 4px; height: 4px; margin-left: 6px; border-radius: 50%; background: var(--hand-ink); vertical-align: middle; }
+.count { color: var(--ink-faint); white-space: nowrap; }
+
+.surface { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.surface[hidden] { display: none; }
+.editor {
+  flex: 1; min-height: 0; display: block; resize: none;
+  margin: 0 -50px 0 -60px; padding: 10px 50px 10px 60px;
+  border: 0; border-radius: 0; outline: 0;
+  background-color: transparent;
+  background-image: repeating-linear-gradient(180deg, transparent 0 calc(var(--line) - 1px), var(--rule) calc(var(--line) - 1px) var(--line));
+  background-attachment: local;
+  background-position: 0 7px;   /* each rule sits just under its line of text (rows start below the 10px top padding) */
+  font-family: var(--hand); font-size: 21px; line-height: var(--line); color: var(--hand-ink);
+  text-shadow: 0 0 .7px rgba(29, 42, 80, .45);
+  caret-color: var(--red-ink);
+  /* text scrolled past an edge fades into the paper over a full line instead of being sliced;
+     page.tsx marks the edges (data-edge) only while there is text beyond them */
+  --clear-top: 0px; --fade-top: 0px; --fade-bottom: 0px;
+  mask-image: linear-gradient(180deg, transparent var(--clear-top), #000 var(--fade-top), #000 calc(100% - var(--fade-bottom)), transparent 100%);
+  scrollbar-width: thin; scrollbar-color: #cdbfa6 transparent;
+}
+.editor[data-edge~="top"] { --clear-top: 8px; --fade-top: calc(var(--line) + 6px); }
+.editor[data-edge~="bottom"] { --fade-bottom: 24px; }
+.book .editor:focus-visible { outline: none !important; }
+.editor::placeholder { color: #aaa293; opacity: 1; text-shadow: none; }
+.editor[readonly] { color: var(--ink-soft); }
+
+.footer { flex: none; display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 10px 18px; padding-top: 14px; }
+.meta { display: flex; align-items: baseline; gap: 16px; min-width: 0; }
+.meta:has(.error) { flex-basis: 100%; }
+.meta:has(.error) .progress { display: none; }
+.saveStatus { font-family: var(--mono); font-size: 11px; letter-spacing: .1em; color: var(--ink-faint); white-space: nowrap; }
+.error { font-family: var(--hand); font-size: 15px; line-height: 1.5; color: var(--red-ink); }
+.progress { display: inline-flex; gap: 7px; font-family: var(--latin); font-style: italic; font-size: 13px; color: #c4bba9; white-space: nowrap; }
+.pageNow { color: var(--ink-faint); }
+.pageDone { color: var(--hand-ink); }
+.actions { display: flex; align-items: baseline; justify-content: flex-end; flex-wrap: wrap; gap: 10px 20px; margin-left: auto; }
+.book button.finish { font-weight: 600; font-size: 16px; }
+.book button.quiet { font-family: var(--mono); font-size: 11.5px; letter-spacing: .1em; color: var(--ink-soft); }
+.book button.fix { position: relative; font-family: var(--hand); font-size: 16px; color: var(--red-ink) !important; padding-bottom: 2px; }
+.fix::after { content: ""; position: absolute; left: -2px; right: -3px; bottom: -3px; height: 6px; background: var(--red-underline) no-repeat center / 100% 100%; }
+
+.empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 22px; text-align: center; font-family: var(--hand); font-size: 18px; color: var(--ink-soft); }
+.finished { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; text-align: center; }
+.finished h2 { font-weight: 900; font-size: 24px; line-height: 1.3; }
+.finished :global(.nb-hand) { color: var(--ink-soft); }
+.finishedActions { display: flex; align-items: baseline; gap: 26px; margin-top: 14px; }
+.tick { width: 44px; height: 33px; fill: none; stroke: var(--red-ink); stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round;
+  stroke-dasharray: 60; stroke-dashoffset: 60; animation: tick-draw .7s cubic-bezier(.6, .1, .2, 1) .15s forwards; }
+@keyframes tick-draw { to { stroke-dashoffset: 0; } }
+
+/* ── drawing on the same sheet ───────────────────────────────────── */
+.drawing { display: flex; flex-direction: column; min-height: 0; }
+.drawTools { display: flex; flex-wrap: wrap; align-items: center; gap: 0 14px; padding-bottom: 8px; }
+.toolSet, .swatches, .drawActions { display: flex; align-items: center; }
+.drawActions { margin-left: auto; }
+.tool { position: relative; width: 34px; height: 34px; display: inline-flex; align-items: center; justify-content: center; color: var(--ink-soft); transition: color .2s; }
+.tool:hover:not(:disabled) { color: var(--ink); }
+.tool[aria-pressed="true"] { color: var(--hand-ink); }
+.tool[aria-pressed="true"]::after { content: ""; position: absolute; left: 7px; right: 6px; bottom: 2px; height: 6px; background: var(--red-underline) no-repeat center / 100% 100%; }
+.swatch { width: 24px; height: 34px; display: inline-flex; align-items: center; justify-content: center; }
+.swatch span { width: 11px; height: 11px; border-radius: 50%; transition: transform .2s; }
+.swatch:hover:not(:disabled) span { transform: scale(1.15); }
+.swatch[aria-pressed="true"] span { outline: 1.2px solid var(--ink-soft); outline-offset: 3px; }
+.brushSize { display: inline-flex; align-items: center; gap: 8px; height: 34px; }
+.brushSize span { font-family: var(--mono); font-size: 10.5px; letter-spacing: .14em; color: var(--ink-faint); }
+.brushSize output { font-family: var(--mono); font-size: 11px; color: var(--ink-soft); width: 14px; text-align: right; }
+.brushSize input { -webkit-appearance: none; appearance: none; width: 64px; height: 18px; background: transparent; cursor: pointer; }
+.brushSize input::-webkit-slider-runnable-track { height: 1px; background: var(--ink-faint); }
+.brushSize input::-moz-range-track { height: 1px; background: var(--ink-faint); }
+.brushSize input::-webkit-slider-thumb { -webkit-appearance: none; width: 11px; height: 11px; margin-top: -5px; border-radius: 50%; background: var(--hand-ink); }
+.brushSize input::-moz-range-thumb { width: 11px; height: 11px; border: 0; border-radius: 50%; background: var(--hand-ink); }
+.canvas {
+  /* the sheet runs from the margin line to the page edge, as the writing lines do */
+  display: block; width: calc(100% + 65px); margin: 0 -50px 0 -15px; height: auto; aspect-ratio: 10 / 7; touch-action: none; cursor: crosshair;
+  background-image: repeating-linear-gradient(180deg, transparent 0 calc(var(--line) - 1px), rgba(205, 213, 220, .6) calc(var(--line) - 1px) var(--line));
+  border-top: 1px dotted var(--dotted); border-bottom: 1px dotted var(--dotted);
+}
+.erasing { cursor: cell; }
+.drawingLimit { margin-top: 8px; }
+
+/* ── phones: one continuous sheet ─────────────────────────────────── */
+@media (max-width: 900px) {
+  .leftPad { overflow: visible; padding-bottom: 18px !important; }
+  .book button.phoneLang { display: inline-block; font-family: var(--mono); font-size: 11px; letter-spacing: .12em; color: var(--ink-soft);
+    border: 1px solid rgba(31, 28, 23, .3) !important; border-radius: 3px; padding: 3px 8px; min-width: 32px; }
+  .title { font-size: 27px; }
+  .dates { margin-top: 20px; }
+  .book button.todayButton, .dateField input { min-height: 40px; }
+  .toc { display: flex; flex: none; gap: 22px; min-height: 0; overflow-x: auto; overflow-y: hidden; padding-bottom: 4px; }
+  .toc li { flex: none; }
+  .toc button { width: auto; height: auto; min-height: 48px; flex-direction: column; gap: 0; padding: 10px 2px 4px; }
+  .tocLead { display: none; }
+
+  :global(.nb-page).right { background-image: linear-gradient(90deg, transparent 22px, var(--margin) 22px 23px, transparent 23px); }
+  :global(.nb-page).right:has(.editor:focus-visible) {
+    background-image: linear-gradient(90deg, transparent 15px, rgba(176, 67, 46, .09) 21px, var(--red-ink) 21px 23px, rgba(176, 67, 46, .09) 23px, transparent 29px);
+  }
+  :global(.nb-page-r) .rightPad { padding: 22px 22px 40px 34px; }
+  .modes button { font-size: 16px; min-height: 40px; }
+  .editor { flex: none; height: calc(var(--line) * 14 + 20px); margin: 0 -22px 0 -34px; padding: 10px 22px 10px 34px; font-size: 19px; resize: vertical; }
+  .canvas { width: calc(100% + 33px); margin: 0 -22px 0 -11px; }
+  .tool { width: 40px; height: 40px; }
+  .swatch { width: 30px; height: 40px; }
+  .brushSize { height: 40px; }
+  .footer { padding-top: 16px; }
+  .actions { gap: 12px 20px; }
+  .actions button { min-height: 36px; }
+  .finished, .empty { min-height: calc(var(--line) * 10); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tick { animation: none; stroke-dashoffset: 0; }
+  .aboutToggle::after { transition: none; }
+}
