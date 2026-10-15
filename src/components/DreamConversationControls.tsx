@@ -1,6 +1,7 @@
 "use client";
 
 import { buildConsultationNotes, type DreamConversationGoal } from "@/lib/dreamSupport";
+import css from "./DreamConversationControls.module.css";
 
 interface Props {
   goal: DreamConversationGoal;
@@ -26,11 +27,11 @@ export function DreamConversationControls({ goal, onGoalChange, disabled, lang, 
   }
 
   return (
-    <section className="dream-conversation-controls" aria-label={zh ? "对话方向" : "Conversation focus"}>
-      <fieldset className="dream-conversation-goals" disabled={disabled}>
+    <section className={css.controls} aria-label={zh ? "对话方向" : "Conversation focus"}>
+      <fieldset className={css.goals} disabled={disabled}>
         <legend className="sr-only">{zh ? "对话方向" : "Conversation focus"}</legend>
         {(["recall", "support"] as const).map((value) => (
-          <label key={value} className={goal === value ? "conversation-goal selected" : "conversation-goal"}>
+          <label key={value} className={goal === value ? `${css.goal} ${css.selected}` : css.goal}>
             <input type="radio" name="conversationGoal" value={value} checked={goal === value} onChange={() => onGoalChange(value)} />
             <span>{value === "recall" ? (zh ? "回忆梦境" : "Dream recall") : (zh ? "情绪支持" : "Emotional support")}</span>
           </label>
@@ -38,14 +39,14 @@ export function DreamConversationControls({ goal, onGoalChange, disabled, lang, 
       </fieldset>
       {goal === "support" && (
         <>
-          <p className="conversation-boundary" role="note">
+          <p className={css.boundary} role="note">
             {zh ? "AI 情绪支持，不是心理治疗或诊断。文字会自动保存；不会自动分享给医生。" : "AI emotional support, not therapy or diagnosis. Text autosaves; nothing is automatically shared with a clinician."}
           </p>
           {statements.length > 0 && (
-            <details className="consultation-notes">
+            <details className={`consultation-notes ${css.notes}`}>
               <summary>{zh ? "咨询准备记录" : "Consultation notes"}</summary>
               <textarea readOnly aria-label={zh ? "咨询准备记录预览" : "Consultation notes preview"} value={notes} rows={8} />
-              <button type="button" className="mist-button-secondary" onClick={downloadNotes}>
+              <button type="button" className="nb-act-quiet" onClick={downloadNotes}>
                 {zh ? "下载个人记录" : "Download personal notes"}
               </button>
             </details>
