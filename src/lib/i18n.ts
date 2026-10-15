@@ -608,8 +608,8 @@ const en: typeof zh = {
     contents: "Contents",
     closeContents: "Close",
     tagline: "A dream notebook for your bedside",
-    soundOn: "Pencil sound on",
-    soundOff: "Pencil sound off",
+    soundOn: "Pen sound on",
+    soundOff: "Pen sound off",
   },
 
   nbLanding: {

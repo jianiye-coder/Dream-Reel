@@ -110,7 +110,7 @@ export function getCurrentDreamEncryptionKeyId() {
   return getCurrentKey().id;
 }
 
-export function isEncryptedDreamText(value: string) {
+function isEncryptedDreamText(value: string) {
   return value.startsWith(LEGACY_PREFIX) || value.startsWith(CURRENT_PREFIX);
 }
 

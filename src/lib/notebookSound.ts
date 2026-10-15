@@ -3,7 +3,7 @@
 /* Paper sounds for the notebook.
    - Writing strokes are a real fountain-pen recording (public/sounds, CC0 — see CREDITS.md), sliced
      into grains. A nib glides rather than scratches, so attacks are soft and the top end is rolled off.
-   - Eraser, tap and page turn are synthesised with Web Audio.
+   - Tap and page turn are synthesised with Web Audio.
    Browsers only allow audio after a user gesture, so nothing plays until unlock() runs. */
 
 const PREF_KEY = "dr-sound";
@@ -14,10 +14,10 @@ let ctx: AudioContext | null = null;
 let master: GainNode | null = null;
 let roomSend: GainNode | null = null;
 let noise: AudioBuffer | null = null;
-let pencil: AudioBuffer | null = null;
+let pen: AudioBuffer | null = null;
 let grains: [number, number][] = [];
 let lastGrain = -1;
-let pencilLoading = false;
+let penLoading = false;
 
 const listeners = new Set<(on: boolean) => void>();
 
@@ -78,24 +78,24 @@ function audio(): AudioContext | null {
     b2 = 0.57 * b2 + w * 1.0526913;
     d[i] = (b0 + b1 + b2 + w * 0.1848) * 0.2;
   }
-  void loadPencil();
+  void loadPen();
   return ctx;
 }
 
-async function loadPencil() {
-  if (pencil || pencilLoading || !ctx) return;
-  pencilLoading = true;
+async function loadPen() {
+  if (pen || penLoading || !ctx) return;
+  penLoading = true;
   try {
     const [buf, offsets] = await Promise.all([
       fetch("/sounds/pen-sprite.mp3").then((r) => r.arrayBuffer()),
       fetch("/sounds/pen-grains.json").then((r) => r.json() as Promise<[number, number][]>),
     ]);
-    pencil = await ctx.decodeAudioData(buf);
+    pen = await ctx.decodeAudioData(buf);
     grains = offsets;
   } catch {
     // synthesised strokes stand in
   } finally {
-    pencilLoading = false;
+    penLoading = false;
   }
 }
 
@@ -126,7 +126,7 @@ function grain(when: number, strength: number, maxDur: number) {
   const s = ctx!.createBufferSource();
   const g = ctx!.createGain();
   const lp = ctx!.createBiquadFilter();
-  s.buffer = pencil;
+  s.buffer = pen;
   s.playbackRate.value = 0.95 + Math.random() * 0.1;
   lp.type = "lowpass";
   lp.frequency.value = 3800 + Math.random() * 800;
@@ -164,7 +164,7 @@ function synthStroke(when: number, strength: number) {
 /** A short pen mark (annotations, ticks). */
 export function stroke(strength = 1, when = 0) {
   if (!audio()) return;
-  if (pencil) grain(when, strength * 0.8, 0.14 + Math.random() * 0.08);
+  if (pen) grain(when, strength * 0.8, 0.14 + Math.random() * 0.08);
   else synthStroke(when, strength);
 }
 
@@ -173,7 +173,7 @@ export function writeChar(ch: string, when = 0): number {
   if (!ch || /\s/.test(ch) || !audio()) return 0;
   const punct = PUNCT.test(ch);
   const cjk = CJK.test(ch);
-  if (pencil) {
+  if (pen) {
     if (punct) return grain(when, 0.45, 0.09);
     // a character is one or two gliding strokes of the nib, slightly overlapping
     let d = grain(when, 1, cjk ? 0.3 : 0.18);
@@ -184,23 +184,6 @@ export function writeChar(ch: string, when = 0): number {
   let t = when;
   for (let i = 0; i < n; i++) { synthStroke(t, punct ? 0.55 : 1); t += 0.03 + Math.random() * 0.045; }
   return t - when;
-}
-
-export function erase() {
-  if (!audio()) return;
-  const t = ctx!.currentTime;
-  for (let i = 0; i < 2; i++) {
-    const s = noiseSource(), bp = ctx!.createBiquadFilter(), g = ctx!.createGain();
-    bp.type = "bandpass";
-    bp.frequency.value = 650 + Math.random() * 350;
-    bp.Q.value = 1.1;
-    const st = t + i * 0.09;
-    g.gain.setValueAtTime(0.0001, st);
-    g.gain.exponentialRampToValueAtTime(0.09, st + 0.025);
-    g.gain.exponentialRampToValueAtTime(0.0001, st + 0.08);
-    s.connect(bp).connect(g).connect(master!);
-    s.start(st, Math.random() * 2.5, 0.12);
-  }
 }
 
 export function tap() {

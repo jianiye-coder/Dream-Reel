@@ -91,7 +91,7 @@ function LoginForm() {
         <div className="nb-auth-form">
           <span className="nb-kicker">{P.authKicker}</span>
           <h1>{isRegister ? P.authTitleUp : P.authTitleIn}</h1>
-          <div className="nb-pencil-tabs" role="tablist" aria-label={P.authTabs}>
+          <div className="nb-ink-tabs" role="tablist" aria-label={P.authTabs}>
             {(["signin", "register"] as const).map((t) => (
               <button key={t} type="button" role="tab" aria-selected={tab === t} onClick={() => { setTab(t); setError(""); stroke(0.5); }}>
                 {t === "signin" ? L.signIn : L.register}

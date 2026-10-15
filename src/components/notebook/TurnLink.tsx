@@ -7,7 +7,7 @@ import { flipPage } from "@/lib/notebookFlip";
 import { unlock } from "@/lib/notebookSound";
 
 /** Navigate by turning the current right-hand page; falls back to a plain push off-book or on phones. */
-export function useTurnTo() {
+function useTurnTo() {
   const router = useRouter();
   return useCallback((href: string) => {
     const book = document.querySelector<HTMLElement>(".nb-book:not(.nb-closed)");

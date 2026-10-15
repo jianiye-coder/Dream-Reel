@@ -19,7 +19,7 @@ const credentialsSchema = z.object({
   password: z.string().min(6),
 });
 
-export const { handlers, signIn, signOut, auth } = NextAuth({
+export const { handlers, auth } = NextAuth({
   ...authConfig,
   adapter: PostgresAdapter(getPool()),
   providers: [

@@ -84,7 +84,7 @@ function exportableDream(entry: DreamEntry): Omit<DreamEntry, "thumbnailUrl"> {
   return dream as Omit<DreamEntry, "thumbnailUrl">;
 }
 
-export function buildDreamExportPayload(
+function buildDreamExportPayload(
   entries: DreamEntry[],
   exportedAt = new Date(),
 ): DreamExportPayload {

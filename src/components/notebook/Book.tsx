@@ -23,10 +23,10 @@ function edgeTexture(outerLeft: boolean) {
 export const Book = forwardRef<HTMLDivElement, {
   className?: string;
   ribbon?: boolean;
-  pencil?: boolean;
+  pen?: boolean;
   tilt?: boolean;
   children: React.ReactNode;
-}>(function Book({ className, ribbon = true, pencil = false, tilt = true, children }, ref) {
+}>(function Book({ className, ribbon = true, pen = false, tilt = true, children }, ref) {
   const el = useRef<HTMLDivElement>(null);
   useImperativeHandle(ref, () => el.current as HTMLDivElement);
 
@@ -61,7 +61,7 @@ export const Book = forwardRef<HTMLDivElement, {
       {children}
       <div className="nb-spine" />
       {ribbon && <div className="nb-ribbon" />}
-      {pencil && <div className="nb-pencil" />}
+      {pen && <div className="nb-pen" />}
     </div>
   );
 });

@@ -11,7 +11,7 @@ import { getApiErrorMessage } from "@/lib/apiErrors";
 type Quota = { dreamEntries: number; analysis: number; imageGenerations: number };
 type BillingStatus = { plan: "free" | "plus"; isUnlimited: boolean; periodEnd: string; limits: Quota; usage: Quota; remaining: Quota };
 
-// usage drawn as ten little pencil boxes
+// usage drawn as ten little inked boxes
 function Boxes({ used, total }: { used: number; total: number }) {
   const filled = total > 0 ? Math.min(10, Math.round((used / total) * 10)) : 0;
   return <span className="nb-boxes" aria-hidden>{Array.from({ length: 10 }, (_, i) => <i key={i} className={i < filled ? "nb-f" : undefined} />)}</span>;
@@ -159,7 +159,7 @@ export default function AccountPage() {
             <div className="nb-account-block">
               <h2>{P.gender}</h2>
               <p className="nb-hint">{P.genderHint}</p>
-              <div className="nb-pencil-tabs">
+              <div className="nb-ink-tabs">
                 {P.genders.map(({ v, label }) => (
                   <button key={v} type="button" aria-pressed={userGender === v} onClick={() => setUserGender(userGender === v ? "" : v)}>{label}</button>
                 ))}
