@@ -101,8 +101,7 @@ html[lang="en"] .nb-root {
   transform-style: preserve-3d;
   transform: rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg));
   transition: transform 1.2s cubic-bezier(.2, .7, .2, 1);
-}   /* backwards only: a lingering opacity animation would flatten the 3D */
-@keyframes settle { from { opacity: 0; transform: translateY(14px) scale(.985); } }
+}
 
 /* working pages lean in: the book is laid out at one fixed size and the whole stage is zoomed to fill the window
    (NotebookBook sets --lean). Type, photos, page curl and turns all scale together. */

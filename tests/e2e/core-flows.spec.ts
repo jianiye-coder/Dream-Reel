@@ -76,7 +76,7 @@ test("keyboard focus is visible and mobile microcopy stays readable", async ({ p
   expect(focusStyle.style).not.toBe("none");
 
   // the smallest copy on the landing page is the mono kicker above the headline
-  const kicker = page.locator(".nb-kicker").first();
+  const kicker = page.locator("main .nb-kicker").first();
   await expect(kicker).toBeVisible();
   const fontSize = await kicker.evaluate((element) => Number.parseFloat(getComputedStyle(element).fontSize));
   expect(fontSize).toBeGreaterThanOrEqual(12);
