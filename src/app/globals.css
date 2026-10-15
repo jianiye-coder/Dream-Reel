@@ -516,12 +516,6 @@ body:has(.mist-page)::after {
    DREAM REEL LANDING — General Sans editorial typography
    ═══════════════════════════════════════════════════════════ */
 
-/* Keyboard navigation must remain visible across both light and dark surfaces. */
-:where(a, button, input, textarea, select, summary, [tabindex]):focus-visible:not(.nb-root *) {
-  outline: 3px solid #f7c873 !important;
-  outline-offset: 3px;
-  box-shadow: 0 0 0 5px rgba(72, 45, 126, 0.72) !important;
-}
 
 /* --------------------------------------------------------------------------
    Dream Reel morning system
