@@ -32,6 +32,7 @@ export default function LandingPage() {
   const indexEl = useRef<HTMLOListElement>(null);
   const [thread, setThread] = useState<{ top: number; height: number } | null>(null);
   const opened = useRef(false);
+  const writeDemoRef = useRef<() => Promise<void>>(async () => {});
   const run = useRef(0);
 
   useEffect(() => {
@@ -64,6 +65,8 @@ export default function LandingPage() {
     }
   }, [L]);
 
+  useEffect(() => { writeDemoRef.current = writeDemo; }, [writeDemo]);
+
   // hand the left half over from the cover to the real page; safe to call more than once
   const landed = useCallback(() => {
     setOpening(false);
@@ -86,8 +89,8 @@ export default function LandingPage() {
     // animationend never fires and the left page would stay hidden
     landed();
     setLit(true);
-    void writeDemo();
-  }, [writeDemo, landed]);
+    void writeDemoRef.current();
+  }, [landed]);
 
   useEffect(() => {
     if (sessionStorage.getItem("dr-cover-seen") || matchMedia("(max-width: 900px)").matches) void open(true);
@@ -182,7 +185,7 @@ export default function LandingPage() {
             <p className="nb-body nb-small">{L.laterSmall}</p>
             <figure className="nb-print">
               <span className="nb-tape" />
-              <Image src="/dream-photo-1.jpg" alt="" width={520} height={390} />
+              <Image src="/images/dream-doors.jpg" alt="" width={520} height={390} />
               <span className="nb-cap">{L.photoCaption}</span>
             </figure>
           </div>
