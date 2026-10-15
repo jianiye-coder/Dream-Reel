@@ -56,8 +56,9 @@ export function NotebookShell({ surface = "desk", lean = false, children }: {
     { href: "/morning-pages", label: N.morningPages },
     { href: "/archive", label: N.archive },
     { href: "/blog/dreams-and-consciousness", label: N.blog },
-    status === "authenticated" ? { href: "/account", label: N.account } : { href: "/pricing", label: N.pricing },
-    ...(status === "authenticated" ? [] : [{ href: "/login", label: N.login }]),
+    // while the session loads, leave the account slot empty rather than flash "Sign in"
+    ...(status === "authenticated" ? [{ href: "/account", label: N.account }] : []),
+    ...(status === "unauthenticated" ? [{ href: "/pricing", label: N.pricing }, { href: "/login", label: N.login }] : []),
   ];
   const linkFor = (href: string, label: string, className?: string) => {
     const on = pathname === href ? "nb-on" : undefined;
