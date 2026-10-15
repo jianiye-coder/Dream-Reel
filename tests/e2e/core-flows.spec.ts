@@ -1,7 +1,16 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
 const email = `e2e-${Date.now()}@example.com`;
 const password = "correct-horse-battery";
+
+// Auth.js mints a new CSRF cookie for every auth request that arrives without one. On a cold
+// dev server the page's first session fetches are still compiling when the form is submitted,
+// and their late Set-Cookie can replace the cookie matching the token signIn() posts
+// (MissingCSRF). Fetching the token up front (page.request shares the browser's cookie jar)
+// means every later request carries a valid cookie.
+async function primeCsrfCookie(page: Page) {
+  expect((await page.request.get("/api/auth/csrf")).ok()).toBe(true);
+}
 
 test("anonymous users are redirected from protected pages", async ({ page }) => {
   await page.goto("/account");
@@ -9,6 +18,7 @@ test("anonymous users are redirected from protected pages", async ({ page }) => 
 });
 
 test("register, sign in, switch language, and update account", async ({ page, context }) => {
+  await primeCsrfCookie(page);
   await page.goto("/login");
   await page.getByRole("button", { name: /register|注册/i }).first().click();
   await page.locator('input[type="text"]').fill("E2E User");
@@ -26,6 +36,7 @@ test("register, sign in, switch language, and update account", async ({ page, co
 
   // Sign out and back in with the normalised address.
   await context.clearCookies();
+  await primeCsrfCookie(page);
   await page.goto("/login");
   await page.locator('input[type="email"]').fill(email);
   await page.locator('input[type="password"]').fill(password);
@@ -67,6 +78,21 @@ test("register, sign in, switch language, and update account", async ({ page, co
 
   await page.goto("/account");
   await expect(page).toHaveURL(/\/account/);
+  // The email comes from the client session, so once it shows the page is hydrated
+  // and clicks are handled.
+  await expect(page.getByText(email)).toBeVisible();
+
+  const nameInput = page.getByPlaceholder("写在扉页上的名字");
+  await expect(nameInput).toHaveValue("E2E User");
+  await nameInput.fill("Renamed Dreamer");
+  await page.getByRole("button", { name: "保存", exact: true }).click();
+  await expect(page.getByRole("status").filter({ hasText: "名字已更新" })).toBeVisible();
+
+  await page.reload();
+  await expect(page.getByText(email)).toBeVisible();
+  await expect(nameInput).toHaveValue("Renamed Dreamer");
+  await expect(page.locator(".nb-account .nb-owner")).toHaveText("Renamed Dreamer");
+
   await expect(page.locator("html")).toHaveAttribute("lang", "zh-CN");
   await page.getByRole("button", { name: "Switch to English" }).first().click();
   await expect(page.locator("html")).toHaveAttribute("lang", "en");

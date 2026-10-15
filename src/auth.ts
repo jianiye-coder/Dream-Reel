@@ -63,8 +63,17 @@ export const { handlers, auth } = NextAuth({
   session: { strategy: "jwt" },
   pages: { signIn: "/login" },
   callbacks: {
-    jwt({ token, user }) {
+    async jwt({ token, user, trigger }) {
       if (user?.id) token.id = user.id;
+      // useSession().update() after a profile change: refresh the name from the database
+      // rather than trusting the client payload, so the new name survives a reload.
+      if (trigger === "update" && token.id) {
+        const { rows } = await getPool().query<{ name: string | null }>(
+          "SELECT name FROM users WHERE id = $1",
+          [Number(token.id)],
+        );
+        if (rows[0]) token.name = rows[0].name;
+      }
       return token;
     },
     session({ session, token }) {
