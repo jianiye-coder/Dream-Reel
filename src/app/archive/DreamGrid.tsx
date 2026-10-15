@@ -292,6 +292,37 @@ function toEditForm(entry: DreamEntry): DreamEditForm {
   };
 }
 
+type UpdateBody = ReturnType<typeof updateBodyFor>;
+function updateBodyFor(id: number, currentForm: DreamEditForm, visualBrief: string | null) {
+  return {
+    id,
+    title: currentForm.title,
+    inputMode: "text" as const,
+    rawText: currentForm.rawText,
+    cleanText: currentForm.cleanText.trim() || currentForm.rawText.trim(),
+    mood: currentForm.mood,
+    stressScore: currentForm.stressScore ? Number(currentForm.stressScore) : null,
+    tags: splitCommaList(currentForm.tags),
+    people: splitCommaList(currentForm.people),
+    locations: splitCommaList(currentForm.locations),
+    symbols: splitCommaList(currentForm.symbols),
+    capturedAt: currentForm.dreamDate || undefined,
+    imageUrl: currentForm.imageUrl,
+    assetStatus: currentForm.imageUrl ? (currentForm.assetStatus ?? "generated") : null,
+    sleepStart: currentForm.sleepStart || null,
+    wakeTime: currentForm.wakeTime || null,
+    sleepQuality: currentForm.sleepQuality,
+    preSleepMeal: currentForm.preSleepMeal || null,
+    preSleepActivity: currentForm.preSleepActivity || null,
+    sleepInsight: currentForm.sleepInsight || null,
+    // saves only happen once the full entry is loaded (see `ready`), so this is never the list
+    // copy's missing value
+    visualBrief,
+  };
+}
+
+const SAVE_TIMEOUT_MS = 20_000;
+
 function getFocusableElements(container: HTMLElement): HTMLElement[] {
   return Array.from(
     container.querySelectorAll<HTMLElement>(
@@ -510,60 +541,43 @@ function DreamEditorModal({
   // the dream the editor is showing, and the analysis / image requests running for it; both are
   // dropped when another dream opens or the editor closes
   const entryIdRef = useRef<number | null>(null);
-  const opsRef = useRef<{ analyze: AbortController | null; image: AbortController | null }>({ analyze: null, image: null });
+  const opsRef = useRef<{ analyze: object | null; image: object | null }>({ analyze: null, image: null });
   const formRef = useRef<DreamEditForm | null>(null);
   useEffect(() => { formRef.current = form; }, [form]);
 
-  const buildUpdateBody = useCallback((currentForm: DreamEditForm) => {
-    if (!entry) return null;
-
-    return {
-      id: entry.id,
-      title: currentForm.title,
-      inputMode: "text" as const,
-      rawText: currentForm.rawText,
-      cleanText: currentForm.cleanText.trim() || currentForm.rawText.trim(),
-      mood: currentForm.mood,
-      stressScore: currentForm.stressScore ? Number(currentForm.stressScore) : null,
-      tags: splitCommaList(currentForm.tags),
-      people: splitCommaList(currentForm.people),
-      locations: splitCommaList(currentForm.locations),
-      symbols: splitCommaList(currentForm.symbols),
-      capturedAt: currentForm.dreamDate || undefined,
-      imageUrl: currentForm.imageUrl,
-      assetStatus: currentForm.imageUrl ? (currentForm.assetStatus ?? "generated") : null,
-      sleepStart: currentForm.sleepStart || null,
-      wakeTime: currentForm.wakeTime || null,
-      sleepQuality: currentForm.sleepQuality,
-      preSleepMeal: currentForm.preSleepMeal || null,
-      preSleepActivity: currentForm.preSleepActivity || null,
-      sleepInsight: currentForm.sleepInsight || null,
-      // the current brief, including one a re-analysis just produced. Saves only happen once the
-      // full entry is loaded (see `ready`), so this is never the list copy's missing value.
-      visualBrief: localVisualBrief ?? null,
-    };
-  }, [entry, localVisualBrief]);
+  // the brief is read from a ref so a save started in one render (e.g. after an image finished)
+  // still sends the newest one, even if an analysis replaced it meanwhile
+  const visualBriefRef = useRef<string | null>(null);
+  const setBrief = useCallback((value: string | null) => {
+    visualBriefRef.current = value;
+    setLocalVisualBrief(value);
+  }, []);
+  const buildUpdateBody = useCallback((currentForm: DreamEditForm) => (
+    entry ? updateBodyFor(entry.id, currentForm, visualBriefRef.current) : null
+  ), [entry]);
 
   // Saves go out one at a time, in order, so an older PUT still in flight can never land after a
   // newer one (autosave, close, flush) and overwrite it.
   const saveChainRef = useRef<Promise<unknown>>(Promise.resolve());
-  const savesInFlightRef = useRef(0);
-  const counted = useCallback(<T,>(task: () => Promise<T>) => async (): Promise<T> => {
-    savesInFlightRef.current += 1;
-    try { return await task(); } finally { savesInFlightRef.current -= 1; }
-  }, []);
   const enqueueSave = useCallback(<T,>(task: () => Promise<T>): Promise<T> => {
-    const run = saveChainRef.current.then(counted(task), counted(task));
+    const run = saveChainRef.current.then(task, task);
     saveChainRef.current = run.catch(() => undefined);
     return run;
-  }, [counted]);
+  }, []);
 
-  const putEntry = useCallback((body: NonNullable<ReturnType<typeof buildUpdateBody>>): Promise<DreamEntry> => enqueueSave(async () => {
-    const response = await fetch("/api/dreams", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
+  // one PUT; a request that hangs gives up after 20 s so the queue moves on and an error shows
+  const putNow = useCallback(async (body: UpdateBody): Promise<DreamEntry> => {
+    let response: Response;
+    try {
+      response = await fetch("/api/dreams", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(SAVE_TIMEOUT_MS),
+      });
+    } catch {
+      throw new Error(M.updateFailed);
+    }
 
     const payload = (await response.json()) as {
       entry?: DreamEntry;
@@ -581,7 +595,8 @@ function DreamEditorModal({
     }
 
     return payload.entry;
-  }), [enqueueSave, lang, M.updateFailed]);
+  }, [lang, M.updateFailed]);
+  const putEntry = useCallback((body: UpdateBody) => enqueueSave(() => putNow(body)), [enqueueSave, putNow]);
 
   const updateEntry = useCallback(async (currentForm: DreamEditForm): Promise<DreamEntry> => {
     const body = buildUpdateBody(currentForm);
@@ -596,7 +611,7 @@ function DreamEditorModal({
     autoSaveTimerRef.current = null;
     pendingBodyRef.current = null;
   }, []);
-  const flushPendingSave = useCallback(() => {
+  const flushPendingSave = useCallback((leavingPage = false) => {
     const body = pendingBodyRef.current;
     cancelPendingSave();
     if (!body) return;
@@ -607,15 +622,16 @@ function DreamEditorModal({
       headers: { "Content-Type": "application/json" },
       body: json,
       keepalive: new Blob([json]).size < 60_000,
+      signal: AbortSignal.timeout(SAVE_TIMEOUT_MS),
     }).then(() => undefined, () => undefined);
-    if (savesInFlightRef.current === 0) {
-      // nothing ahead of it: send synchronously, which is what a page being hidden needs
-      const run = counted(send)();
-      saveChainRef.current = run;
+    if (leavingPage) {
+      // The page is going away: a request queued behind one in flight would never be sent, so
+      // this one goes out now (keepalive). It is the newest edit; the rare reorder is accepted.
+      void send();
     } else {
       void enqueueSave(send);
     }
-  }, [cancelPendingSave, counted, enqueueSave]);
+  }, [cancelPendingSave, enqueueSave]);
 
   const closeEditor = useCallback(async () => {
     if (!entry || !form || saving) return;
@@ -651,8 +667,8 @@ function DreamEditorModal({
     flushPendingSave();
     const id = entry?.id ?? null;
     if (id !== entryIdRef.current) {
-      opsRef.current.analyze?.abort();
-      opsRef.current.image?.abort();
+      // Requests already running are not aborted: the server finishes (and charges) them anyway.
+      // Their results are routed by the dream they were started for (see generateImage / analyzeAndAsk).
       opsRef.current = { analyze: null, image: null };
       entryIdRef.current = id;
       setIsAnalyzing(false);
@@ -671,14 +687,14 @@ function DreamEditorModal({
       return;
     }
     setForm(toEditForm(entry));
-    setLocalVisualBrief(entry.visualBrief ?? null);
+    setBrief(entry.visualBrief ?? null);
     setImagePromptEdited(false);
     setFollowUpQuestions([]);
     setFollowUpAnswers({});
     setMessage("");
     setError("");
     setAutoSaveStatus("idle");
-  }, [entry, flushPendingSave]);
+  }, [entry, flushPendingSave, setBrief]);
 
   // leaving the page (Back, closing the tab) inside the 1.5 s autosave delay still saves the edit;
   // coming back from the back/forward cache, a "Saving…" left from that moment is stale
@@ -686,10 +702,11 @@ function DreamEditorModal({
     const onShow = (event: PageTransitionEvent) => {
       if (event.persisted) setAutoSaveStatus((current) => (current === "saving" ? "idle" : current));
     };
-    addEventListener("pagehide", flushPendingSave);
+    const onHide = () => flushPendingSave(true);
+    addEventListener("pagehide", onHide);
     addEventListener("pageshow", onShow);
     return () => {
-      removeEventListener("pagehide", flushPendingSave);
+      removeEventListener("pagehide", onHide);
       removeEventListener("pageshow", onShow);
       flushPendingSave();
     };
@@ -806,10 +823,9 @@ function DreamEditorModal({
     }
 
     const startedFor = entryIdRef.current;
-    const op = new AbortController();
-    opsRef.current.image?.abort();
+    const op = {};
     opsRef.current.image = op;
-    const stillHere = () => !op.signal.aborted && entryIdRef.current === startedFor;
+    const stillHere = () => entryIdRef.current === startedFor;
     setGeneratingImage(true);
     setMessage("");
     setError("");
@@ -833,14 +849,27 @@ function DreamEditorModal({
         body: JSON.stringify({
           prompt,
           size: "1024x1024",
-          visualBrief: localVisualBrief,
+          visualBrief: visualBriefRef.current,
           dreamText: form?.rawText ?? null,
           genderContext: genderContext || null,
         }),
-        signal: op.signal,
       });
       const payload = (await response.json()) as { imageUrl?: string; revisedPrompt?: string | null; error?: string };
-      if (!stillHere()) return; // closed, or another dream opened: this picture isn't for it
+      if (!stillHere()) {
+        // the picture was paid for and made for a dream that is no longer open: file it onto that
+        // dream (only its image fields change) without touching the form now on screen
+        if (response.ok && payload.imageUrl && startedFor != null) {
+          const imageUrl = payload.imageUrl;
+          void enqueueSave(async () => {
+            const res = await fetch(`/api/dreams?id=${startedFor}`, { cache: "no-store", signal: AbortSignal.timeout(SAVE_TIMEOUT_MS) });
+            const full = ((await res.json()) as { entry?: DreamEntry }).entry;
+            if (!res.ok || !full) throw new Error(M.updateFailed);
+            const saved = await putNow(updateBodyFor(full.id, { ...toEditForm(full), imageUrl, assetStatus: "generated" }, full.visualBrief));
+            onSaved(saved);
+          }).catch(() => {});
+        }
+        return;
+      }
       if (response.status === 402) { router.push("/pricing"); return; }
       if (!response.ok || !payload.imageUrl) {
         throw new Error(getApiErrorMessage(payload.error, lang, M.noImageError));
@@ -872,10 +901,11 @@ function DreamEditorModal({
       return;
     }
     const startedFor = entryIdRef.current;
-    const op = new AbortController();
-    opsRef.current.analyze?.abort();
+    const op = {};
     opsRef.current.analyze = op;
-    const stillHere = () => !op.signal.aborted && entryIdRef.current === startedFor;
+    // Analysis rewrites the reader's own fields (title, mood, people…) as suggestions to look over,
+    // so a result for a dream that was closed meanwhile is dropped rather than written unseen.
+    const stillHere = () => entryIdRef.current === startedFor;
     setIsAnalyzing(true);
     setMessage("");
     setError("");
@@ -890,7 +920,6 @@ function DreamEditorModal({
           preSleepMeal: form.preSleepMeal || undefined,
           preSleepActivity: form.preSleepActivity || undefined,
         }),
-        signal: op.signal,
       });
       const payload = (await response.json()) as {
         title?: string;
@@ -925,7 +954,7 @@ function DreamEditorModal({
         };
       });
 
-      if (payload.visualBrief) setLocalVisualBrief(payload.visualBrief);
+      if (payload.visualBrief) setBrief(payload.visualBrief);
       if (payload.followUpQuestions?.length) {
         setFollowUpQuestions(payload.followUpQuestions);
         setFollowUpAnswers({});
