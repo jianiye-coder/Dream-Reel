@@ -115,24 +115,27 @@ export function DrawingBoard({ strokes, onChange, disabled, date, labels: L }: {
   }
 
   const colors = L.colors;
+  const icon = { size: 17, strokeWidth: 1.5, "aria-hidden": true } as const;
   return (
     <div className={styles.drawing}>
       <div className={styles.drawTools} role="group" aria-label={L.tools}>
-        <button type="button" className={styles.iconButton} title={L.pen} aria-label={L.pen} aria-pressed={tool === "pen"} disabled={disabled} onClick={() => setTool("pen")}><PenLine size={19} aria-hidden /></button>
-        <button type="button" className={styles.iconButton} title={L.eraser} aria-label={L.eraser} aria-pressed={tool === "eraser"} disabled={disabled} onClick={() => setTool("eraser")}><Eraser size={19} aria-hidden /></button>
+        <div className={styles.toolSet}>
+          <button type="button" className={styles.tool} title={L.pen} aria-label={L.pen} aria-pressed={tool === "pen"} disabled={disabled} onClick={() => setTool("pen")}><PenLine {...icon} /></button>
+          <button type="button" className={styles.tool} title={L.eraser} aria-label={L.eraser} aria-pressed={tool === "eraser"} disabled={disabled} onClick={() => setTool("eraser")}><Eraser {...icon} /></button>
+        </div>
         <div className={styles.swatches} role="group" aria-label={L.color}>{drawingColors.map((value, index) => <button key={value} type="button" className={styles.swatch} title={colors[index]} aria-label={colors[index]} aria-pressed={color === value} disabled={disabled} onClick={() => { setColor(value); setTool("pen"); }}><span style={{ background: value }} /></button>)}</div>
-        <label className={styles.brushSize}>{L.size}<input type="range" min="1" max="10" value={width} disabled={disabled} onChange={(e) => setWidth(Number(e.target.value))} /><output>{width}</output></label>
+        <label className={styles.brushSize}><span>{L.size}</span><input type="range" min="1" max="10" value={width} disabled={disabled} onChange={(e) => setWidth(Number(e.target.value))} /><output>{width}</output></label>
         <div className={styles.drawActions}>
-          <button type="button" className={styles.iconButton} title={L.undo} aria-label={L.undo} disabled={disabled || !undo.length} onClick={undoDrawing}><Undo2 size={19} aria-hidden /></button>
-          <button type="button" className={styles.iconButton} title={L.redo} aria-label={L.redo} disabled={disabled || !redo.length} onClick={redoDrawing}><Redo2 size={19} aria-hidden /></button>
-          <button type="button" className={styles.iconButton} title={L.clear} aria-label={L.clear} disabled={disabled || !strokes.length} onClick={clear}><Trash2 size={19} aria-hidden /></button>
-          <button type="button" className={styles.iconButton} title={L.download} aria-label={L.download} disabled={!strokes.length} onClick={download}><Download size={19} aria-hidden /></button>
+          <button type="button" className={styles.tool} title={L.undo} aria-label={L.undo} disabled={disabled || !undo.length} onClick={undoDrawing}><Undo2 {...icon} /></button>
+          <button type="button" className={styles.tool} title={L.redo} aria-label={L.redo} disabled={disabled || !redo.length} onClick={redoDrawing}><Redo2 {...icon} /></button>
+          <button type="button" className={styles.tool} title={L.clear} aria-label={L.clear} disabled={disabled || !strokes.length} onClick={clear}><Trash2 {...icon} /></button>
+          <button type="button" className={styles.tool} title={L.download} aria-label={L.download} disabled={!strokes.length} onClick={download}><Download {...icon} /></button>
         </div>
       </div>
-      <canvas ref={canvas} width={1000} height={700} className={styles.canvas} aria-label={L.canvas} role="img" onPointerDown={start} onPointerMove={move} onPointerUp={end} onPointerCancel={end} onLostPointerCapture={end}>
+      <canvas ref={canvas} width={1000} height={700} className={`${styles.canvas}${tool === "eraser" ? ` ${styles.erasing}` : ""}`} aria-label={L.canvas} role="img" onPointerDown={start} onPointerMove={move} onPointerUp={end} onPointerCancel={end} onLostPointerCapture={end}>
         {L.canvas}
       </canvas>
-      {limit && <p className={styles.drawingLimit} role="status">{L.limit}</p>}
+      {limit && <p className={`nb-msg ${styles.drawingLimit}`} role="status">{L.limit}</p>}
     </div>
   );
 }
