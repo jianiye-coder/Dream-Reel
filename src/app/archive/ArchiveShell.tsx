@@ -25,7 +25,6 @@ export default function ArchiveShell({
   entries: DreamEntry[];
   nextCursor: string | null;
   dataError: string;
-  user: { name?: string | null; email?: string | null; image?: string | null } | null;
 }) {
   const { lang, T } = useLanguage();
   const { archive: A } = T;
@@ -43,7 +42,7 @@ export default function ArchiveShell({
     const query = params.toString();
     // The native history API stays in sync with useSearchParams without re-running the server
     // page, so dreams loaded with "load more" and photos fetched for the open night survive a tab turn.
-    window.history.replaceState(null, "", query ? `${pathname}?${query}` : pathname);
+    window.history.replaceState(null, "", `${pathname}${query ? `?${query}` : ""}${window.location.hash}`);
   }
 
   async function exportAllDreams(format: "markdown" | "json") {

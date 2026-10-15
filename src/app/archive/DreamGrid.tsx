@@ -69,8 +69,28 @@ type KeywordArchiveItem = {
 
 const PHONE = "(max-width: 900px)";
 
+function ordinal(n: number): string {
+  const tens = n % 100;
+  if (tens >= 11 && tens <= 13) return `${n}th`;
+  return `${n}${["th", "st", "nd", "rd"][n % 10] ?? "th"}`;
+}
+
+/** "{count}" inserts a value; "{count:dream|dreams}" picks singular/plural; "{count:ord}" gives 1st, 2nd… */
 function fill(template: string, values: Record<string, string | number>): string {
-  return template.replace(/\{(\w+)\}/g, (match, key: string) => (key in values ? String(values[key]) : match));
+  return template.replace(/\{(\w+)(?::([^}|]*)(?:\|([^}]*))?)?\}/g, (match, key: string, one?: string, other?: string) => {
+    if (!(key in values)) return match;
+    const value = values[key];
+    if (one === undefined) return String(value);
+    if (one === "ord" && other === undefined) return ordinal(Number(value));
+    return Number(value) === 1 ? one : other ?? one;
+  });
+}
+
+/** The reader's own today, read after mount so server and browser render the same markup. */
+type Clock = { todayKey: string; todayUtc: number; year: number };
+function readClock(): Clock {
+  const now = new Date();
+  return { todayKey: localDayKey(now), todayUtc: Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()), year: now.getFullYear() };
 }
 
 function formatDayKey(date: Date): string {
@@ -88,6 +108,18 @@ function localDayKey(date: Date): string {
 function shortDate(value: string): string {
   const date = new Date(value);
   return `${String(date.getUTCMonth() + 1).padStart(2, "0")}.${String(date.getUTCDate()).padStart(2, "0")}`;
+}
+
+/** "10.07", or "2025.10.07" when the dream is from another year. */
+function dateLabel(value: string, thisYear: number): string {
+  const year = new Date(value).getUTCFullYear();
+  return year === thisYear ? shortDate(value) : `${year}.${shortDate(value)}`;
+}
+
+/** Date for list rows: the year (when it differs) sits small above the day. */
+function DateMark({ value, thisYear, className }: { value: string; thisYear: number; className?: string }) {
+  const year = new Date(value).getUTCFullYear();
+  return <span className={className}>{year !== thisYear ? <small>{year}</small> : null}{shortDate(value)}</span>;
 }
 
 function weekdayLabel(value: string, lang: Lang): string {
@@ -196,7 +228,7 @@ function buildKeywordArchive(entries: DreamEntry[], kind: KeywordArchiveKind, al
     .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
 }
 
-function buildCalendarCells(monthKey: string, buckets: Map<string, DayBucket>): CalendarCell[] {
+function buildCalendarCells(monthKey: string, buckets: Map<string, DayBucket>, todayKey: string | null): CalendarCell[] {
   const [yearText, monthText] = monthKey.split("-");
   const year = Number(yearText);
   const month = Number(monthText) - 1;
@@ -205,7 +237,6 @@ function buildCalendarCells(monthKey: string, buckets: Map<string, DayBucket>): 
   const firstDay = new Date(Date.UTC(year, month, 1));
   const daysInMonth = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
   const leading = (firstDay.getUTCDay() + 6) % 7;
-  const todayKey = localDayKey(new Date());
   const cells: CalendarCell[] = [];
 
   for (let i = 0; i < leading; i += 1) {
@@ -266,10 +297,10 @@ function getFocusableElements(container: HTMLElement): HTMLElement[] {
     container.querySelectorAll<HTMLElement>(
       'a[href], button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), summary, [tabindex]:not([tabindex="-1"])',
     ),
-  ).filter((element) => !element.hasAttribute("hidden") && element.getClientRects().length > 0);
+  ).filter((element) => !element.hasAttribute("hidden") && !element.closest("[inert]") && element.getClientRects().length > 0);
 }
 
-function useModalFocus(isOpen: boolean, onClose: () => void, initialFocusRef?: React.RefObject<HTMLElement | null>) {
+function useModalFocus(isOpen: boolean, onClose: () => void, initialFocusRef?: React.RefObject<HTMLElement | null>, restoreFocus?: () => void) {
   const dialogRef = useRef<HTMLDivElement>(null);
   const returnFocusRef = useRef<HTMLElement | null>(null);
 
@@ -282,9 +313,10 @@ function useModalFocus(isOpen: boolean, onClose: () => void, initialFocusRef?: R
 
     return () => {
       window.cancelAnimationFrame(focusFrame);
-      returnFocusRef.current?.focus();
+      if (restoreFocus) restoreFocus();
+      else returnFocusRef.current?.focus();
     };
-  }, [initialFocusRef, isOpen]);
+  }, [initialFocusRef, isOpen, restoreFocus]);
 
   function onKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
     if (event.key === "Escape") {
@@ -410,13 +442,20 @@ function TagChipInput({
 
 function DreamEditorModal({
   entry,
+  ready,
   loadError,
+  thisYear,
+  restoreFocus,
   onClose,
   onSaved,
   onDeleted,
 }: {
   entry: DreamEntry | null;
+  /** false until the full entry (with its image and visual brief) has arrived; editing waits for it */
+  ready: boolean;
   loadError?: string;
+  thisYear: number;
+  restoreFocus: () => void;
   onClose: () => void;
   onSaved: (entry: DreamEntry) => void;
   onDeleted: (id: number) => void;
@@ -448,7 +487,8 @@ function DreamEditorModal({
 
   const closeEditor = useCallback(async () => {
     if (!entry || !form || saving) return;
-    if (formRevisionRef.current === savedRevisionRef.current) {
+    // nothing can have been edited before the full entry arrived; never save the list copy
+    if (!ready || formRevisionRef.current === savedRevisionRef.current) {
       onClose();
       return;
     }
@@ -471,11 +511,16 @@ function DreamEditorModal({
     }
   // updateEntry is intentionally defined below and only reads the current form state.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [entry, form, onClose, onSaved, saving]);
+  }, [entry, form, onClose, onSaved, saving, ready]);
 
-  const { dialogRef, onKeyDown } = useModalFocus(Boolean(entry && form), () => void closeEditor(), closeButtonRef);
+  const { dialogRef, onKeyDown } = useModalFocus(Boolean(entry && form), () => void closeEditor(), closeButtonRef, restoreFocus);
 
   useEffect(() => {
+    // a save queued for the previous version of this entry must never fire with its fields
+    if (autoSaveTimerRef.current) {
+      clearTimeout(autoSaveTimerRef.current);
+      autoSaveTimerRef.current = null;
+    }
     formDirtyRef.current = false;
     setDownloadError("");
     formRevisionRef.current = 0;
@@ -498,6 +543,11 @@ function DreamEditorModal({
     setAutoSaveStatus("idle");
   }, [entry]);
 
+  // closing saves pending edits first, so a timer still queued at unmount is never needed
+  useEffect(() => () => {
+    if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+  }, []);
+
   useEffect(() => {
     if (!entry || formRevisionRef.current === savedRevisionRef.current) return;
     const warnBeforeUnload = (event: BeforeUnloadEvent) => {
@@ -510,6 +560,7 @@ function DreamEditorModal({
   }, [entry, form]);
 
   function updateForm(patch: Partial<DreamEditForm>) {
+    if (!ready) return;
     formDirtyRef.current = true;
     formRevisionRef.current += 1;
     setForm((prev) => prev ? { ...prev, ...patch } : prev);
@@ -844,7 +895,8 @@ function DreamEditorModal({
   const dateIso = form.dreamDate ? `${form.dreamDate}T00:00:00.000Z` : entry.capturedAt;
   const stress = form.stressScore ? Number(form.stressScore) : 0;
   const charCount = Array.from(form.rawText.replace(/\s/g, "")).length;
-  const statusText = autoSaveStatus === "saving" ? M.autoSaving
+  const statusText = !ready ? (loadError ? "" : T.archive.nb.opening)
+    : autoSaveStatus === "saving" ? M.autoSaving
     : autoSaveStatus === "saved" ? M.autoSaved
     : autoSaveStatus === "error" ? M.autoSaveFailed : "";
 
@@ -853,7 +905,12 @@ function DreamEditorModal({
       className={`${s.ar} ${s.editorLayer}`}
       data-backdrop="true"
       onClick={(event) => {
-        if ((event.target as HTMLElement).dataset.backdrop) void closeEditor();
+        // only the dimmed desk around the book closes it; on phones the sheet fills the screen.
+        // Clicks on the (inert, still loading) book fall through to the backdrop, so test the point too.
+        if (!(event.target as HTMLElement).dataset.backdrop || matchMedia(PHONE).matches) return;
+        const book = dialogRef.current?.querySelector(".nb-book")?.getBoundingClientRect();
+        if (book && event.clientX >= book.left && event.clientX <= book.right && event.clientY >= book.top && event.clientY <= book.bottom) return;
+        void closeEditor();
       }}
     >
       <div
@@ -876,10 +933,11 @@ function DreamEditorModal({
           {M.closeBtn} <span aria-hidden>×</span>
         </button>
 
+        <div className={s.bookWrap} inert={!ready} aria-busy={!ready}>
         <Book tilt={false} className={s.editorBook}>
           {/* ── left: the dream as written ── */}
           <BookPage side="l" folio="p. 218" padClassName={s.scrollPad}>
-            <h2 id={titleId} className="nb-kicker">{M.spreadKicker} · {shortDate(dateIso)}</h2>
+            <h2 id={titleId} className="nb-kicker">{M.spreadKicker} · {dateLabel(dateIso, thisYear)}</h2>
             <input
               name="dreamTitle"
               aria-label={M.dreamTitle}
@@ -1046,7 +1104,7 @@ function DreamEditorModal({
                   ) : (
                     <div className={s.noPhoto}>{M.noImage}</div>
                   )}
-                  <figcaption className="nb-cap">{shortDate(dateIso)}{form.title ? ` — ${form.title}` : ""}</figcaption>
+                  <figcaption className="nb-cap">{dateLabel(dateIso, thisYear)}{form.title ? ` — ${form.title}` : ""}</figcaption>
                 </figure>
                 {form.imageUrl ? (
                   <button
@@ -1115,6 +1173,7 @@ function DreamEditorModal({
             </div>
           </BookPage>
         </Book>
+        </div>
       </div>
     </div>
   );
@@ -1177,9 +1236,13 @@ export default function DreamGrid({
   const [tagBusy, setTagBusy] = useState(false);
   const [tagError, setTagError] = useState("");
   const bookRef = useRef<HTMLDivElement>(null);
-  const hydrated = useRef(new Set<number>());
+  // ids whose local copy is complete (image + visual brief), so the editor can open it without a refetch
+  const fullIds = useRef(new Set<number>());
+  const openerRef = useRef<HTMLElement | null>(null);
+  const turning = useRef(false);
+  const [readyId, setReadyId] = useState<number | null>(null);
   const [openError, setOpenError] = useState("");
-  const [now] = useState(() => Date.now());
+  const [clock, setClock] = useState<Clock | null>(null);
   const uid = useId();
   const tabId = (tab: ArchiveTab) => `${uid}-tab-${tab}`;
   const leftPageId = `${uid}-left`;
@@ -1250,8 +1313,12 @@ export default function DreamGrid({
 
   useEffect(() => {
     setLocalEntries(entries);
-    hydrated.current.clear();
+    fullIds.current.clear();
   }, [entries]);
+
+  useEffect(() => {
+    setClock(readClock());
+  }, []);
 
   const { monthKeys, buckets, totalDays } = useMemo(() => {
     const dayBuckets = new Map<string, DayBucket>();
@@ -1304,8 +1371,8 @@ export default function DreamGrid({
     });
   }
   const calendarCells = useMemo(
-    () => (visibleMonth ? buildCalendarCells(visibleMonth, buckets) : []),
-    [visibleMonth, buckets],
+    () => (visibleMonth ? buildCalendarCells(visibleMonth, buckets, clock?.todayKey ?? null) : []),
+    [visibleMonth, buckets, clock],
   );
   const keywordArchives = useMemo(
     () => ({
@@ -1328,18 +1395,29 @@ export default function DreamGrid({
   const monthSymbol = monthTop && monthTop.count >= 2 ? monthTop.item : null;
   const hasSymbol = (entry: DreamEntry, symbol: string) => entry.symbols.some((item) => normalizeKeyword(item) === normalizeKeyword(symbol));
 
-  // list pages leave out inline (data URL) images; fetch the full entry so the night's photo can be taped on
+  // List pages leave out inline (data URL) images. Fetch them for the open night so its photo can be
+  // taped on, and merge only the image fields: anything edited meanwhile (autosave, rename, merge) stays.
+  const shownId = shownEntry?.id ?? null;
+  const shownOmitted = Boolean(shownEntry?.imageUrlOmitted);
   useEffect(() => {
-    if (!shownEntry?.imageUrlOmitted || hydrated.current.has(shownEntry.id)) return;
-    hydrated.current.add(shownEntry.id);
-    fetch(`/api/dreams?id=${shownEntry.id}`, { cache: "no-store" })
+    if (shownId == null || !shownOmitted) return;
+    const controller = new AbortController();
+    fetch(`/api/dreams?id=${shownId}`, { cache: "no-store", signal: controller.signal })
       .then((response) => (response.ok ? response.json() as Promise<{ entry?: DreamEntry }> : null))
       .then((payload) => {
         const full = payload?.entry;
-        if (full) setLocalEntries((current) => current.map((item) => (item.id === full.id ? full : item)));
+        if (!full || controller.signal.aborted) return;
+        setLocalEntries((current) => current.map((item) => (
+          // a newer full copy (e.g. from a save) already replaced the list version: leave it alone
+          item.id === full.id && item.imageUrlOmitted
+            ? { ...item, imageUrl: full.imageUrl, thumbnailUrl: full.thumbnailUrl, imageUrlOmitted: undefined, assetStatus: full.assetStatus, visualBrief: full.visualBrief }
+            : item
+        )));
+        fullIds.current.add(full.id);
       })
-      .catch(() => {});
-  }, [shownEntry]);
+      .catch(() => {}); // stays omitted; the next visit to this night tries again
+    return () => controller.abort();
+  }, [shownId, shownOmitted]);
 
   /** How many times this symbol had appeared by this dream (inclusive), across the loaded archive. */
   function symbolOrdinal(entry: DreamEntry, symbol: string): number {
@@ -1352,6 +1430,8 @@ export default function DreamGrid({
     () => [...localEntries].sort((a, b) => +new Date(b.capturedAt) - +new Date(a.capturedAt)),
     [localEntries],
   );
+  // the year shown dates are compared against: the reader's year once mounted, the newest dream's before
+  const thisYear = clock?.year ?? (recentEntries[0] ? new Date(recentEntries[0].capturedAt).getUTCFullYear() : 0);
   const recap = useMemo(() => {
     const latest = recentEntries[0];
     if (!latest) return null;
@@ -1362,6 +1442,9 @@ export default function DreamGrid({
     });
     const week = inRange(start, end);
     const previous = inRange(start - 7 * 86_400_000, start);
+    // the recap reads loaded dreams only; it is exact once they reach back past last week
+    const oldest = recentEntries[recentEntries.length - 1];
+    const complete = !nextCursor || +new Date(oldest.capturedAt) < start - 7 * 86_400_000;
     const moods = topCounts(week.flatMap((entry) => splitMood(entry.mood)), 2);
     const places = topCounts(week.flatMap((entry) => entry.locations), 2);
     const symbols = topCounts(week.flatMap((entry) => Array.from(new Set(entry.symbols))), 1);
@@ -1388,8 +1471,10 @@ export default function DreamGrid({
     ].filter(Boolean);
     if (slip.length === 0) slip.push(fill(N.slipCount, { count: week.length }));
     return {
-      current: now >= start && now < end,
-      range: `${shortDate(new Date(start).toISOString())} – ${shortDate(new Date(end - 86_400_000).toISOString())}`,
+      // "this week" means the week holding the reader's own today (as a UTC date, like the dreams)
+      current: clock ? clock.todayUtc >= start && clock.todayUtc < end : false,
+      complete,
+      range: `${dateLabel(new Date(start).toISOString(), thisYear)} – ${shortDate(new Date(end - 86_400_000).toISOString())}`,
       count: week.length,
       diff: week.length - previous.length,
       moods,
@@ -1397,7 +1482,7 @@ export default function DreamGrid({
       symbol: symbols[0] ?? null,
       slip,
     };
-  }, [recentEntries, N, now]);
+  }, [recentEntries, N, clock, nextCursor, thisYear]);
 
   async function patchEntryTag(entry: DreamEntry, patch: { people?: string[]; locations?: string[] }) {
     const res = await fetch("/api/dreams", {
@@ -1412,17 +1497,29 @@ export default function DreamGrid({
   }
 
   async function openEntry(entry: DreamEntry) {
+    // remember who opened it before the button disables itself while loading
+    openerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     unlock();
     pageTurn({ dur: 0.7 });
     setOpenError("");
     setSelected(entry);
+    if (fullIds.current.has(entry.id)) {
+      setReadyId(entry.id);
+      return;
+    }
+    // the list copy lacks inline images and the visual brief; the editor stays read-only until the
+    // full entry arrives, so no save can overwrite those fields with nulls
+    setReadyId(null);
     setOpeningEntryId(entry.id);
     try {
       const response = await fetch(`/api/dreams?id=${entry.id}`, { cache: "no-store" });
       const payload = (await response.json()) as { entry?: DreamEntry; error?: string };
       if (!response.ok || !payload.entry) throw new Error(getApiErrorMessage(payload.error, lang, N.openFailed));
-      setSelected((current) => (current?.id === entry.id ? payload.entry! : current));
-      setLocalEntries((current) => current.map((item) => (item.id === payload.entry!.id ? payload.entry! : item)));
+      const full = payload.entry;
+      fullIds.current.add(full.id);
+      setSelected((current) => (current?.id === entry.id ? full : current));
+      setReadyId(full.id);
+      setLocalEntries((current) => current.map((item) => (item.id === full.id ? full : item)));
     } catch (error) {
       setOpenError(error instanceof Error ? error.message : N.openFailed);
     } finally {
@@ -1530,6 +1627,7 @@ export default function DreamGrid({
   }
 
   function handleSaved(updatedEntry: DreamEntry) {
+    fullIds.current.add(updatedEntry.id);
     setLocalEntries((current) => current.map((item) => (item.id === updatedEntry.id ? updatedEntry : item)));
   }
 
@@ -1570,23 +1668,41 @@ export default function DreamGrid({
     }
   }
 
+  // back to whatever opened the editor; if it is gone or still disabled, the open night, then the tab
+  const restoreFocus = useCallback(() => {
+    const usable = (el: HTMLElement | null | undefined): el is HTMLElement =>
+      Boolean(el?.isConnected && !(el as HTMLButtonElement).disabled);
+    const candidates = [
+      openerRef.current,
+      document.querySelector<HTMLElement>(".nb-stage [aria-current='true']"),
+      document.querySelector<HTMLElement>(".nb-stage [role='tab'][aria-selected='true']"),
+    ];
+    candidates.find(usable)?.focus();
+  }, []);
+
   // ── turning between the bookmarks: the right-hand page lifts and turns on desktop ──
   function turnTo(tab: ArchiveTab) {
-    if (tab === activeTab) return;
+    if (tab === activeTab || turning.current) return;
     const book = bookRef.current;
     if (!book || matchMedia(PHONE).matches) { tap(); onTabChange(tab); return; }
     unlock();
-    flipPage(book, { dur: 720, onStart: () => onTabChange(tab) });
+    turning.current = true; // one sheet in the air at a time
+    flipPage(book, { dur: 720, onStart: () => onTabChange(tab), onEnd: () => { turning.current = false; } });
   }
 
   function onTabKeyDown(event: React.KeyboardEvent<HTMLButtonElement>, tab: ArchiveTab) {
     const order: ArchiveTab[] = ["calendar", "tags", "recent"];
-    const step = event.key === "ArrowDown" || event.key === "ArrowRight" ? 1 : event.key === "ArrowUp" || event.key === "ArrowLeft" ? -1 : 0;
-    if (!step) return;
+    const at = order.indexOf(tab);
+    const target = event.key === "ArrowDown" || event.key === "ArrowRight" ? order[(at + 1) % order.length]
+      : event.key === "ArrowUp" || event.key === "ArrowLeft" ? order[(at + order.length - 1) % order.length]
+      : event.key === "Home" ? order[0]
+      : event.key === "End" ? order[order.length - 1]
+      : null;
+    if (!target) return;
     event.preventDefault();
-    const next = order[(order.indexOf(tab) + step + order.length) % order.length];
-    document.getElementById(tabId(next))?.focus();
-    turnTo(next);
+    if (turning.current || target === tab) return;
+    document.getElementById(tabId(target))?.focus();
+    turnTo(target);
   }
 
   function selectDay(cell: CalendarCell) {
@@ -1610,11 +1726,11 @@ export default function DreamGrid({
   const exportLinks = (withJson: boolean) => (
     <>
       <button type="button" className={s.quiet} onClick={() => exporter.run("markdown")} disabled={exporter.busy}>
-        {exporter.busy ? A.export.exporting : `↓ ${N.exportMd}`}
+        {exporter.busy ? A.export.exporting : `↓ ${A.export.markdown}`}
       </button>
       {withJson ? (
         <button type="button" className={s.quiet} onClick={() => exporter.run("json")} disabled={exporter.busy}>
-          {N.exportJson}
+          {A.export.json}
         </button>
       ) : null}
     </>
@@ -1681,7 +1797,7 @@ export default function DreamGrid({
             <div className={s.pageFoot}>
               <TurnLink href="/journal" className="nb-act">{N.newDream} <span aria-hidden>→</span></TurnLink>
               <div className={s.quietRow}>
-                <TurnLink href="/morning-pages" className={s.quiet}>{N.morningPages}</TurnLink>
+                <TurnLink href="/morning-pages" className={s.quiet}>{T.nav.morningPages}</TurnLink>
               </div>
             </div>
           </BookPage>
@@ -1781,9 +1897,9 @@ export default function DreamGrid({
         {isEditingRel && !isEditing ? (
           <div className={s.subPanel}>
             <span className={s.subLabel}>{N.relationLabel}</span>
-            <div className={s.wordList} role="radiogroup" aria-label={N.relationLabel}>
+            <div className={s.wordList} role="group" aria-label={N.relationLabel}>
               {N.relationOptions.map((opt) => (
-                <button key={opt} type="button" role="radio" aria-checked={relDraft === opt} onClick={() => setRelDraft(opt)}>{opt}</button>
+                <button key={opt} type="button" aria-pressed={relDraft === opt} onClick={() => setRelDraft(relDraft === opt ? "" : opt)}>{opt}</button>
               ))}
             </div>
             <div className={s.inlineEdit}>
@@ -1847,7 +1963,7 @@ export default function DreamGrid({
                       }}
                     >
                       <i aria-hidden>{on ? "✓" : ""}</i>
-                      <span className={s.pickDate}>{shortDate(entry.capturedAt)}</span>
+                      <DateMark value={entry.capturedAt} thisYear={thisYear} className={s.pickDate} />
                       {dreamDisplayTitle(entry)}
                     </button>
                   </li>
@@ -1897,7 +2013,7 @@ export default function DreamGrid({
         {list.map((entry) => (
           <li key={entry.id}>
             <button type="button" onClick={() => void openEntry(entry)} disabled={openingEntryId === entry.id}>
-              <span className={s.entryDate}>{shortDate(entry.capturedAt)}</span>
+              <DateMark value={entry.capturedAt} thisYear={thisYear} className={s.entryDate} />
               <span className={s.entryBody}>
                 <span className={s.entryTitle}>{dreamDisplayTitle(entry)}</span>
                 <span className={s.entryExcerpt}>{dreamText(entry) || N.noText}</span>
@@ -1939,8 +2055,8 @@ export default function DreamGrid({
                     </select>
                   </label>
                   <div className={s.monthArrows}>
-                    <button type="button" onClick={() => changeMonth(-1)} aria-label={N.prevMonth}>←</button>
-                    <button type="button" onClick={() => changeMonth(1)} aria-label={N.nextMonth}>→</button>
+                    <button type="button" onClick={() => changeMonth(-1)} aria-label={G.prev}>←</button>
+                    <button type="button" onClick={() => changeMonth(1)} aria-label={G.next}>→</button>
                   </div>
                 </div>
                 <p className={s.monthStats}>
@@ -2013,11 +2129,11 @@ export default function DreamGrid({
             {activeTab === "calendar" && (
               shownEntry ? (
                 <>
-                  <p className="nb-kicker">{shortDate(shownEntry.capturedAt)} · {weekdayLabel(shownEntry.capturedAt, lang)}</p>
+                  <p className="nb-kicker">{dateLabel(shownEntry.capturedAt, thisYear)} · {weekdayLabel(shownEntry.capturedAt, lang)}</p>
                   {dayEntries.length > 1 ? (
-                    <div className={s.dayPicker} role="radiogroup" aria-label={N.dayPicker}>
+                    <div className={s.dayPicker} role="group" aria-label={N.dayPicker}>
                       {dayEntries.map((entry, i) => (
-                        <button key={entry.id} type="button" role="radio" aria-checked={entry.id === shownEntry.id} onClick={() => { tap(); setSelectedDayEntryId(entry.id); }}>
+                        <button key={entry.id} type="button" aria-pressed={entry.id === shownEntry.id} onClick={() => { tap(); setSelectedDayEntryId(entry.id); }}>
                           {i + 1} · {dreamDisplayTitle(entry)}
                         </button>
                       ))}
@@ -2041,7 +2157,7 @@ export default function DreamGrid({
                     <figure className={`nb-print ${s.dayPhoto}`}>
                       <span className="nb-tape" aria-hidden />
                       <Image src={shownImage} alt={T.modal.imageAlt} width={320} height={240} unoptimized />
-                      <figcaption className="nb-cap">{shortDate(shownEntry.capturedAt)}</figcaption>
+                      <figcaption className="nb-cap">{dateLabel(shownEntry.capturedAt, thisYear)}</figcaption>
                     </figure>
                   ) : null}
                   {exportError}
@@ -2056,7 +2172,7 @@ export default function DreamGrid({
                 <>
                   <p className="nb-kicker">{formatMonthLabel(visibleMonth, lang)}</p>
                   <p className={s.emptyNote}>{N.emptyMonth}</p>
-                  {nextCursor ? loadMore : null}
+                  {nextCursor && visibleMonth > oldestMonth ? loadMore : null}
                   {exportError}
                   <div className={s.pageFoot}>
                     <TurnLink href="/journal" className="nb-act">{N.newDream} <span aria-hidden>→</span></TurnLink>
@@ -2136,6 +2252,9 @@ export default function DreamGrid({
                     {recap.symbol && recap.symbol.count > 1 ? <span className="nb-note">{fill(N.recapSymbolNote, { count: recap.symbol.count })}</span> : null}
                   </dd>
                 </dl>
+                {!recap.complete ? (
+                  <p className={s.recapScope}>{fill(N.recapPartial, { count: localEntries.length })}</p>
+                ) : null}
                 <div className={`${s.slip} ${s.recapSlip}`}>
                   <span className={s.slipLabel}>{T.modal.slipLabel}</span>
                   {recap.slip.map((line) => <p key={line}>{line}</p>)}
@@ -2144,7 +2263,7 @@ export default function DreamGrid({
                 <div className={s.pageFoot}>
                   <TurnLink href="/journal" className="nb-act">{N.newDream} <span aria-hidden>→</span></TurnLink>
                   <div className={s.quietRow}>
-                    <Link href="/morning-pages" className={s.quiet}>{N.morningPages}</Link>
+                    <Link href="/morning-pages" className={s.quiet}>{T.nav.morningPages}</Link>
                     {exportLinks(true)}
                   </div>
                 </div>
@@ -2156,7 +2275,10 @@ export default function DreamGrid({
 
       <DreamEditorModal
         entry={selected}
+        ready={selected != null && readyId === selected.id}
         loadError={openError}
+        thisYear={thisYear}
+        restoreFocus={restoreFocus}
         onClose={() => { setSelected(null); setOpenError(""); }}
         onSaved={handleSaved}
         onDeleted={handleDeleted}

@@ -31,7 +31,6 @@ export default async function ArchivePage() {
       entries={entries}
       nextCursor={nextCursor}
       dataError={dataError}
-      user={session?.user ?? null}
     />
   );
 }
