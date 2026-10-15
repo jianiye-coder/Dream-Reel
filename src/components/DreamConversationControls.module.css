@@ -1,0 +1,32 @@
+/* Conversation focus for the journal's chat page: two ink tabs, the support boundary as a
+   pencilled note in the margin, and the consultation notes folded underneath. */
+.controls { flex: none; padding-bottom: 14px; border-bottom: 1px solid rgba(31, 28, 23, .12); }
+.goals { display: flex; flex-wrap: wrap; gap: 6px 24px; border: 0; padding: 0; margin: 0; min-width: 0; }
+.goals:disabled { opacity: .6; }
+.goal { position: relative; display: inline-block; padding-bottom: 4px; font-size: 14px; color: var(--ink-faint); cursor: pointer; transition: color .2s; }
+.goal:hover { color: var(--ink-soft); }
+.goals:disabled .goal { cursor: wait; }
+/* the native radio stays in place (keyboard and screen readers), drawn as the word itself */
+.goal input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: inherit; }
+.goal:has(input:focus-visible) { outline: 2px solid var(--hand-ink); outline-offset: 4px; }
+.selected { color: var(--ink); font-weight: 600; }
+.selected::after {
+  content: ""; position: absolute; left: -3px; right: -4px; bottom: -3px; height: 7px;
+  background: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 10' preserveAspectRatio='none'><path d='M1 6 C 30 3, 65 8, 99 4' stroke='%23b0432e' stroke-width='1.8' fill='none' stroke-linecap='round'/></svg>") no-repeat center / 100% 100%;
+}
+.boundary { margin-top: 12px; padding-left: 10px; border-left: 2px solid var(--margin); font-size: 12.5px; line-height: 1.8; color: var(--ink-soft); }
+.controls .notes { margin-top: 10px; }
+.controls .notes summary {
+  min-height: 0; padding: 4px 0; width: max-content; list-style: none; cursor: pointer;
+  font-family: var(--mono); font-weight: 400; font-size: 10.5px; letter-spacing: .14em; color: var(--ink-soft);
+}
+.controls .notes summary::-webkit-details-marker { display: none; }
+.controls .notes summary::before { content: "▸ "; }
+.controls .notes[open] summary::before { content: "▾ "; }
+.controls .notes textarea {
+  display: block; width: 100%; margin: 8px 0 10px; padding: 10px 12px; border: 0; border-radius: 0; resize: vertical;
+  font-family: var(--mono); font-size: 11.5px; line-height: 1.7; color: var(--ink-soft);
+  background: #fbf8f1; box-shadow: inset 0 0 0 1px rgba(31, 28, 23, .12);
+}
+.controls .notes textarea:focus { box-shadow: inset 0 0 0 1px var(--ink-soft); }
+.controls .notes button { min-height: 0; padding: 0; border-radius: 0; }

@@ -1,0 +1,417 @@
+/* /journal — the writing spread of the bedside notebook.
+   Left page: the dreamer's own words, in fountain-pen hand. Right page: what Dream Reel read,
+   or the conversation (its voice on small paper slips, yours in hand). Sizes are book px:
+   the whole book is zoomed to fit the window (NotebookShell lean). */
+
+/* ── focus: ink, not a UI ring. Writing fields show focus with their own line/margin mark ── */
+.stage :where(a, button, summary, select, [tabindex], input[type="range"]):focus-visible,
+.room :where(a, button, summary):focus-visible,
+.toast :where(a, button):focus-visible {
+  outline: 2px solid var(--hand-ink) !important;
+  outline-offset: 4px;
+  box-shadow: none !important;
+  border-radius: 1px;
+}
+.room :where(a, button):focus-visible { outline-color: #efe4d0 !important; }
+.stage :is(textarea, input:not([type="range"])):focus-visible { outline: none !important; box-shadow: none !important; }
+
+/* ── left page ─────────────────────────────── */
+/* the red margin rule; the ruling itself lives in the textarea so it scrolls with the writing */
+:global(.nb-root) .left { background-image: linear-gradient(90deg, transparent 62px, var(--margin) 62px 63px, transparent 63px); }
+:global(.nb-root) .leftPad { padding-top: 34px !important; padding-bottom: 38px !important; }
+
+:global(.nb-root) .leftHead { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; }
+:global(.nb-root) .tabs { gap: 24px; }
+:global(.nb-root) .tabs button { font-size: 15px; }
+/* notebook.css resets every button to `font: inherit`; give the shared link styles back their type */
+:global(.nb-root) .stage :is(a, button):global(.nb-act-quiet) {
+  font-family: var(--mono); font-size: 11.5px; letter-spacing: .1em; color: var(--ink-soft);
+}
+:global(.nb-root) .stage button:global(.nb-act) { font-size: 17px; font-weight: 600; }
+:global(.nb-root) .morningLink {
+  font-family: var(--hand); font-size: 14px; color: var(--red-ink); white-space: nowrap;
+  border-bottom: 1px solid transparent; transition: border-color .2s;
+}
+:global(.nb-root) .morningLink:hover { border-bottom-color: currentColor; }
+
+:global(.nb-root) .dateLine { margin-top: 12px; height: 48px; }
+:global(.nb-root) .dateInput {
+  font-family: var(--mono); font-size: 11px; letter-spacing: .08em; color: var(--ink-faint);
+  background: transparent; border: 0; border-bottom: 1px solid transparent; padding: 2px 0; margin-left: auto;
+  color-scheme: light;
+}
+:global(.nb-root) .dateInput:hover { color: var(--ink-soft); }
+:global(.nb-root) .dateInput:focus { color: var(--ink); border-bottom-color: var(--ink); }
+:global(.nb-root) .dateInput::-webkit-calendar-picker-indicator { opacity: .4; cursor: pointer; }
+
+:global(.nb-root) .title {
+  display: block; width: 100%; height: 40px; flex: none;
+  font-family: var(--serif); font-weight: 600; font-size: 22px; letter-spacing: .01em; color: var(--ink);
+  background: transparent; border: 0; border-bottom: 1px solid transparent; outline: 0;
+  caret-color: var(--red-ink); transition: border-color .2s;
+}
+:global(.nb-root) .title::placeholder { color: #b0a796; font-weight: 400; font-size: 15px; letter-spacing: .04em; }
+:global(.nb-root) .title:focus { border-bottom-color: var(--ink); }
+:global(.nb-root) .titleWaiting::placeholder { opacity: .55; }
+
+/* the ruled sheet: full page width, so the lines run from the edge to the gutter */
+:global(.nb-root) .writeWrap { position: relative; flex: 1; min-height: 0; margin: 8px -58px 0 -84px; }
+:global(.nb-root) .write {
+  display: block; width: 100%; height: 100%; min-height: 0; resize: none; border: 0; border-radius: 0; outline: 0;
+  font-family: var(--hand); color: var(--hand-ink);
+  padding: 0 58px 0 84px;
+  font-size: 21px; line-height: var(--line);
+  background: transparent repeating-linear-gradient(180deg, transparent 0 calc(var(--line) - 1px), var(--rule) calc(var(--line) - 1px) var(--line));
+  background-attachment: local;
+  caret-color: var(--red-ink);
+  scrollbar-width: thin; scrollbar-color: rgba(31, 28, 23, .18) transparent;
+}
+:global(.nb-root) .write::placeholder { color: #a9a090; text-shadow: none; font-family: var(--hand); font-style: normal; }
+/* "刚醒" in the margin while the pen is on the page — it is also the field's focus mark */
+:global(.nb-root) .marginNote {
+  position: absolute; left: 4px; top: 6px; width: 52px; text-align: right;
+  font-family: var(--hand); font-size: 14px; color: var(--red-ink);
+  transform: rotate(-5deg); opacity: 0; transition: opacity .35s ease; pointer-events: none;
+}
+:global(.nb-root) .writeWrap:focus-within .marginNote { opacity: 1; }
+
+/* chat mode: the left page gathers what you've said, as one entry */
+:global(.nb-root) .gathered { flex: 1; min-height: 0; overflow-y: auto; margin-top: 6px; scrollbar-width: thin; scrollbar-color: rgba(31, 28, 23, .18) transparent; }
+:global(.nb-root) .gathered :global(.nb-kicker) { display: block; margin-bottom: 8px; }
+:global(.nb-root) .gathered :global(.nb-hand) { font-size: 19px; white-space: pre-line; }
+:global(.nb-root) .gathered :global(.nb-hand) + :global(.nb-hand) { margin-top: 6px; }
+:global(.nb-root) .gathered .later { color: #4b587c; }
+:global(.nb-root) .gatheredEmpty { font-family: var(--hand); font-size: 16px; line-height: var(--line); color: var(--ink-faint); }
+
+/* sleep log, folded at the foot of the page */
+:global(.nb-root) .sleep { flex: none; margin: 10px 0 0; border: 0; border-top: 1px solid rgba(31, 28, 23, .14); border-radius: 0; background: none; color: inherit; }
+:global(.nb-root) .sleep summary {
+  display: block; font-weight: 400; list-style: none; cursor: pointer; width: max-content;
+  font-family: var(--mono); font-size: 11px; letter-spacing: .12em; color: var(--ink-soft);
+  padding: 10px 0 4px;
+}
+:global(.nb-root) .sleep summary::-webkit-details-marker { display: none; }
+:global(.nb-root) .sleep summary:hover { color: var(--ink); }
+:global(.nb-root) .sleep[open] summary { color: var(--ink); }
+:global(.nb-root) .sleepGrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px 18px; padding: 8px 0 2px; }
+:global(.nb-root) .sleepGrid label, :global(.nb-root) .quality { display: flex; flex-direction: column; gap: 1px; min-width: 0; border: 0; }
+:global(.nb-root) .sleepGrid label > span, :global(.nb-root) .quality legend {
+  font-family: var(--mono); font-size: 10px; letter-spacing: .14em; color: var(--ink-faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+:global(.nb-root) .quality legend { padding: 0; margin-bottom: 1px; }
+:global(.nb-root) .sleepGrid input[type="time"], :global(.nb-root) .sleepGrid input[type="text"] {
+  width: 100%; min-width: 0; height: 32px; padding: 0;
+  font-family: var(--hand); font-size: 18px; color: var(--hand-ink);
+  background: transparent; border: 0; border-bottom: 1px dotted #c3b9a5; outline: 0; caret-color: var(--red-ink);
+  color-scheme: light;
+}
+:global(.nb-root) .sleepGrid input::placeholder { color: #b3aa99; font-size: 15px; }
+:global(.nb-root) .sleepGrid input:focus { border-bottom: 1px solid var(--ink); }
+:global(.nb-root) .sleepGrid input::-webkit-calendar-picker-indicator { opacity: .35; }
+:global(.nb-root) .quality > div { display: flex; gap: 6px; align-items: center; height: 32px; }
+:global(.nb-root) .quality button {
+  width: 14px; height: 14px; border-radius: 50%; border: 1.2px solid var(--hand-ink); opacity: .7;
+  transition: background-color .2s, opacity .2s;
+}
+:global(.nb-root) .quality button:hover { opacity: 1; }
+:global(.nb-root) .quality button.on { background: var(--hand-ink); opacity: 1; }
+:global(.nb-root) .stressField input[type="range"] { width: 100%; height: 22px; margin-top: 5px; accent-color: var(--red-ink); }
+:global(.nb-root) .stressField small { display: flex; justify-content: space-between; font-family: var(--mono); font-size: 9.5px; letter-spacing: .1em; color: var(--ink-faint); }
+:global(.nb-root) .sleepFoot { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin-top: 8px; }
+:global(.nb-root) .sleepFoot :global(.nb-mono) { font-size: 10px; color: var(--ink-faint); }
+
+:global(.nb-root) .leftFoot { flex: none; display: flex; align-items: center; gap: 16px; margin-top: 12px; min-height: 40px; }
+:global(.nb-root) .saveState { margin-left: auto; font-size: 10.5px; color: var(--ink-faint); white-space: nowrap; }
+:global(.nb-root) .saveError { color: var(--red-ink); }
+
+/* voice: a small ink circle and the words "说出来" */
+:global(.nb-root) .voice { display: inline-flex; align-items: center; gap: 10px; font-family: var(--hand); font-size: 17px; color: var(--ink); }
+:global(.nb-root) .mic {
+  width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--ink-soft);
+  display: inline-grid; place-items: center; position: relative; transition: border-color .2s, color .2s;
+}
+:global(.nb-root) .mic svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; }
+:global(.nb-root) .voice:hover .mic { border-color: var(--ink); }
+:global(.nb-root) .recording { color: var(--red-ink); }
+:global(.nb-root) .recording .mic { border-color: var(--red-ink); }
+:global(.nb-root) .recording .mic::after {
+  content: ""; position: absolute; inset: -5px; border-radius: 50%; border: 1px solid var(--red-ink);
+  animation: listen 1.6s ease-out infinite;
+}
+@keyframes listen { from { opacity: .7; transform: scale(.9); } to { opacity: 0; transform: scale(1.25); } }
+:global(.nb-root) .voiceCompact .mic { width: 28px; height: 28px; }
+:global(.nb-root) .voiceCompact .mic svg { width: 13px; height: 13px; }
+
+/* ── right page ────────────────────────────── */
+:global(.nb-root) .rightPad { padding-top: 40px !important; padding-bottom: 40px !important; }
+:global(.nb-root) .rightHead { flex: none; display: flex; justify-content: space-between; align-items: baseline; gap: 16px; min-height: 20px; margin-bottom: 18px; }
+:global(.nb-root) .headActs { display: flex; align-items: baseline; gap: 16px; margin-left: auto; white-space: nowrap; }
+:global(.nb-root) .rightHead > :global(.nb-kicker) { white-space: nowrap; }
+
+/* the page's own scroll: never the window's */
+:global(.nb-root) .scroll {
+  flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain;
+  display: flex; flex-direction: column; gap: 18px;
+  margin: -10px -16px -10px -8px; padding: 10px 16px 10px 8px;   /* room for slip shadows */
+  scrollbar-width: thin; scrollbar-color: rgba(31, 28, 23, .18) transparent;
+  mask-image: linear-gradient(180deg, transparent, #000 10px, #000 calc(100% - 18px), transparent);
+}
+
+/* Dream Reel's voice: a small slip of paper laid on the page */
+:global(.nb-root) .slip {
+  position: relative; flex: none; align-self: flex-start; max-width: 92%;
+  background: #fbf8f1; padding: 13px 18px 14px;
+  box-shadow: 0 1px 1px rgba(60, 40, 20, .1), 0 9px 14px -11px rgba(60, 40, 20, .4);
+}
+:global(.nb-root) .slip:nth-of-type(even) { transform: rotate(.25deg); }
+:global(.nb-root) .slipLabel { display: block; font-family: var(--mono); font-size: 9.5px; letter-spacing: .24em; color: var(--ink-faint); margin-bottom: 5px; }
+:global(.nb-root) .slipText { font-size: 14px; line-height: 1.95; color: var(--ink); white-space: pre-line; }
+:global(.nb-root) .slipHead { font-size: 14px; font-weight: 600; color: var(--ink); }
+:global(.nb-root) .slipError .slipText { color: var(--red-ink); }
+:global(.nb-root) .slipError .redAct { margin-top: 6px; }
+:global(.nb-root) .insight { align-self: stretch; max-width: none; }
+:global(.nb-root) .typing { padding-bottom: 10px; }
+
+:global(.nb-root) .dots { display: inline-flex; gap: 5px; vertical-align: middle; margin-left: 2px; }
+:global(.nb-root) .dots i { width: 4px; height: 4px; border-radius: 50%; background: var(--hand-ink); opacity: .25; animation: ink-dot 1.2s ease-in-out infinite; }
+:global(.nb-root) .dots i:nth-child(2) { animation-delay: .18s; }
+:global(.nb-root) .dots i:nth-child(3) { animation-delay: .36s; }
+@keyframes ink-dot { 40% { opacity: .9; } }
+
+/* the dreamer's replies, in hand, to the right */
+:global(.nb-root) .said { flex: none; align-self: flex-end; text-align: right; max-width: 88%; font-size: 19px; line-height: 1.65; white-space: pre-line; padding-right: 2px; }
+
+/* actions inside the conversation are red-ink annotations with a hand-drawn underline */
+:global(.nb-root) .redAct {
+  font-family: var(--hand); font-size: 15px; color: var(--red-ink); text-align: left;
+  padding-bottom: 4px;
+  background: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 10' preserveAspectRatio='none'><path d='M1 6 C 30 3, 65 8, 99 4' stroke='%23b0432e' stroke-width='1.4' fill='none' stroke-linecap='round' opacity='.75'/></svg>") no-repeat left bottom / 100% 5px;
+  transition: opacity .2s;
+}
+:global(.nb-root) .redAct:hover { opacity: .78; }
+:global(.nb-root) .redAct:disabled { opacity: .4; cursor: default; }
+:global(.nb-root) .redActs { display: flex; flex-wrap: wrap; gap: 6px 22px; margin-top: 8px; }
+
+:global(.nb-root) .feedback { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; margin-top: 6px; }
+:global(.nb-root) .feedback > button { font-family: var(--mono); font-size: 12px; color: var(--ink-faint); padding: 0 2px; transition: color .2s; }
+:global(.nb-root) .feedback > button:hover { color: var(--ink-soft); }
+:global(.nb-root) .feedback > button[aria-pressed="true"] { color: var(--red-ink); }
+:global(.nb-root) .reasons { display: inline-flex; flex-wrap: wrap; gap: 2px 12px; }
+:global(.nb-root) .reasons button { font-family: var(--hand); font-size: 13px; color: var(--ink-soft); }
+:global(.nb-root) .reasons button[aria-pressed="true"] { color: var(--red-ink); text-decoration: underline; text-underline-offset: 3px; }
+
+:global(.nb-root) .earlier { align-self: center; flex: none; }
+:global(.nb-root) .decision { align-self: stretch; max-width: none; }
+:global(.nb-root) .signals { font-family: var(--mono); font-size: 10.5px; letter-spacing: .1em; color: var(--ink-faint); margin-top: 8px; }
+:global(.nb-root) .suggest { flex: none; align-self: stretch; padding-left: 18px; }
+:global(.nb-root) .suggest :global(.nb-kicker) { font-size: 10px; }
+
+/* the reply line: "答 ……" */
+:global(.nb-root) .reply {
+  flex: none; display: flex; align-items: flex-end; gap: 10px;
+  margin-top: 14px; padding: 5px 0;
+  border-top: 1px solid var(--rule); border-bottom: 1px solid var(--rule);
+  transition: border-color .2s;
+}
+:global(.nb-root) .reply:focus-within { border-bottom-color: var(--ink-soft); }
+:global(.nb-root) .replyMark { font-family: var(--mono); font-size: 11px; color: var(--ink-faint); padding-bottom: 9px; }
+:global(.nb-root) .replyInput {
+  flex: 1; min-width: 0; resize: none; border: 0; outline: 0; background: transparent;
+  font-size: 19px; line-height: 30px; min-height: 34px; max-height: 176px; padding: 2px 0;
+  caret-color: var(--red-ink);
+}
+:global(.nb-root) .replyInput::placeholder { color: #aaa293; text-shadow: none; }
+:global(.nb-root) .send { font-family: var(--mono); font-size: 16px; color: var(--ink-soft); padding: 0 2px 8px; transition: color .2s; }
+:global(.nb-root) .send:hover { color: var(--ink); }
+:global(.nb-root) .send:disabled { opacity: .3; cursor: default; }
+:global(.nb-root) .replyFoot { flex: none; display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin-top: 8px; }
+:global(.nb-root) .replyFoot :global(.nb-mono) { font-size: 9.5px; color: var(--ink-faint); }
+
+/* quick mode: what it read, as in a notebook index */
+:global(.nb-root) .read { display: grid; grid-template-columns: minmax(0, 1fr); gap: 22px; align-items: start; flex: none; }
+:global(.nb-root) .readWithPrint { grid-template-columns: minmax(0, 1fr) 156px; }
+:global(.nb-root) .facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 13px 22px; }
+:global(.nb-root) .facts > .wide, :global(.nb-root) .readWithPrint .facts > div { grid-column: 1 / -1; }
+:global(.nb-root) .readWithPrint .facts { gap: 9px; }
+:global(.nb-root) .readWithPrint .facts dd { font-size: 15px; line-height: 1.5; }
+:global(.nb-root) .facts dt { font-size: 11px; letter-spacing: .14em; color: var(--ink-faint); }
+:global(.nb-root) .facts dd { font-size: 16px; line-height: 1.55; color: var(--ink); margin-top: 2px; }
+:global(.nb-root) .stress { display: flex; align-items: center; gap: 10px; }
+:global(.nb-root) .stress span { display: inline-flex; gap: 6px; }
+:global(.nb-root) .stress i { width: 16px; height: 2px; border-radius: 2px; background: #d2c9b8; transform: rotate(-9deg); }
+:global(.nb-root) .stress i.on { background: var(--red-ink); }
+:global(.nb-root) .stress b { font-family: var(--hand); font-weight: 400; font-size: 16px; color: var(--red-ink); }
+
+:global(.nb-root) .printCol { display: flex; flex-direction: column; align-items: flex-start; gap: 14px; padding-top: 6px; }
+:global(.nb-root) .print {
+  position: relative; width: 100%; background: #fbf8f1; padding: 7px 7px 30px;
+  box-shadow: 0 1px 1px rgba(0, 0, 0, .12), 0 14px 20px -12px rgba(60, 40, 20, .5);
+  transform: rotate(2deg);
+}
+:global(.nb-root) .print :global(.nb-tape) { width: 60px; height: 18px; margin-left: -30px; top: -9px; z-index: 1; }
+:global(.nb-root) .printPhoto { display: block; width: 100%; padding: 0; }
+:global(.nb-root) .printPhoto img { display: block; width: 100%; height: auto; aspect-ratio: 1; object-fit: cover; filter: sepia(.15) contrast(1.02); }
+:global(.nb-root) .print figcaption {
+  position: absolute; left: 9px; right: 9px; bottom: 7px;
+  font-family: var(--hand); font-size: 12.5px; color: var(--ink-soft);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+:global(.nb-root) .downloadFrame { white-space: nowrap; font-family: var(--hand); font-size: 15px; color: var(--ink); border-bottom: 1.5px solid var(--ink); padding-bottom: 2px; }
+:global(.nb-root) .downloadFrame:disabled { opacity: .45; }
+
+/* image prompt, laid in on the page */
+:global(.nb-root) .promptPanel { flex: none; border-top: 1px solid rgba(31, 28, 23, .15); padding-top: 12px; }
+:global(.nb-root) .promptHead { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+:global(.nb-root) .promptHeadActs { display: inline-flex; align-items: center; gap: 14px; }
+:global(.nb-root) .close { font-size: 18px; line-height: 1; color: var(--ink-faint); padding: 0 2px; }
+:global(.nb-root) .close:hover { color: var(--ink); }
+:global(.nb-root) .promptText {
+  display: block; width: 100%; margin-top: 8px; padding: 8px 10px; resize: vertical; min-height: 96px; max-height: 220px;
+  font-family: var(--serif); font-size: 13px; line-height: 1.7; color: var(--ink-soft);
+  background: rgba(251, 248, 241, .6); border: 1px dotted #c3b9a5; outline: 0;
+}
+:global(.nb-root) .promptText:focus { border: 1px solid var(--ink-soft); color: var(--ink); }
+:global(.nb-root) .promptFoot { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 16px; margin-top: 10px; }
+:global(.nb-root) .promptImageActs { display: inline-flex; gap: 16px; }
+:global(.nb-root) .hint { flex: 1; min-width: 12em; font-size: 11.5px; line-height: 1.6; color: var(--ink-faint); }
+:global(.nb-root) .err { font-family: var(--hand); font-size: 14px; line-height: 1.5; color: var(--red-ink); }
+
+/* foot of the right page: where the dream is, then what to do */
+:global(.nb-root) .foot { flex: none; padding-top: 14px; }
+:global(.nb-root) .progress { list-style: none; display: flex; align-items: center; flex-wrap: wrap; row-gap: 4px; }
+:global(.nb-root) .progress li { font-size: 12px; letter-spacing: .12em; color: var(--ink-faint); display: inline-flex; align-items: center; }
+:global(.nb-root) .progress li + li::before { content: ""; width: 22px; height: 1px; background: rgba(31, 28, 23, .22); margin: 0 12px; }
+:global(.nb-root) .progress li.reached { color: var(--ink-soft); }
+:global(.nb-root) .progress li[aria-current="step"] { color: var(--ink); font-weight: 600; }
+:global(.nb-root) .nextNote { font-size: 12.5px; line-height: 1.75; color: var(--ink-soft); margin-top: 12px; }
+:global(.nb-root) .nextNote b { font-weight: 600; color: var(--ink); margin-right: .7em; }
+:global(.nb-root) .actions { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 12px 20px; margin-top: 16px; }
+:global(.nb-root) .quietActs { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px 18px; margin-left: auto; }
+:global(.nb-root) .exit { white-space: nowrap; }
+
+:global(.nb-root) .billing { display: inline-flex; }
+:global(.nb-root) .billing :global(.nb-mono) { font-size: 10px; color: var(--ink-faint); letter-spacing: .16em; }
+:global(.nb-root) .upgrade { font-family: var(--mono); font-size: 10px; letter-spacing: .14em; color: var(--ink-soft); border-bottom: 1px solid rgba(176, 67, 46, .5); padding-bottom: 1px; }
+:global(.nb-root) .upgrade:hover { color: var(--red-ink); }
+:global(.nb-root) .upgrade:disabled { opacity: .5; }
+
+/* a note slipped onto the desk, for billing messages */
+:global(.nb-root) .toast {
+  position: fixed; left: 50%; bottom: 28px; z-index: 96; transform: translateX(-50%) rotate(-.6deg);
+  max-width: min(460px, calc(100vw - 40px)); padding: 12px 20px;
+  background: #fbf8f1; font-family: var(--hand); font-size: 15px; color: var(--ink);
+  box-shadow: 0 1px 1px rgba(0, 0, 0, .1), 0 14px 24px -14px rgba(60, 40, 20, .55);
+  animation: toast-in .5s ease both;
+}
+@keyframes toast-in { from { opacity: 0; transform: translateX(-50%) translateY(8px); } }
+
+/* ── the developing room: lights off, safelight on, a print surfacing in the tray ── */
+:global(.nb-root) .room {
+  position: fixed; inset: 0; width: 100vw; height: 100dvh; max-width: none; max-height: none;
+  margin: 0; padding: 0; border: 0; overflow: auto;
+  color: #e9dec9; font-family: var(--serif);
+  background:
+    radial-gradient(ellipse 55% 40% at 50% -6%, rgba(170, 40, 24, .36), transparent 72%),
+    radial-gradient(ellipse 80% 60% at 50% 110%, rgba(60, 30, 18, .5), transparent 70%),
+    #140f0c;
+}
+:global(.nb-root) .room[open] { animation: lights-off .6s ease both; }
+:global(.nb-root) .room::backdrop { background: rgba(10, 7, 5, .7); }
+@keyframes lights-off { from { opacity: 0; } }
+:global(.nb-root) .roomIn { position: relative; min-height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 22px; padding: 70px 24px 56px; }
+:global(.nb-root) .roomClose { position: absolute; top: 22px; right: 26px; z-index: 2; font-family: var(--mono); font-size: 11px; letter-spacing: .18em; color: rgba(233, 222, 201, .7); }
+:global(.nb-root) .roomClose:hover { color: #f3e9d7; }
+:global(.nb-root) .roomCopy { text-align: center; position: relative; z-index: 1; }
+:global(.nb-root) .roomKicker { font-family: var(--mono); font-size: 11px; letter-spacing: .24em; color: #cf6a52; }
+:global(.nb-root) .roomCopy h2 { font-weight: 400; font-size: 26px; letter-spacing: .02em; margin-top: 10px; color: #f3e9d7; }
+
+:global(.nb-root) .polaroid {
+  position: relative; z-index: 1; width: min(360px, 76vw); padding: 13px 13px 54px; background: #f2ecdf;
+  box-shadow: 0 2px 2px rgba(0, 0, 0, .4), 0 34px 60px -24px rgba(0, 0, 0, .85);
+  transform: rotate(-1.6deg);
+}
+:global(.nb-root) .emulsion { position: relative; aspect-ratio: 1; overflow: hidden; background: #2a221d; }
+:global(.nb-root) .emulsion img { display: block; width: 100%; height: 100%; object-fit: cover; }
+:global(.nb-root) .latent {
+  position: absolute; inset: 0;
+  background: radial-gradient(ellipse 60% 55% at 42% 46%, rgba(132, 100, 76, .6), transparent 70%), #2a221d;
+  animation: latent 3.4s ease-in-out infinite alternate;
+}
+@keyframes latent { from { opacity: .35; } to { opacity: 1; } }
+:global(.nb-root) .developed .emulsion img { animation: develop 5s cubic-bezier(.3, .1, .3, 1) both; }
+@keyframes develop {
+  0% { opacity: .2; filter: brightness(.2) sepia(1) contrast(.5) blur(8px); }
+  45% { opacity: .85; filter: brightness(.6) sepia(.75) contrast(.75) blur(2.5px); }
+  100% { opacity: 1; filter: none; }
+}
+:global(.nb-root) .polaroid figcaption {
+  position: absolute; left: 16px; right: 16px; bottom: 16px;
+  font-family: var(--hand); font-size: 17px; color: #3b3832;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+:global(.nb-root) .developing figcaption { opacity: .35; }
+
+:global(.nb-root) .roomSteps { list-style: none; display: flex; flex-wrap: wrap; justify-content: center; gap: 6px 24px; position: relative; z-index: 1; }
+:global(.nb-root) .roomSteps li { font-family: var(--mono); font-size: 11px; letter-spacing: .12em; color: rgba(233, 222, 201, .25); animation: step 6s ease-in-out infinite; }
+:global(.nb-root) .roomSteps li:nth-child(2) { animation-delay: 2s; }
+:global(.nb-root) .roomSteps li:nth-child(3) { animation-delay: 4s; }
+@keyframes step { 0%, 100% { color: rgba(233, 222, 201, .25); } 15%, 30% { color: rgba(233, 222, 201, .85); } }
+
+/* the dream's own words drift in the dark, fading as the print comes up */
+:global(.nb-root) .fragments { position: absolute; inset: 0; overflow: hidden; pointer-events: none; transition: opacity 2s ease; }
+:global(.nb-root) .fragments span {
+  position: absolute; left: calc(7% + var(--i) * 18%); top: calc(18% + var(--i) * 13%);
+  max-width: 22ch; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  font-family: var(--hand); font-size: 16px; color: rgba(233, 222, 201, .16);
+  animation: drift 16s ease-in-out infinite alternate; animation-delay: calc(var(--i) * -3s);
+}
+:global(.nb-root) .fragments span:nth-child(even) { top: auto; bottom: calc(14% + var(--i) * 8%); }
+@keyframes drift { from { transform: translate(0, 0); } to { transform: translate(24px, -18px); } }
+:global(.nb-root) .developed ~ .fragments { opacity: .35; }
+
+:global(.nb-root) .roomNext { position: relative; z-index: 1; text-align: center; display: grid; gap: 14px; justify-items: center; }
+:global(.nb-root) .roomNext > p { font-size: 13.5px; color: rgba(233, 222, 201, .72); }
+:global(.nb-root) .roomActs { position: relative; z-index: 1; display: flex; flex-wrap: wrap; justify-content: center; gap: 10px 28px; }
+:global(.nb-root) .roomActs button {
+  font-family: var(--hand); font-size: 17px; color: #e9dec9; padding-bottom: 3px;
+  border-bottom: 1px solid rgba(233, 222, 201, .35); transition: border-color .2s, opacity .2s;
+}
+:global(.nb-root) .roomActs button:hover { border-bottom-color: #e9dec9; }
+:global(.nb-root) .roomActs button:disabled { opacity: .35; cursor: default; }
+:global(.nb-root) .roomActs button.roomPrimary {
+  border-bottom: 0;
+  background: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 10' preserveAspectRatio='none'><path d='M1 6 C 30 3, 65 8, 99 4' stroke='%23d0644b' stroke-width='1.8' fill='none' stroke-linecap='round'/></svg>") no-repeat left bottom / 100% 6px;
+}
+:global(.nb-root) .roomError { position: relative; z-index: 1; max-width: 32em; text-align: center; font-family: var(--hand); font-size: 16px; color: #e8907a; }
+
+@media (prefers-reduced-motion: reduce) {
+  :global(.nb-root) .developed .emulsion img, :global(.nb-root) .latent, :global(.nb-root) .roomSteps li, :global(.nb-root) .fragments span, :global(.nb-root) .recording .mic::after, :global(.nb-root) .dots i, :global(.nb-root) .room[open], :global(.nb-root) .toast { animation: none; }
+}
+
+/* ── phones: one continuous sheet ── */
+@media (max-width: 900px) {
+  :global(.nb-root) .left { background-image: linear-gradient(90deg, transparent 44px, var(--margin) 44px 45px, transparent 45px); }
+  :global(.nb-root) .leftPad { padding-top: 22px !important; padding-bottom: 28px !important; }
+  :global(.nb-root) .rightPad { padding-top: 26px !important; padding-bottom: 40px !important; }
+  :global(.nb-root) .leftHead { flex-wrap: wrap; row-gap: 10px; }
+  :global(.nb-root) .dateLine { margin-top: 14px; height: auto; min-height: 48px; flex-wrap: wrap; row-gap: 0; white-space: normal; }
+  :global(.nb-root) .writeWrap { flex: none; margin: 6px -26px 0 -62px; }
+  /* globals.css forces 16px on phone inputs (iOS zoom); the hand needs a little more to sit on the rules */
+  :global(.nb-root) .write { height: calc(var(--line) * 9); padding: 0 26px 0 62px; font-size: 19px !important; }
+  :global(.nb-root) .replyInput { font-size: 18px !important; }
+  :global(.nb-root) .title { font-size: 19px !important; }
+  :global(.nb-root) .marginNote { left: 0; width: 38px; font-size: 12px; }
+  :global(.nb-root) .gathered { display: none; }
+  :global(.nb-root) .sleepGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 22px; }
+  :global(.nb-root) .sleepFoot { flex-direction: column; gap: 10px; }
+  :global(.nb-root) .leftFoot { flex-wrap: wrap; }
+  :global(.nb-root) .scroll { flex: none; overflow: visible; margin: 0; padding: 0; mask-image: none; }
+  :global(.nb-root) .slip { max-width: 100%; }
+  :global(.nb-root) .said { max-width: 92%; }
+  :global(.nb-root) .readWithPrint { grid-template-columns: minmax(0, 1fr); }
+  :global(.nb-root) .printCol { width: 64%; margin-left: 8%; }
+  :global(.nb-root) .actions { flex-direction: column; align-items: flex-start; gap: 18px; }
+  :global(.nb-root) .quietActs { justify-content: flex-start; margin-left: 0; }
+  :global(.nb-root) .roomCopy h2 { font-size: 22px; }
+}
+

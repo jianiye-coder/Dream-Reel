@@ -3,6 +3,9 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { Book, BookPage } from "@/components/notebook/Book";
+import { NotebookShell } from "@/components/notebook/NotebookShell";
+import { TurnLink } from "@/components/notebook/TurnLink";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import type { DreamAgentMemory, DreamAgentNextAction, DreamAgentStage } from "@/lib/dreamFollowUpAgent";
@@ -10,11 +13,12 @@ import type { DreamAgentResponseMeta } from "@/lib/dreamAgentTelemetry";
 import { getRealityQuestion } from "@/lib/dreamQuestions";
 import { buildDreamImagePrompt } from "@/lib/imagePrompt";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { LangToggle } from "@/components/LangToggle";
 import { getApiErrorMessage } from "@/lib/apiErrors";
 import { shouldFlushLatestSave } from "@/lib/autosave";
 import { DreamConversationControls } from "@/components/DreamConversationControls";
 import type { DreamConversationGoal } from "@/lib/dreamSupport";
+import { usePenSound } from "./usePenSound";
+import css from "./journal.module.css";
 
 type SpeechRecognitionConstructor = new () => SpeechRecognitionLike;
 
@@ -40,6 +44,33 @@ function getTodayDate() {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
+
+const CN_DIGITS = "〇一二三四五六七八九";
+function cnNum(n: number) {
+  if (n <= 10) return n === 10 ? "十" : CN_DIGITS[n];
+  if (n < 20) return "十" + CN_DIGITS[n % 10];
+  return CN_DIGITS[Math.floor(n / 10)] + "十" + (n % 10 ? CN_DIGITS[n % 10] : "");
+}
+
+/** "2026-10-07" → the date as you'd write it at the top of a page, plus its folio number */
+function pageDate(value: string, lang: "zh" | "en") {
+  const [y, m, d] = value.split("-").map(Number);
+  const date = y && m && d ? new Date(y, m - 1, d) : new Date();
+  const dayOfYear = Math.round((date.getTime() - new Date(date.getFullYear(), 0, 1).getTime()) / 86_400_000) + 1;
+  const short = `${String(date.getMonth() + 1).padStart(2, "0")}.${String(date.getDate()).padStart(2, "0")}`;
+  return lang === "zh"
+    ? { day: `${cnNum(date.getMonth() + 1)}月${cnNum(date.getDate())}日`, weekday: "周" + "日一二三四五六"[date.getDay()], short, folio: dayOfYear * 2 }
+    : { day: date.toLocaleDateString("en-US", { month: "long", day: "numeric" }), weekday: date.toLocaleDateString("en-US", { weekday: "long" }), short, folio: dayOfYear * 2 };
+}
+
+const MicIcon = () => (
+  <svg viewBox="0 0 24 24" aria-hidden>
+    <path d="M12 3.5a3 3 0 0 0-3 3v5a3 3 0 0 0 6 0v-5a3 3 0 0 0-3-3Z" />
+    <path d="M5.75 10.5v1a6.25 6.25 0 0 0 12.5 0v-1" />
+    <path d="M12 17.75v2.75" />
+    <path d="M8.75 20.5h6.5" />
+  </svg>
+);
 
 interface ChatMessage {
   id: string;
@@ -297,7 +328,7 @@ export default function JournalPage() {
   // Seed or update welcome message when lang changes
   useEffect(() => {
     const content = conversationGoal === "support"
-      ? (lang === "zh" ? "记不住梦也没关系。不用把空白补完整，我们可以从醒来后留下的感受，或你现在想聊的事情开始。" : "It is okay not to remember the dream. You do not need to fill in the gaps. We can start with how you felt after waking, or whatever you want to talk about now.")
+      ? J.nb.supportWelcome
       : J.welcome;
     const welcome: ChatMessage = { id: "welcome", role: "assistant", content };
     if (!welcomed) {
@@ -356,16 +387,9 @@ export default function JournalPage() {
     [messages, visibleChatMessageCount],
   );
   const hiddenChatMessageCount = Math.max(messages.length - visibleMessages.length, 0);
-  const agentDecisionCopy = lang === "zh"
-    ? "Agent 判断：这场梦的信息已经足够整理。"
-    : "Agent decision: this dream is ready to organize.";
-  const organizeDreamLabel = (() => {
-    if (isAnalyzing) return J.analyzingBtn;
-    return lang === "zh" ? "整理这场梦" : "Organize this dream";
-  })();
-  const imageGenerationStartingCopy = lang === "zh"
-    ? "好，我现在用刚才的梦境内容开始生成图像。"
-    : "Okay, I’m starting an image from the dream you just shared.";
+  const agentDecisionCopy = J.nb.agentDecision;
+  const organizeDreamLabel = isAnalyzing ? J.analyzingBtn : J.nb.organizeDream;
+  const imageGenerationStartingCopy = J.nb.imageStarting;
 
   const activeDreamText =
     mode === "chat"
@@ -606,6 +630,8 @@ export default function JournalPage() {
   }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+    // Enter that commits an IME candidate (pinyin, kana…) is not a send
+    if (e.nativeEvent.isComposing) return;
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       void sendMessage();
@@ -827,11 +853,7 @@ export default function JournalPage() {
       const data = (await res.json()) as { imageUrl?: string; error?: string };
       if (res.status === 402) { router.push("/pricing"); return; }
       if (!res.ok) {
-        throw new Error(getApiErrorMessage(
-          data.error,
-          lang,
-          lang === "zh" ? "图片生成失败，请稍后重试。" : "Image generation failed. Please try again.",
-        ));
+        throw new Error(getApiErrorMessage(data.error, lang, J.nb.imageFailed));
       }
       if (data.imageUrl) {
         setGeneratedImageUrl(data.imageUrl);
@@ -839,17 +861,11 @@ export default function JournalPage() {
         void refreshBillingStatus();
         void autoSave({ pendingImageUrl: data.imageUrl });
       } else {
-        throw new Error(lang === "zh" ? "未收到生成的图片，请重试。" : "No image was returned. Please try again.");
+        throw new Error(J.nb.imageNone);
       }
     } catch (err) {
       console.error(err);
-      setImageError(
-        err instanceof Error
-          ? err.message
-          : lang === "zh"
-            ? "图片生成失败，请稍后重试。"
-            : "Image generation failed. Please try again.",
-      );
+      setImageError(err instanceof Error ? err.message : J.nb.imageFailed);
     } finally {
       setIsGeneratingImage(false);
     }
@@ -916,7 +932,7 @@ export default function JournalPage() {
       anchor.remove();
       window.setTimeout(() => URL.revokeObjectURL(url), 1000);
     } catch {
-      setDownloadError(lang === "zh" ? "图片下载失败，请重试。" : "Couldn't download the image. Please try again.");
+      setDownloadError(J.nb.downloadFailed);
     } finally {
       setIsDownloadingImage(false);
     }
@@ -1036,557 +1052,397 @@ export default function JournalPage() {
 
   autoSaveLatestRef.current = autoSave;
 
-  return (
-    <div className="journal-root">
-      <div className="grain-overlay" aria-hidden />
-      <div className="dream-orb orb-1" aria-hidden />
-      <div className="dream-orb orb-2" aria-hidden />
-      <div className="dream-orb orb-3" aria-hidden />
 
-      {/* Nav */}
-      <nav className="journal-nav site-header">
-        <Link href="/" className="landing-logo site-brand">
-          <Image src="/dream-reel-logo.png" alt="" aria-hidden width={36} height={36} className="logo-img" />
-          <span>Dream Reel</span>
-        </Link>
+  // ── notebook spread ─────────────────────────────────────────────────────────
+  const N = J.nb;
+  const pen = usePenSound();
+  const roomRef = useRef<HTMLDialogElement>(null);
+  const roomOpenerRef = useRef<HTMLElement | null>(null);
+  const sleepFirstRef = useRef<HTMLInputElement>(null);
+  const promptRef = useRef<HTMLTextAreaElement>(null);
 
-        <div className="journal-mode-tabs" role="tablist">
-          <button
-            type="button"
-            id="journal-tab-quick"
-            role="tab"
-            aria-selected={mode === "quick"}
-            aria-controls="journal-panel-quick"
-            tabIndex={mode === "quick" ? 0 : -1}
-            onClick={() => setJournalMode("quick")}
-            onKeyDown={handleModeTabKeyDown}
-            className={`mode-tab ${mode === "quick" ? "mode-tab-active" : ""}`}
-          >
-            <span>{J.quickMode}</span>
-          </button>
-          <button
-            type="button"
-            id="journal-tab-chat"
-            role="tab"
-            aria-selected={mode === "chat"}
-            aria-controls="journal-panel-chat"
-            tabIndex={mode === "chat" ? 0 : -1}
-            onClick={() => { setJournalMode("chat"); setStep("dream"); }}
-            onKeyDown={handleModeTabKeyDown}
-            className={`mode-tab ${mode === "chat" ? "mode-tab-active" : ""}`}
-          >
-            <span>{J.chatMode}</span>
-          </button>
-        </div>
+  // the developing room is a native modal dialog: focus moves in, Tab stays inside, Esc closes,
+  // and focus goes back to whatever opened it
+  useEffect(() => {
+    const room = roomRef.current;
+    if (!room) return;
+    if (isDevelopingRoomOpen && !room.open) {
+      roomOpenerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      room.showModal();
+    } else if (!isDevelopingRoomOpen && room.open) {
+      room.close();
+    }
+  }, [isDevelopingRoomOpen]);
 
-        <div className="nav-actions site-nav-actions">
-          {billingStatus && !billingStatus.isUnlimited && (
-            billingStatus.plan === "plus" ? (
-              <span className="billing-pill" title={`${B.analysisLeft.replace("{count}", String(billingStatus.remaining.analysis))} · ${B.imagesLeft.replace("{count}", String(billingStatus.remaining.imageGenerations))}`}>
-                Plus
-              </span>
-            ) : (
-              <button
-                type="button"
-                className="nav-btn billing-upgrade-btn"
-                onClick={() => void openCheckout()}
-                disabled={isCheckoutLoading}
-                title={`${B.analysisLeft.replace("{count}", String(billingStatus.remaining.analysis))} · ${B.imagesLeft.replace("{count}", String(billingStatus.remaining.imageGenerations))}`}
-              >
-                {isCheckoutLoading ? "…" : (lang === "zh" ? `Free → Plus` : `Free → Plus`)}
-              </button>
-            )
+  function handleRoomClosed() {
+    setIsDevelopingRoomOpen(false);
+    const opener = roomOpenerRef.current;
+    roomOpenerRef.current = null;
+    requestAnimationFrame(() => {
+      const active = document.activeElement;
+      if (active && active !== document.body && active.id !== "main-content") return;
+      // the button that opened the room may have been replaced (its step is done): land on the page's next action
+      // (a button that started generating was disabled, so focus may already have fallen to <body>)
+      const usable = opener && opener.isConnected && opener !== document.body && !opener.matches(":disabled") ? opener : null;
+      const target = usable ?? document.querySelector<HTMLElement>(`.${css.actions} button:not(:disabled), .${css.printPhoto}, .${css.reply} textarea`);
+      target?.focus();
+    });
+  }
+
+  const page = pageDate(dreamDate, lang);
+  const userStatements = messages.filter((m) => m.role === "user" && !m.isCommand).map((m) => m.content);
+  const writtenCount = lang === "zh"
+    ? activeDreamText.replace(/\s/g, "").length
+    : (activeDreamText.trim() ? activeDreamText.trim().split(/\s+/).length : 0);
+  const saveText = autoSaveStatus === "error" ? N.saveError
+    : autoSaveStatus === "saving" ? N.saving
+      : autoSaveStatus === "saved" ? N.saved
+        : hasContent ? N.autoSaving : "";
+  const progress = !currentAnalysis ? 0 : !generatedImageUrl ? 1 : savedImageUrl === generatedImageUrl ? 3 : 2;
+  const quota = billingStatus
+    ? `${B.analysisLeft.replace("{count}", String(billingStatus.remaining.analysis))} · ${B.imagesLeft.replace("{count}", String(billingStatus.remaining.imageGenerations))}`
+    : "";
+  const printCaption = `${page.short} — ${quickTitle || analysis?.title || N.room.untitled}`;
+  const imageFileName = `${(quickTitle || "dream").replace(/[\\/:*?"<>|]/g, "_")}.png`;
+
+  function openImagePrompt() {
+    setPanel("image");
+    requestAnimationFrame(() => promptRef.current?.focus());
+  }
+
+  function openSleepLog() {
+    setStep("sleep");
+    requestAnimationFrame(() => sleepFirstRef.current?.focus());
+  }
+
+  const voiceButton = (compact: boolean) => (
+    <button
+      type="button"
+      className={`${css.voice}${compact ? ` ${css.voiceCompact}` : ""}${isRecording ? ` ${css.recording}` : ""}`}
+      onClick={toggleVoiceRecord}
+      aria-pressed={isRecording}
+      aria-label={compact ? (isRecording ? J.toolbar.recording : J.toolbar.voice) : undefined}
+      title={isRecording ? J.toolbar.recording : J.toolbar.voice}
+    >
+      <span className={css.mic} aria-hidden><MicIcon /></span>
+      {!compact && <span>{isRecording ? N.listening : N.speak}</span>}
+    </button>
+  );
+
+  const slip = (children: React.ReactNode, extra?: string, props?: React.HTMLAttributes<HTMLDivElement>) => (
+    <div className={`${css.slip}${extra ? ` ${extra}` : ""}`} {...props}>
+      <span className={css.slipLabel} aria-hidden>{N.aiLabel}</span>
+      {children}
+    </div>
+  );
+
+  const inkDots = <span className={css.dots} aria-hidden><i /><i /><i /></span>;
+
+  const imagePanel = panel === "image" && (
+    <section className={css.promptPanel} aria-label={J.image.title}>
+      <div className={css.promptHead}>
+        <span className="nb-kicker">{J.image.title}</span>
+        <span className={css.promptHeadActs}>
+          {imagePromptEdited && (
+            <button type="button" className="nb-act-quiet" onClick={() => setImagePromptEdited(false)}>{J.image.reset}</button>
           )}
-          <LangToggle className="nav-btn site-language" />
-          <Link href="/archive" className="nav-btn site-nav-link">{T.nav.archive}</Link>
-          <Link href="/account" className="nav-btn site-nav-link">{lang === "zh" ? "账号" : "Account"}</Link>
-          {hasContent && (
-            <Link href="/archive" className="nav-btn journal-exit-btn" title={lang === "zh" ? "内容已保存，退出记录" : "Content saved — exit"}>
-              ✕
-            </Link>
-          )}
-        </div>
-      </nav>
-
-      {billingMessage && (
-        <div className="billing-toast" role="status">
-          {billingMessage}
-        </div>
-      )}
-
-      <div className="relative z-10 px-6 py-2 text-right">
-        <Link href="/morning-pages" className="inline-flex min-h-11 items-center text-sm text-[#92400e] underline underline-offset-4">
-          {T.morningPages.journalLink}
-        </Link>
+          <button type="button" className={css.close} onClick={() => setPanel("none")} aria-label={N.closePrompt}>×</button>
+        </span>
       </div>
+      <textarea
+        ref={promptRef}
+        name="imagePrompt"
+        aria-label={J.image.title}
+        autoComplete="off"
+        value={imagePrompt}
+        onChange={(e) => { setImagePrompt(e.target.value); setImagePromptEdited(true); }}
+        placeholder={J.image.placeholder}
+        rows={5}
+        className={css.promptText}
+      />
+      <div className={css.promptFoot}>
+        <button
+          type="button"
+          className={css.redAct}
+          onClick={() => void generateImage()}
+          disabled={isGeneratingImage || !imagePrompt.trim()}
+        >
+          {isGeneratingImage ? J.image.genLoading : J.image.genBtn}
+        </button>
+        {imageError
+          ? <p className={css.err}>{imageError}</p>
+          : <p className={css.hint}>{J.image.hint}{!analysis && <><br />{J.image.analyzeHint}</>}</p>}
+        {generatedImageUrl && (
+          <span className={css.promptImageActs}>
+            <button type="button" className="nb-act-quiet" onClick={() => setIsDevelopingRoomOpen(true)}>{N.viewImage}</button>
+            <a href={generatedImageUrl} download={imageFileName} className="nb-act-quiet">{J.image.download}</a>
+          </span>
+        )}
+      </div>
+    </section>
+  );
 
+  const exitLink = (label: string) => (
+    <TurnLink href="/archive" className={`nb-act-quiet ${css.exit}`} title={N.exitTitle}>{label}</TurnLink>
+  );
 
-      {/* Chat mode — messages */}
-      {mode === "chat" && step === "dream" && (
-        <main id="journal-panel-chat" role="tabpanel" aria-labelledby="journal-tab-chat" className="messages-area" ref={messagesAreaRef}>
-          <div className="messages-inner">
-            <DreamConversationControls
-              goal={conversationGoal}
-              onGoalChange={setConversationGoal}
-              disabled={isTyping}
-              lang={lang}
-              date={dreamDate}
-              statements={messages.filter((m) => m.role === "user" && !m.isCommand).map((m) => m.content)}
-            />
-            {hiddenChatMessageCount > 0 ? (
-              <div className="mb-4 text-center">
-                <button
-                  type="button"
-                  className="mist-button-secondary rounded-full px-4 py-2 text-sm font-medium"
-                  onClick={() => setVisibleChatMessageCount((count) => Math.min(count + CHAT_RENDER_WINDOW, messages.length))}
-                >
-                  {lang === "zh"
-                    ? `显示更早的 ${Math.min(CHAT_RENDER_WINDOW, hiddenChatMessageCount)} 条消息`
-                    : `Show ${Math.min(CHAT_RENDER_WINDOW, hiddenChatMessageCount)} earlier messages`}
-                </button>
-              </div>
-            ) : null}
-            {visibleMessages.map((msg, i) => (
-              <div
-                key={msg.id}
-                className={`msg-row ${msg.role === "user" ? "msg-row-user" : "msg-row-ai"}`}
-                style={{ animationDelay: `${Math.min(i * 0.04, 0.25)}s` }}
-              >
-                {msg.role === "assistant" && <div className="msg-avatar" aria-hidden>☾</div>}
-                <div className={`msg-bubble ${msg.role === "user" ? "bubble-user" : "bubble-ai"}`}>
-                  <p className="msg-text">{msg.content}</p>
-                  {msg.role === "assistant" && msg.isError && (
-                    <button type="button" className="agent-retry-btn" onClick={() => editAndRetry(msg)}>
-                      {lang === "zh" ? "编辑后重试" : "Edit and retry"}
-                    </button>
-                  )}
-                  {msg.role === "assistant" && msg.meta?.feedbackToken && !msg.isError && (
-                    <div className="agent-feedback" aria-label={lang === "zh" ? "评价这次回应" : "Rate this response"}>
-                      <button
-                        type="button"
-                        aria-label={lang === "zh" ? "有帮助" : "Helpful"}
-                        aria-pressed={msg.feedback === "up"}
-                        className={msg.feedback === "up" ? "agent-feedback-active" : ""}
-                        onClick={() => void submitAgentFeedback(msg.id, "up")}
-                      >↑</button>
-                      <button
-                        type="button"
-                        aria-label={lang === "zh" ? "没帮助" : "Not helpful"}
-                        aria-pressed={msg.feedback === "down"}
-                        className={msg.feedback === "down" ? "agent-feedback-active" : ""}
-                        onClick={() => void submitAgentFeedback(msg.id, "down")}
-                      >↓</button>
-                      {msg.feedback === "down" && (
-                        <div className="agent-feedback-reasons">
-                          {([
-                            ["repetitive", lang === "zh" ? "重复" : "Repetitive"],
-                            ["irrelevant", lang === "zh" ? "跑题" : "Irrelevant"],
-                            ["too_many_questions", lang === "zh" ? "问题太多" : "Too many questions"],
-                            ["unsafe", lang === "zh" ? "不舒服" : "Unsafe"],
-                            ["other", lang === "zh" ? "其他" : "Other"],
-                          ] as const).map(([reason, label]) => (
-                            <button
-                              type="button"
-                              key={reason}
-                              className={msg.feedbackReason === reason ? "agent-feedback-active" : ""}
-                              onClick={() => void submitAgentFeedback(msg.id, "down", reason)}
-                            >{label}</button>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              </div>
-            ))}
+  // ── quick mode, right page ──
+  const quickRight = (
+    <>
+      <div className={css.scroll}>
+        {!hasContent && slip(<p className={css.slipText}>{N.quickWelcome}</p>)}
 
-            {isTyping && (
-              <div className="msg-row msg-row-ai">
-                <div className="msg-avatar" aria-hidden>☾</div>
-                <div className="msg-bubble bubble-ai msg-typing">
-                  <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-                    {[0, 1, 2].map((i) => (
-                      <span key={i} className="dream-dot" style={{ animationDelay: `${i * 0.18}s` }} />
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
-            <div ref={messagesEndRef} />
-          </div>
-        </main>
-      )}
+        {hasContent && !currentAnalysis && slip(
+          isAnalyzing
+            ? <p className={css.slipText}>{N.reading} {inkDots}</p>
+            : <>
+              <p className={css.slipHead}>{J.quickFlow.analysisWaiting}</p>
+              <p className={css.slipText}>{J.workflow.beforeAnalyze}</p>
+            </>,
+          undefined,
+          { "aria-live": "polite" },
+        )}
 
-      {/* Quick record mode */}
-      {mode === "quick" && step === "dream" && (
-        <main id="journal-panel-quick" role="tabpanel" aria-labelledby="journal-tab-quick" className="quick-area">
-          <div className={`quick-inner${panel === "image" ? " quick-inner-wide" : ""}`}>
-            <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                <span className="field-label">{J.sleep.date}</span>
-                <input
-                  type="date"
-                  name="dreamDate"
-                  aria-label={J.sleep.date}
-                  autoComplete="off"
-                  value={dreamDate}
-                  max={getTodayDate()}
-                  onChange={(e) => setDreamDate(e.target.value)}
-                  className="dream-input-sm dream-date-input"
-                  style={{ width: "auto" }}
-                />
-              </div>
-              <input
-                name="dreamTitle"
-                aria-label={lang === "zh" ? "梦境标题" : "Dream title"}
-                autoComplete="off"
-                value={quickTitle}
-                onChange={(e) => setQuickTitle(e.target.value, true)}
-                placeholder={isTitleGenerating
-                  ? (lang === "zh" ? "标题生成中…" : "Generating title…")
-                  : (lang === "zh" ? "梦境标题（写完后自动填充）" : "Title (auto-fills after you write)")}
-                className="dream-input-sm"
-                style={{ flex: 1, minWidth: "10rem", opacity: isTitleGenerating && !quickTitle ? 0.55 : 1 }}
-              />
-            </div>
-
-            {/* Dream textarea + image prompt side by side */}
-            <div className={panel === "image" ? "quick-split" : ""}>
-              <div className="quick-record-field">
-                <textarea
-                  name="dreamText"
-                  aria-label={J.quickTitle}
-                  autoComplete="off"
-                  value={quickText}
-                  onChange={(e) => {
-                    setQuickText(e.target.value);
-                    setInputMode("text");
-                  }}
-                  placeholder={J.quickPlaceholder}
-                  className="quick-textarea"
-                />
-                <button
-                  type="button"
-                  className={`voice-input-btn ${isRecording ? "voice-input-btn-active" : ""}`}
-                  style={{ position: "absolute", right: "0.75rem", bottom: "0.75rem" }}
-                  onClick={toggleVoiceRecord}
-                  aria-label={isRecording ? J.toolbar.recording : J.toolbar.voice}
-                  title={isRecording ? J.toolbar.recording : J.toolbar.voice}
-                >
-                  <svg viewBox="0 0 24 24" aria-hidden>
-                    <path d="M12 3.5a3 3 0 0 0-3 3v5a3 3 0 0 0 6 0v-5a3 3 0 0 0-3-3Z" />
-                    <path d="M5.75 10.5v1a6.25 6.25 0 0 0 12.5 0v-1" />
-                    <path d="M12 17.75v2.75" />
-                    <path d="M8.75 20.5h6.5" />
-                  </svg>
-                </button>
-              </div>
-
-              {/* Image prompt column — quick mode only, inline */}
-              {panel === "image" && (
-                <div className="image-prompt-col">
-                  <div className="image-prompt-col-header">
-                    <span className="image-prompt-col-title">{J.image.title}</span>
-
-                    {imagePromptEdited && (
-                      <button
-                        type="button"
-                        className="reset-btn"
-                        onClick={() => setImagePromptEdited(false)}
-                      >
-                        {J.image.reset}
-                      </button>
-                    )}
-                    <button
-                      type="button"
-                      className="panel-close"
-                      onClick={() => setPanel("none")}
-                      aria-label={lang === "zh" ? "关闭图像提示词" : "Close image prompt"}
-                    >
-                      ✕
-                    </button>
-                  </div>
-                  <textarea
-                    name="imagePrompt"
-                    aria-label={J.image.title}
-                    autoComplete="off"
-                    value={imagePrompt}
-                    onChange={(e) => { setImagePrompt(e.target.value); setImagePromptEdited(true); }}
-                    placeholder={J.image.placeholder}
-                    className="image-prompt-textarea"
-                  />
-                  <div className="image-prompt-col-footer">
-                    <button
-                      type="button"
-                      onClick={() => void generateImage()}
-                      disabled={isGeneratingImage || !imagePrompt.trim()}
-                      className="gen-btn"
-                      style={{ flexShrink: 0 }}
-                    >
-                      {isGeneratingImage ? J.image.genLoading : J.image.genBtn}
-                    </button>
-                    {imageError && <p className="save-err" style={{ margin: 0 }}>{imageError}</p>}
-                    {!imageError && (
-                      <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "0.2rem" }}>
-                        <p className="hint-text" style={{ margin: 0 }}>{J.image.hint}</p>
-                        {!analysis && <p className="hint-text" style={{ margin: 0, opacity: 0.7 }}>{J.image.analyzeHint}</p>}
-                      </div>
-                    )}
-                    {generatedImageUrl && (
-                      <>
-                        <button
-                          type="button"
-                          className="developing-open-btn"
-                          style={{ margin: 0 }}
-                          onClick={() => setIsDevelopingRoomOpen(true)}
-                        >
-                          {lang === "zh" ? "查看图像" : "View Image"}
-                        </button>
-                        <a
-                          href={generatedImageUrl}
-                          download={`${(quickTitle || "dream").replace(/[\\/:*?"<>|]/g, "_")}.png`}
-                          className="developing-open-btn"
-                          style={{ margin: 0, textDecoration: "none" }}
-                        >
-                          {J.image.download}
-                        </a>
-                      </>
-                    )}
-                  </div>
+        {currentAnalysis && (
+          <div className={`${css.read}${generatedImageUrl ? ` ${css.readWithPrint}` : ""}`} aria-live="polite">
+            <dl className={css.facts}>
+              {currentAnalysis.title && <div className={css.wide}><dt>{J.analysis.dreamTitle}</dt><dd>{currentAnalysis.title}</dd></div>}
+              {currentAnalysis.mood && <div><dt>{J.analysis.mood}</dt><dd>{currentAnalysis.mood}</dd></div>}
+              {currentAnalysis.stressScore != null && (
+                <div>
+                  <dt>{J.analysis.stress}</dt>
+                  <dd className={css.stress}>
+                    <span aria-hidden>{[1, 2, 3, 4, 5].map((n) => <i key={n} className={n <= (currentAnalysis.stressScore ?? 0) ? css.on : undefined} />)}</span>
+                    <b>{N.stressValue.replace("{n}", String(currentAnalysis.stressScore))}</b>
+                  </dd>
                 </div>
               )}
-            </div>
-
-
-            {hasContent && (
-              <div className="quick-analysis-entry" aria-live="polite">
-                <div className="quick-analysis-entry-copy">
-                  <p>{currentAnalysis ? J.quickFlow.analysisReady : J.quickFlow.analysisWaiting}</p>
-                  <span>
-                    {currentAnalysis
-                      ? J.workflow.afterAnalyze
-                      : J.workflow.beforeAnalyze}
-                  </span>
-                </div>
-                <div className="quick-entry-actions">
-                  <button
-                    type="button"
-                    className="quick-analyze-btn"
-                    onClick={() => void analyzeDream()}
-                    disabled={isAnalyzing || isTyping || !hasContent}
-                  >
-                    {isAnalyzing
-                      ? J.analyzingBtn
-                      : currentAnalysis
-                        ? J.quickFlow.reanalyze
-                        : J.analyzeBtn}
+              {currentAnalysis.people.length > 0 && <div><dt>{J.analysis.people}</dt><dd>{currentAnalysis.people.join(" · ")}</dd></div>}
+              {currentAnalysis.locations.length > 0 && <div><dt>{J.analysis.locations}</dt><dd>{currentAnalysis.locations.join(" · ")}</dd></div>}
+              {currentAnalysis.symbols.length > 0 && <div className={css.wide}><dt>{J.analysis.symbols}</dt><dd>{currentAnalysis.symbols.join(" · ")}</dd></div>}
+            </dl>
+            {generatedImageUrl && (
+              <div className={css.printCol}>
+                <figure className={css.print}>
+                  <span className="nb-tape" aria-hidden />
+                  <button type="button" className={css.printPhoto} onClick={() => setIsDevelopingRoomOpen(true)} aria-label={N.viewImage}>
+                    <Image src={generatedImageUrl} alt={N.room.alt} width={512} height={512} unoptimized />
                   </button>
-                  <button
-                    type="button"
-                    className="quick-chat-btn"
-                    onClick={() => void startDirectDreamChat()}
-                    disabled={isAnalyzing || isTyping || !hasContent}
-                  >
-                    {J.quickFlow.chatDirect}
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* Analysis result card */}
-            {currentAnalysis && mode === "quick" && (
-              <div className="quick-analysis-card">
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.625rem" }}>
-                  <p className="quick-analysis-heading" style={{ fontSize: "0.7rem", fontWeight: 600, letterSpacing: "0.14em", textTransform: "uppercase" }}>
-                    {J.analysis.title.replace("✦  ", "")}
-                  </p>
-                  <button type="button" className="panel-close" onClick={() => setAnalysis(null)}>✕</button>
-                </div>
-                {currentAnalysis.title && (
-                  <div className="quick-analysis-row" style={{ marginBottom: "0.55rem" }}>
-                    <span className="quick-analysis-label">{J.analysis.dreamTitle}</span>
-                    <span className="quick-analysis-value">{currentAnalysis.title}</span>
-                  </div>
-                )}
-                <div className="quick-analysis-grid">
-                  {currentAnalysis.mood && (
-                    <div className="quick-analysis-row">
-                      <span className="quick-analysis-label">{J.analysis.mood}</span>
-                      <span className="quick-analysis-value">{currentAnalysis.mood}</span>
-                    </div>
-                  )}
-                  {currentAnalysis.stressScore != null && (
-                    <div className="quick-analysis-row">
-                      <span className="quick-analysis-label">{J.analysis.stress}</span>
-                      <span className="quick-analysis-value">{currentAnalysis.stressScore} / 5</span>
-                    </div>
-                  )}
-                </div>
-                <div className="quick-analysis-tags">
-                  {currentAnalysis.people.length > 0 && (
-                    <div>
-                      <span className="quick-analysis-label" style={{ marginRight: "0.5rem" }}>{J.analysis.people}</span>
-                      <span className="quick-analysis-value">{currentAnalysis.people.join("  ·  ")}</span>
-                    </div>
-                  )}
-                  {currentAnalysis.locations.length > 0 && (
-                    <div>
-                      <span className="quick-analysis-label" style={{ marginRight: "0.5rem" }}>{J.analysis.locations}</span>
-                      <span className="quick-analysis-value">{currentAnalysis.locations.join("  ·  ")}</span>
-                    </div>
-                  )}
-                  {currentAnalysis.symbols.length > 0 && (
-                    <div>
-                      <span className="quick-analysis-label" style={{ marginRight: "0.5rem" }}>{J.analysis.symbols}</span>
-                      <span className="quick-analysis-value">{currentAnalysis.symbols.join("  ·  ")}</span>
-                    </div>
-                  )}
-                </div>
-                {currentAnalysis.sleepInsight && (
-                  <p className="quick-analysis-insight">{currentAnalysis.sleepInsight}</p>
-                )}
-              </div>
-            )}
-
-            {showNextStep && mode === "quick" && (
-              <div className="quick-choice-panel">
-                <div>
-                  <p>{generatedImageUrl ? J.quickFlow.imageReady : J.quickFlow.chooseNext}</p>
-                  <span>{generatedImageUrl ? J.quickFlow.chatUnlocked : J.quickFlow.chooseNextDesc}</span>
-                </div>
-                <div className="quick-choice-actions">
-                  <button
-                    type="button"
-                    className="tool-btn action-primary"
-                    onClick={() => void generateImage()}
-                    disabled={isGeneratingImage || !hasContent}
-                  >
-                    {isGeneratingImage ? J.image.genLoading : J.quickFlow.generateImage}
-                  </button>
-                  <button
-                    type="button"
-                    className="tool-btn action-secondary"
-                    onClick={() => setStep("sleep")}
-                  >
-                    {J.toolbar.sleepNext}
-                  </button>
-                  <Link href="/archive" className="tool-btn action-secondary" style={{ textDecoration: "none", display: "inline-flex", alignItems: "center" }}>
-                    {lang === "zh" ? "保存并退出" : "Save & exit"}
-                  </Link>
-                  {chatUnlocked && generatedImageUrl && (
-                    <button
-                      type="button"
-                      className="tool-btn action-image"
-                      onClick={enterDreamChat}
-                    >
-                      {J.quickFlow.enterChat}
-                    </button>
-                  )}
-                </div>
+                  <figcaption>{printCaption}</figcaption>
+                </figure>
+                <button type="button" className={css.downloadFrame} onClick={() => void downloadDreamImage()} disabled={isDownloadingImage}>
+                  <span aria-hidden>↓</span> {isDownloadingImage ? N.room.downloading : N.downloadFrame}
+                </button>
+                {downloadError && <p role="alert" className={css.err}>{downloadError}</p>}
               </div>
             )}
           </div>
-        </main>
-      )}
+        )}
 
-      {/* Sleep log — step 2 */}
-      {step === "sleep" && (
-        <main className="sleep-step-screen">
-          <div className="sleep-step-inner">
-            <div className="sleep-step-header">
-              <button type="button" className="sleep-step-back" onClick={() => setStep("dream")}>
-                ← {lang === "zh" ? "返回" : "Back"}
+        {currentAnalysis?.sleepInsight && slip(<p className={css.slipText}>{currentAnalysis.sleepInsight}</p>, css.insight)}
+
+        {imagePanel}
+      </div>
+
+      <div className={css.foot}>
+        {hasContent && (
+          <ol className={css.progress} aria-label={N.steps}>
+            {[J.workflow.capture, J.workflow.analyze, J.workflow.generate, J.workflow.archive].map((label, i) => (
+              <li key={label} className={i <= progress ? css.reached : undefined} aria-current={i === progress ? "step" : undefined}>{label}</li>
+            ))}
+          </ol>
+        )}
+        {showNextStep && (
+          <p className={css.nextNote}>
+            <b>{generatedImageUrl ? J.quickFlow.imageReady : J.quickFlow.chooseNext}</b>
+            {generatedImageUrl ? J.quickFlow.chatUnlocked : J.quickFlow.chooseNextDesc}
+          </p>
+        )}
+        {hasContent && (
+          <div className={css.actions}>
+            {!currentAnalysis ? (
+              <button type="button" className="nb-act" onClick={() => void analyzeDream()} disabled={isAnalyzing || isTyping || !hasContent}>
+                {isAnalyzing ? J.analyzingBtn : N.organize} <span aria-hidden>→</span>
               </button>
-              <h2>{J.sleep.title}</h2>
-            </div>
-            <div className="sleep-context-grid">
-              <label className="sleep-context-field">
-                <span>{J.sleep.sleepStart}</span>
-                <input type="time" name="sleepStart" autoComplete="off" value={sleepStart} onChange={(e) => setSleepStart(e.target.value)} className="dream-input-sm" />
-              </label>
-              <label className="sleep-context-field">
-                <span>{J.sleep.wakeTime}</span>
-                <input type="time" name="wakeTime" autoComplete="off" value={wakeTime} onChange={(e) => setWakeTime(e.target.value)} className="dream-input-sm" />
-              </label>
-              <fieldset className="sleep-context-field sleep-context-quality">
-                <legend>{J.sleep.quality}</legend>
-                <div className="quality-btns">
-                  {[1, 2, 3, 4, 5].map((n) => (
-                    <button key={n} type="button" onClick={() => setSleepQuality(sleepQuality === n ? null : n)} className={`quality-btn ${sleepQuality === n ? "quality-btn-active" : ""}`} aria-pressed={sleepQuality === n}>{n}</button>
-                  ))}
-                </div>
-              </fieldset>
-              <label className="sleep-context-field sleep-context-stress">
-                <span>{J.sleep.stress}: {stressScore}</span>
-                <input type="range" min="1" max="5" step="1" value={stressScore} onChange={(e) => setStressScore(Number(e.target.value))} />
-                <small><span>{J.sleep.stressLow}</span><span>{J.sleep.stressHigh}</span></small>
-              </label>
-              <label className="sleep-context-field">
-                <span>{J.sleep.meal}</span>
-                <input type="text" name="preSleepMeal" autoComplete="off" value={preSleepMeal} onChange={(e) => setPreSleepMeal(e.target.value)} placeholder={J.sleep.mealPlaceholder} className="dream-input-sm" maxLength={500} />
-              </label>
-              <label className="sleep-context-field">
-                <span>{J.sleep.activity}</span>
-                <input type="text" name="preSleepActivity" autoComplete="off" value={preSleepActivity} onChange={(e) => setPreSleepActivity(e.target.value)} placeholder={J.sleep.activityPlaceholder} className="dream-input-sm" maxLength={500} />
-              </label>
-            </div>
-            <div className="sleep-step-footer">
-              <Link href="/archive" className="tool-btn action-primary" style={{ textDecoration: "none", display: "inline-flex", alignItems: "center" }}>
-                {lang === "zh" ? "保存并退出" : "Save & exit"}
-              </Link>
-            </div>
-          </div>
-        </main>
-      )}
-
-      {/* Question chips — chat mode only */}
-      {mode === "chat" && step === "dream" && agentReadyToAnalyze && (
-        <div className="chips-bar agent-decision-bar">
-          <div className="chips-inner">
-            <span className="agent-decision-copy">
-              {agentDecisionCopy}
+            ) : chatUnlocked && generatedImageUrl ? (
+              <button type="button" className="nb-act" onClick={enterDreamChat}>
+                {J.quickFlow.enterChat} <span aria-hidden>→</span>
+              </button>
+            ) : (
+              <button type="button" className="nb-act" onClick={() => void generateImage()} disabled={isGeneratingImage || !hasContent}>
+                {isGeneratingImage ? J.image.genLoading : J.quickFlow.generateImage} <span aria-hidden>→</span>
+              </button>
+            )}
+            <span className={css.quietActs}>
+              {!currentAnalysis && (
+                <button type="button" className="nb-act-quiet" onClick={() => void startDirectDreamChat()} disabled={isAnalyzing || isTyping || !hasContent}>
+                  {N.chatAbout}
+                </button>
+              )}
+              {showNextStep && (!currentAnalysis || (chatUnlocked && generatedImageUrl)) && (
+                <button type="button" className="nb-act-quiet" onClick={() => void generateImage()} disabled={isGeneratingImage || !hasContent}>
+                  {isGeneratingImage ? J.image.genLoading : generatedImageUrl ? N.againImage : J.quickFlow.generateImage}
+                </button>
+              )}
+              {(showNextStep || currentAnalysis) && panel !== "image" && (
+                <button type="button" className="nb-act-quiet" onClick={openImagePrompt}>{N.editPrompt}</button>
+              )}
+              {showNextStep && step !== "sleep" && (
+                <button type="button" className="nb-act-quiet" onClick={openSleepLog}>{J.toolbar.sleepNext}</button>
+              )}
+              {exitLink(currentAnalysis || showNextStep ? N.saveExit : N.saveOnly)}
             </span>
-            <button type="button" className="chip chip-primary" onClick={() => void analyzeDream()} disabled={isAnalyzing}>
-              {organizeDreamLabel}
-            </button>
-            <button
-              type="button"
-              className="chip"
-              onClick={() => void generateImage()}
-              disabled={isGeneratingImage || !hasContent}
-              aria-busy={isGeneratingImage}
-            >
-              {isGeneratingImage ? J.image.genLoading : J.quickFlow.generateImage}
-            </button>
-            {latestAgentDecision.memory?.observedSignals?.slice(0, 3).map((signal) => (
-              <span key={signal} className="chip chip-static">
-                {signal}
-              </span>
-            ))}
           </div>
-        </div>
-      )}
+        )}
+      </div>
+    </>
+  );
 
-      {mode === "chat" && step === "dream" && latestQuestions.length > 0 && (
-        <div className="chips-bar">
-          <div className="chips-inner">
-            {latestQuestions.map((q, i) => (
-              <button key={i} className="chip" onClick={() => appendQuestion(q)}>
-                {q}
+  // ── chat mode, right page ──
+  const feedbackReasons = ["repetitive", "irrelevant", "too_many_questions", "unsafe", "other"] as const;
+  const chatRight = (
+    <>
+      <section className={`${css.scroll} ${css.thread}`} ref={messagesAreaRef} aria-label={N.chatKicker}>
+        <DreamConversationControls
+          goal={conversationGoal}
+          onGoalChange={setConversationGoal}
+          disabled={isTyping}
+          lang={lang}
+          date={dreamDate}
+          statements={userStatements}
+        />
+        {hiddenChatMessageCount > 0 && (
+          <button
+            type="button"
+            className={`nb-act-quiet ${css.earlier}`}
+            onClick={() => setVisibleChatMessageCount((count) => Math.min(count + CHAT_RENDER_WINDOW, messages.length))}
+          >
+            {N.showEarlier.replace("{count}", String(Math.min(CHAT_RENDER_WINDOW, hiddenChatMessageCount)))}
+          </button>
+        )}
+        {visibleMessages.map((msg) => msg.role === "user" ? (
+          <p key={msg.id} className={`nb-hand ${css.said}`}>{msg.content}</p>
+        ) : (
+          <div key={msg.id} className={`${css.slip}${msg.isError ? ` ${css.slipError}` : ""}`}>
+            <span className={css.slipLabel} aria-hidden>{N.aiLabel}</span>
+            <p className={css.slipText}>{msg.content}</p>
+            {msg.isError && (
+              <button type="button" className={css.redAct} onClick={() => editAndRetry(msg)}>{N.editRetry}</button>
+            )}
+            {msg.meta?.feedbackToken && !msg.isError && (
+              <div className={css.feedback} role="group" aria-label={N.rate}>
+                <button type="button" aria-label={N.helpful} aria-pressed={msg.feedback === "up"} onClick={() => void submitAgentFeedback(msg.id, "up")}>↑</button>
+                <button type="button" aria-label={N.notHelpful} aria-pressed={msg.feedback === "down"} onClick={() => void submitAgentFeedback(msg.id, "down")}>↓</button>
+                {msg.feedback === "down" && (
+                  <span className={css.reasons}>
+                    {feedbackReasons.map((reason) => (
+                      <button
+                        type="button"
+                        key={reason}
+                        aria-pressed={msg.feedbackReason === reason}
+                        onClick={() => void submitAgentFeedback(msg.id, "down", reason)}
+                      >{N.reasons[reason]}</button>
+                    ))}
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
+        ))}
+
+        {isTyping && slip(<p className={css.slipText}>{inkDots}</p>, css.typing, { role: "status", "aria-label": N.thinking })}
+
+        {agentReadyToAnalyze && (
+          <div className={`${css.slip} ${css.decision}`}>
+            <span className={css.slipLabel} aria-hidden>{N.aiLabel}</span>
+            <p className={css.slipText}>{agentDecisionCopy}</p>
+            <div className={css.redActs}>
+              <button type="button" className={css.redAct} onClick={() => void analyzeDream()} disabled={isAnalyzing}>{organizeDreamLabel}</button>
+              <button type="button" className={css.redAct} onClick={() => void generateImage()} disabled={isGeneratingImage || !hasContent} aria-busy={isGeneratingImage}>
+                {isGeneratingImage ? J.image.genLoading : J.quickFlow.generateImage}
               </button>
-            ))}
+              {panel !== "image" && <button type="button" className={css.redAct} onClick={openImagePrompt}>{N.editPrompt}</button>}
+            </div>
+            {!!latestAgentDecision.memory?.observedSignals?.length && (
+              <p className={css.signals}>{latestAgentDecision.memory.observedSignals.slice(0, 3).join(" · ")}</p>
+            )}
           </div>
-        </div>
-      )}
+        )}
 
-      {/* Input area */}
-      <div className="input-wrapper">
-        <div className="input-content">
+        {latestQuestions.length > 0 && (
+          <div className={css.suggest}>
+            <span className="nb-kicker">{N.suggestions}</span>
+            <div className={css.redActs}>
+              {latestQuestions.map((q, i) => (
+                <button type="button" key={i} className={css.redAct} onClick={() => appendQuestion(q)}>{q}</button>
+              ))}
+            </div>
+          </div>
+        )}
+        <div ref={messagesEndRef} />
+      </section>
 
-          {/* Dream date — in bottom bar for chat mode only (quick mode has it top-left) */}
-          {step === "dream" && mode === "chat" && (
-            <div className="dream-date-bar">
-              <span className="field-label">{J.sleep.date}</span>
+      {imagePanel}
+
+      <form className={css.reply} onSubmit={(e) => { e.preventDefault(); void sendMessage(); }}>
+        <span className={css.replyMark} aria-hidden>{N.replyMark}</span>
+        <textarea
+          ref={inputRef}
+          name="dreamMessage"
+          aria-label={J.chatInputLabel}
+          autoComplete="off"
+          value={input}
+          onChange={(e) => { handleInputChange(e); pen.onInput(e); }}
+          onCompositionStart={pen.onCompositionStart}
+          onCompositionEnd={pen.onCompositionEnd}
+          onKeyDown={handleKeyDown}
+          placeholder={conversationGoal === "support" ? N.supportPlaceholder : J.placeholder}
+          className={`nb-hand ${css.replyInput}`}
+          rows={1}
+        />
+        {voiceButton(true)}
+        <button type="submit" disabled={!input.trim() || isTyping} className={css.send} aria-label={N.send} title={N.send}>↵</button>
+      </form>
+      <div className={css.replyFoot}>
+        <span className="nb-mono">{N.replyHint}</span>
+        {voiceError && <span className={css.err} role="alert">{voiceError}</span>}
+        {hasContent && exitLink(N.saveExit)}
+      </div>
+    </>
+  );
+
+  const roomFragments = dreamFragments.length ? dreamFragments : N.room.fallbackFragments;
+  const developed = !!generatedImageUrl && !isGeneratingImage && !imageError;
+
+  return (
+    <NotebookShell lean>
+      <main className={`nb-stage ${css.stage}`} id="main">
+        <Book className={css.book} tilt={false}>
+          {/* ── left page: the dreamer's own writing ── */}
+          <BookPage side="l" indent folio={`p. ${page.folio}`} className={css.left} padClassName={css.leftPad}>
+            <div className={css.leftHead}>
+              <div className={`nb-ink-tabs ${css.tabs}`} role="tablist" aria-label={N.modeTabs}>
+                {(["quick", "chat"] as const).map((m) => (
+                  <button
+                    key={m}
+                    type="button"
+                    id={`journal-tab-${m}`}
+                    role="tab"
+                    aria-selected={mode === m}
+                    aria-controls={`journal-panel-${m}`}
+                    tabIndex={mode === m ? 0 : -1}
+                    onClick={() => { setJournalMode(m); if (m === "chat") setStep("dream"); }}
+                    onKeyDown={handleModeTabKeyDown}
+                  >
+                    {m === "quick" ? J.quickMode : J.chatMode}
+                  </button>
+                ))}
+              </div>
+              <Link href="/morning-pages" className={css.morningLink}>{T.morningPages.journalLink} <span aria-hidden>→</span></Link>
+            </div>
+
+            <div className={`nb-date-line ${css.dateLine}`}>
+              <b>{page.day}</b><span>{page.weekday}</span>
               <input
                 type="date"
                 name="dreamDate"
@@ -1595,244 +1451,222 @@ export default function JournalPage() {
                 value={dreamDate}
                 max={getTodayDate()}
                 onChange={(e) => setDreamDate(e.target.value)}
-                className="dream-input-sm dream-date-input"
-                style={{ width: "auto" }}
+                className={css.dateInput}
               />
             </div>
-          )}
 
-
-          {/* Image panel — chat mode only (quick mode shows inline next to dream textarea) */}
-          {panel === "image" && mode === "chat" && (
-            <div className="panel">
-              <div className="panel-header">
-                <span className="panel-title">{J.image.title}</span>
-                <button className="panel-close" onClick={() => setPanel("none")} aria-label={lang === "zh" ? "关闭图像提示词" : "Close image prompt"}>✕</button>
-              </div>
-              <div className="panel-body">
-                <div style={{ display: "flex", gap: "0.5rem" }}>
-                  <textarea
-                    name="imagePrompt"
-                    aria-label={J.image.title}
-                    autoComplete="off"
-                    value={imagePrompt}
-                    onChange={(e) => { setImagePrompt(e.target.value); setImagePromptEdited(true); }}
-                    placeholder={J.image.placeholder}
-                    rows={6}
-                    className="dream-textarea"
-                    style={{ flex: 1, resize: "vertical" }}
-                  />
-                  <button
-                    onClick={() => void generateImage()}
-                    disabled={isGeneratingImage || !imagePrompt.trim()}
-                    className="gen-btn"
-                  >
-                    {isGeneratingImage ? J.image.genLoading : J.image.genBtn}
-                  </button>
-                </div>
-                <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginTop: "0.5rem" }}>
-                  <div style={{ display: "flex", flexDirection: "column", gap: "0.2rem" }}>
-                    <p className={imageError ? "save-err" : "hint-text"}>
-                      {imageError || J.image.hint}
-                    </p>
-                    {!imageError && !analysis && <p className="hint-text" style={{ opacity: 0.7 }}>{J.image.analyzeHint}</p>}
-                  </div>
-                  {imagePromptEdited && (
-                    <button className="reset-btn" onClick={() => setImagePromptEdited(false)}>
-                      {J.image.reset}
-                    </button>
-                  )}
-                </div>
-                {generatedImageUrl && (
-                  <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-                    <button
-                      className="developing-open-btn"
-                      onClick={() => setIsDevelopingRoomOpen(true)}
-                    >
-                      {lang === "zh" ? "查看图像" : "View Image"}
-                    </button>
-                    <a
-                      href={generatedImageUrl}
-                      download={`${(quickTitle || "dream").replace(/[\\/:*?"<>|]/g, "_")}.png`}
-                      className="developing-open-btn"
-                      style={{ textDecoration: "none" }}
-                    >
-                      {J.image.download}
-                    </a>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* Input form — chat mode only */}
-          {mode === "chat" && step === "dream" && (
-            <form
-              className="input-form"
-              onSubmit={(e) => { e.preventDefault(); void sendMessage(); }}
-            >
-              <textarea
-                ref={inputRef}
-                name="dreamMessage"
-                aria-label={J.chatInputLabel}
-                autoComplete="off"
-                value={input}
-                onChange={handleInputChange}
-                onKeyDown={handleKeyDown}
-                placeholder={conversationGoal === "support" ? (lang === "zh" ? "聊聊醒来后的感受…" : "What is on your mind?") : J.placeholder}
-                className="main-input"
-                rows={1}
-              />
-              <button
-                type="button"
-                className={`voice-input-btn ${isRecording ? "voice-input-btn-active" : ""}`}
-                onClick={toggleVoiceRecord}
-                aria-label={isRecording ? J.toolbar.recording : J.toolbar.voice}
-                title={isRecording ? J.toolbar.recording : J.toolbar.voice}
-              >
-                <svg viewBox="0 0 24 24" aria-hidden>
-                  <path d="M12 3.5a3 3 0 0 0-3 3v5a3 3 0 0 0 6 0v-5a3 3 0 0 0-3-3Z" />
-                  <path d="M5.75 10.5v1a6.25 6.25 0 0 0 12.5 0v-1" />
-                  <path d="M12 17.75v2.75" />
-                  <path d="M8.75 20.5h6.5" />
-                </svg>
-              </button>
-              <button
-                type="submit"
-                disabled={!input.trim() || isTyping}
-                className="send-btn"
-              >
-                ↑
-              </button>
-            </form>
-          )}
-
-          <div className="toolbar action-toolbar">
-            {step === "dream" && mode === "quick" && (
+            {mode === "quick" ? (
               <>
-                {(isAnalyzing || currentAnalysis) && (
+                <input
+                  name="dreamTitle"
+                  aria-label={N.titleLabel}
+                  autoComplete="off"
+                  value={quickTitle}
+                  onChange={(e) => setQuickTitle(e.target.value, true)}
+                  placeholder={isTitleGenerating ? N.titleGenerating : N.titlePlaceholder}
+                  className={`${css.title}${isTitleGenerating && !quickTitle ? ` ${css.titleWaiting}` : ""}`}
+                />
+                <div className={css.writeWrap}>
+                  <span className={css.marginNote} aria-hidden>{lang === "zh" ? "刚醒" : "just up"}</span>
+                  <textarea
+                    name="dreamText"
+                    aria-label={J.quickTitle}
+                    autoComplete="off"
+                    value={quickText}
+                    onChange={(e) => {
+                      setQuickText(e.target.value);
+                      setInputMode("text");
+                      pen.onInput(e);
+                    }}
+                    onCompositionStart={pen.onCompositionStart}
+                    onCompositionEnd={pen.onCompositionEnd}
+                    placeholder={J.quickPlaceholder}
+                    className={`quick-textarea nb-hand ${css.write}`}
+                  />
+                </div>
+              </>
+            ) : (
+              <div className={css.gathered}>
+                <span className="nb-kicker">{N.gatheredKicker}</span>
+                {userStatements.length
+                  ? userStatements.map((text, i) => <p key={i} className={`nb-hand${i > 0 ? ` ${css.later}` : ""}`}>{text}</p>)
+                  : <p className={css.gatheredEmpty}>{N.gatheredEmpty}</p>}
+              </div>
+            )}
+
+            <details
+              className={`sleep-context-panel ${css.sleep}`}
+              open={step === "sleep"}
+              onToggle={(e) => setStep(e.currentTarget.open ? "sleep" : "dream")}
+            >
+              <summary><span aria-hidden>{step === "sleep" ? "−" : "+"}</span> {step === "sleep" ? J.sleep.title : N.sleepToggle}</summary>
+              <div className={css.sleepGrid}>
+                <label>
+                  <span>{J.sleep.sleepStart}</span>
+                  <input ref={sleepFirstRef} type="time" name="sleepStart" autoComplete="off" value={sleepStart} onChange={(e) => setSleepStart(e.target.value)} />
+                </label>
+                <label>
+                  <span>{J.sleep.wakeTime}</span>
+                  <input type="time" name="wakeTime" autoComplete="off" value={wakeTime} onChange={(e) => setWakeTime(e.target.value)} />
+                </label>
+                <fieldset className={css.quality}>
+                  <legend>{J.sleep.quality}</legend>
+                  <div>
+                    {[1, 2, 3, 4, 5].map((n) => (
+                      <button
+                        key={n}
+                        type="button"
+                        onClick={() => setSleepQuality(sleepQuality === n ? null : n)}
+                        className={sleepQuality != null && n <= sleepQuality ? css.on : undefined}
+                        aria-pressed={sleepQuality === n}
+                        title={`${n} / 5`}
+                      ><span className="sr-only">{n}</span></button>
+                    ))}
+                  </div>
+                </fieldset>
+                <label>
+                  <span>{J.sleep.activity}</span>
+                  <input type="text" name="preSleepActivity" autoComplete="off" value={preSleepActivity} onChange={(e) => setPreSleepActivity(e.target.value)} placeholder={J.sleep.activityPlaceholder} maxLength={500} />
+                </label>
+                <label>
+                  <span>{J.sleep.meal}</span>
+                  <input type="text" name="preSleepMeal" autoComplete="off" value={preSleepMeal} onChange={(e) => setPreSleepMeal(e.target.value)} placeholder={J.sleep.mealPlaceholder} maxLength={500} />
+                </label>
+                <label className={css.stressField}>
+                  <span>{J.sleep.stress} · {stressScore}</span>
+                  <input type="range" min="1" max="5" step="1" value={stressScore} onChange={(e) => setStressScore(Number(e.target.value))} />
+                  <small aria-hidden><span>{J.sleep.stressLow}</span><span>{J.sleep.stressHigh}</span></small>
+                </label>
+              </div>
+              <div className={css.sleepFoot}>
+                <span className="nb-mono">{J.toolbar.sleepOptional}</span>
+                {exitLink(N.saveExit)}
+              </div>
+            </details>
+
+            <div className={css.leftFoot}>
+              {mode === "quick" && voiceButton(false)}
+              {mode === "quick" && voiceError && <span className={css.err} role="alert">{voiceError}</span>}
+              <span className={`nb-mono ${css.saveState}${autoSaveStatus === "error" ? ` ${css.saveError}` : ""}`}>
+                {saveText}{hasContent && <>{saveText ? " · " : ""}{N.chars.replace("{count}", String(writtenCount))}</>}
+              </span>
+            </div>
+          </BookPage>
+
+          {/* ── right page: what it read, or the conversation ── */}
+          <BookPage
+            side="r"
+            folio={`p. ${page.folio + 1}`}
+            className={css.right}
+            padClassName={css.rightPad}
+            id={`journal-panel-${mode}`}
+            role="tabpanel"
+            aria-labelledby={`journal-tab-${mode}`}
+          >
+            <header className={css.rightHead}>
+              <span className="nb-kicker">{mode === "chat" ? N.chatKicker : currentAnalysis ? N.readKicker : N.quickKicker}</span>
+              <span className={css.headActs}>
+                {mode === "quick" && (isAnalyzing || currentAnalysis) && (<>
                   <button
-                    className="tool-btn action-primary"
+                    type="button"
+                    className="nb-act-quiet"
                     onClick={() => { analysisAutoTriggeredRef.current = true; void analyzeDream(); }}
                     disabled={isAnalyzing || !hasContent}
                   >
-                    {isAnalyzing ? J.analyzingBtn : (lang === "zh" ? "重新分析" : "Re-analyze")}
+                    {isAnalyzing ? J.analyzingBtn : N.reanalyze}
                   </button>
+                  {currentAnalysis && <button type="button" className="nb-act-quiet" onClick={() => setAnalysis(null)}>{N.fold}</button>}
+                </>)}
+                {billingStatus && !billingStatus.isUnlimited && (
+                  <span className={css.billing}>
+                    {billingStatus.plan === "plus" ? (
+                      <span className="nb-mono" title={quota}>PLUS</span>
+                    ) : (
+                      <button type="button" className={css.upgrade} onClick={() => void openCheckout()} disabled={isCheckoutLoading} title={quota}>
+                        {isCheckoutLoading ? "…" : "Free → Plus"}
+                      </button>
+                    )}
+                  </span>
                 )}
-              </>
-            )}
-            <div className="toolbar-spacer" />
-            {voiceError && <span className="save-err">{voiceError}</span>}
-
-            {/* Auto-save status */}
-            {autoSaveStatus === "error" && (
-              <span className="save-err save-status-text">{lang === "zh" ? "保存失败，请重试" : "Save failed"}</span>
-            )}
-            {autoSaveStatus === "saving" && (
-              <span className="save-ok save-status-text" style={{ opacity: 0.7 }}>{lang === "zh" ? "保存中…" : "Saving…"}</span>
-            )}
-            {autoSaveStatus === "saved" && (
-              <span className="save-ok save-status-text">{lang === "zh" ? "已自动保存 ✓" : "Auto-saved ✓"}</span>
-            )}
-            {autoSaveStatus === "idle" && hasContent && (
-              <span className="save-ok save-status-text" style={{ opacity: 0.8 }}>
-                {lang === "zh" ? "✦ 内容自动保存中" : "✦ Auto-saving"}
               </span>
-            )}
-          </div>
-        </div>
-      </div>
+            </header>
 
-      {isDevelopingRoomOpen && (
-        <div className="developing-room" role="dialog" aria-modal="true" aria-label="Dream Developing Room">
-          <button className="developing-close" onClick={() => setIsDevelopingRoomOpen(false)}>
-            {lang === "zh" ? "关闭" : "Close"}
-          </button>
+            {mode === "chat" ? chatRight : quickRight}
 
-          <div className="developing-copy">
-            <p>{lang === "zh" ? "梦境显影室" : "Dream Developing Room"}</p>
-            <h2>{isGeneratingImage
-              ? (lang === "zh" ? "梦境正在慢慢浮现。" : "The dream is slowly appearing.")
-              : imageError
-                ? (lang === "zh" ? "图片生成失败" : "Image generation failed")
-                : (lang === "zh" ? "梦境已经显影" : "The dream has surfaced")
-            }</h2>
-          </div>
+          </BookPage>
+        </Book>
+      </main>
 
-          <div className={`developing-image-stage ${generatedImageUrl && !isGeneratingImage ? "is-developed" : ""}`}>
-            <div className={`developing-content-row ${isGeneratingImage ? "developing-content-row-split" : ""}`}>
-              <div className="developing-image-shell">
-                {generatedImageUrl ? (
-                  <>
-                    <Image
-                      src={generatedImageUrl}
-                      alt="梦境图"
-                      width={1024}
-                      height={1024}
-                      unoptimized
-                      className="developed-image"
-                    />
-                  </>
-                ) : (
-                  <div className="developing-placeholder" aria-hidden>
-                    <span className="placeholder-film-strip">
-                      <span className="placeholder-film-frame film-frame-one" />
-                    </span>
-                  </div>
-                )}
-              </div>
+      {billingMessage && <div className={css.toast} role="status">{billingMessage}</div>}
 
+      {/* ── the developing room: a print surfacing in the tray under the safelight ── */}
+      <dialog
+        ref={roomRef}
+        className={css.room}
+        aria-label={N.room.label}
+        onClose={handleRoomClosed}
+      >
+        {isDevelopingRoomOpen && (
+          <div className={css.roomIn}>
+            <button type="button" className={css.roomClose} onClick={() => setIsDevelopingRoomOpen(false)}>{N.room.close}</button>
+
+            <div className={css.roomCopy}>
+              <p className={css.roomKicker}>{N.room.label}</p>
+              <h2>{isGeneratingImage ? N.room.appearing : imageError ? N.room.failed : N.room.surfaced}</h2>
             </div>
 
-            {isGeneratingImage && <div className="developing-steps" aria-live="polite">
-              <span>{lang === "zh" ? "正在解读意象…" : "Interpreting symbols..."}</span>
-              <span>{lang === "zh" ? "正在重建记忆…" : "Reconstructing memory..."}</span>
-              <span>{lang === "zh" ? "正在冲洗胶片…" : "Developing the film..."}</span>
-            </div>}
+            <figure className={`${css.polaroid}${developed ? ` ${css.developed}` : ""}${isGeneratingImage ? ` ${css.developing}` : ""}`}>
+              <div className={css.emulsion}>
+                {generatedImageUrl
+                  ? <Image src={generatedImageUrl} alt={N.room.alt} width={1024} height={1024} unoptimized />
+                  : <span className={css.latent} aria-hidden />}
+              </div>
+              <figcaption>{printCaption}</figcaption>
+            </figure>
 
-            <div className="developing-fragments" aria-label="Dream fragments being developed">
-              {(dreamFragments.length ? dreamFragments : ["moonlight", "old room", "unfinished door"]).map((fragment, index) => (
-                <span key={`${fragment}-${index}`} className={`developing-fragment frag-${index + 1}`}>
-                  {fragment}
-                </span>
+            {isGeneratingImage && (
+              <ol className={css.roomSteps} aria-live="polite">
+                {N.room.steps.map((text) => <li key={text}>{text}</li>)}
+              </ol>
+            )}
+
+            <div className={css.fragments} role="group" aria-label={N.room.fragmentsLabel}>
+              {roomFragments.map((fragment, index) => (
+                <span key={`${fragment}-${index}`} style={{ "--i": index } as React.CSSProperties}>{fragment}</span>
               ))}
             </div>
-          </div>
 
-          {generatedImageUrl && !isGeneratingImage && !imageError && (
-            <div className="developed-next-steps">
-              <p role="status">
-                {autoSaveStatus === "error"
-                  ? (lang === "zh" ? "图片已生成，但存入档案失败，请重试保存。" : "Image ready, but saving to your archive failed. Please retry.")
-                  : savedImageUrl === generatedImageUrl
-                    ? (lang === "zh" ? "图片已保存到这条梦境档案" : "Image saved to this dream in your archive")
-                    : (lang === "zh" ? "正在将图片存入档案…" : "Saving the image to your archive…")}
-              </p>
-              <div className="developed-actions">
-                <button type="button" onClick={() => void downloadDreamImage()} disabled={isDownloadingImage}>
-                  {isDownloadingImage ? (lang === "zh" ? "下载中…" : "Downloading…") : (lang === "zh" ? "保存图片" : "Download image")}
-                </button>
-                <button type="button" onClick={() => router.push("/archive")} disabled={savedImageUrl !== generatedImageUrl || autoSaveStatus === "saving" || autoSaveStatus === "error"}>
-                  {lang === "zh" ? "进入档案" : "View archive"}
-                </button>
-                <button type="button" className="developed-chat-action" onClick={continueFromImage}>
-                  {lang === "zh" ? "与 Agent 对话" : "Continue with Agent"}
-                </button>
-                {autoSaveStatus === "error" && <button type="button" onClick={() => void autoSave({ pendingImageUrl: generatedImageUrl })}>
-                  {lang === "zh" ? "重试保存" : "Retry saving"}
-                </button>}
+            {developed && (
+              <div className={css.roomNext}>
+                <p role="status">
+                  {autoSaveStatus === "error" ? N.room.saveFailed : savedImageUrl === generatedImageUrl ? N.room.saved : N.room.savingImage}
+                </p>
+                <div className={css.roomActs}>
+                  <button type="button" onClick={() => void downloadDreamImage()} disabled={isDownloadingImage}>
+                    {isDownloadingImage ? N.room.downloading : N.room.download}
+                  </button>
+                  <button type="button" onClick={() => router.push("/archive")} disabled={savedImageUrl !== generatedImageUrl || autoSaveStatus === "saving" || autoSaveStatus === "error"}>
+                    {N.room.archive}
+                  </button>
+                  <button type="button" className={css.roomPrimary} onClick={continueFromImage}>{N.room.continueChat}</button>
+                  {autoSaveStatus === "error" && (
+                    <button type="button" onClick={() => void autoSave({ pendingImageUrl: generatedImageUrl })}>{N.room.retrySave}</button>
+                  )}
+                </div>
+                {downloadError && <p role="alert" className={css.roomError}>{downloadError}</p>}
               </div>
-              {downloadError && <p role="alert" className="developing-error">{downloadError}</p>}
-            </div>
-          )}
+            )}
 
-          {imageError ? <p className="developing-error">{imageError}</p> : null}
-          {imageError && !isGeneratingImage && <div className="developed-actions">
-            <button type="button" onClick={() => void generateImage()}>{lang === "zh" ? "重新生成" : "Try again"}</button>
-            <button type="button" onClick={() => setIsDevelopingRoomOpen(false)}>{lang === "zh" ? "返回梦境" : "Back to dream"}</button>
-          </div>}
-        </div>
-      )}
-    </div>
+            {imageError && <p className={css.roomError}>{imageError}</p>}
+            {imageError && !isGeneratingImage && (
+              <div className={css.roomActs}>
+                <button type="button" className={css.roomPrimary} onClick={() => void generateImage()}>{N.room.tryAgain}</button>
+                <button type="button" onClick={() => setIsDevelopingRoomOpen(false)}>{N.room.back}</button>
+              </div>
+            )}
+          </div>
+        )}
+      </dialog>
+    </NotebookShell>
   );
 }
