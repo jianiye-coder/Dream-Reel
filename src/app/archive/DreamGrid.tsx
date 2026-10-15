@@ -589,23 +589,6 @@ function DreamEditorModal({
     return payload.entry;
   }
 
-  async function saveEntry() {
-    if (!entry || !form) return;
-    setSaving(true);
-    setMessage("");
-    setError("");
-
-    try {
-      const updatedEntry = await updateEntry(form);
-      onSaved(updatedEntry);
-      setMessage(M.savedMsg);
-    } catch (saveError) {
-      setError(saveError instanceof Error ? saveError.message : M.updateFailed);
-    } finally {
-      setSaving(false);
-    }
-  }
-
   async function deleteEntry() {
     if (!entry || deleting) return;
     if (!window.confirm(M.deleteConfirm)) return;
@@ -1745,7 +1728,7 @@ export default function DreamGrid({
                                 type="button"
                                 onClick={() => {
                                   const next = new Set(addingTag.selectedIds);
-                                  selected ? next.delete(entry.id) : next.add(entry.id);
+                                  if (selected) next.delete(entry.id); else next.add(entry.id);
                                   setAddingTag({ ...addingTag, selectedIds: next });
                                 }}
                                 className={`rounded-full px-2.5 py-1 text-[11px] transition ${

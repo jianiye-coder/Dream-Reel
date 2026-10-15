@@ -4,8 +4,8 @@
   "description": "AI dream journal · 梦境日记",
   "start_url": "/journal",
   "display": "standalone",
-  "background_color": "#070712",
-  "theme_color": "#070712",
+  "background_color": "#f5efe3",
+  "theme_color": "#f5efe3",
   "icons": [
     { "src": "/dream-reel-logo.png", "sizes": "192x192", "type": "image/png" },
     { "src": "/dream-reel-logo.png", "sizes": "512x512", "type": "image/png" }
