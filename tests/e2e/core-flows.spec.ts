@@ -8,14 +8,24 @@ test("anonymous users are redirected from protected pages", async ({ page }) => 
   await expect(page).toHaveURL(/\/login\?callbackUrl=%2Faccount|\/login\?callbackUrl=\/account/);
 });
 
-test("register, sign in, switch language, and update account", async ({ page }) => {
+test("register, sign in, switch language, and update account", async ({ page, context }) => {
   await page.goto("/login");
   await page.getByRole("button", { name: /register|注册/i }).first().click();
   await page.locator('input[type="text"]').fill("E2E User");
   await page.locator('input[type="email"]').fill(`  ${email.toUpperCase()}  `);
   await page.locator('input[type="password"]').fill(password);
+  // Wait for the register request to finish: navigating away while it is in flight
+  // aborts it and the account is never created.
+  const registerResponse = page.waitForResponse(
+    (response) => response.url().endsWith("/api/auth/register") && response.request().method() === "POST",
+  );
   await page.locator('button[type="submit"]').click();
+  expect((await registerResponse).status()).toBe(201);
+  // A successful registration signs the new account straight in.
+  await expect(page).toHaveURL(/\/journal/, { timeout: 15_000 });
 
+  // Sign out and back in with the normalised address.
+  await context.clearCookies();
   await page.goto("/login");
   await page.locator('input[type="email"]').fill(email);
   await page.locator('input[type="password"]').fill(password);
@@ -57,9 +67,10 @@ test("register, sign in, switch language, and update account", async ({ page }) 
 
   await page.goto("/account");
   await expect(page).toHaveURL(/\/account/);
-  const languageButton = page.getByRole("button", { name: /EN|中/ }).first();
-  await languageButton.click();
-  await expect(page.locator("html")).toHaveAttribute("lang", /en|zh-CN/);
+  await expect(page.locator("html")).toHaveAttribute("lang", "zh-CN");
+  await page.getByRole("button", { name: "Switch to English" }).first().click();
+  await expect(page.locator("html")).toHaveAttribute("lang", "en");
+  await expect(page.getByRole("button", { name: "切换中文" }).first()).toBeVisible();
 });
 
 test("keyboard focus is visible and mobile microcopy stays readable", async ({ page }) => {
