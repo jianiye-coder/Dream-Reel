@@ -499,6 +499,7 @@ function DreamEditorModal({
   onRetry,
   thisYear,
   restoreFocus,
+  onNotice,
   onClose,
   onSaved,
   onDeleted,
@@ -510,6 +511,8 @@ function DreamEditorModal({
   onRetry: () => void;
   thisYear: number;
   restoreFocus: () => void;
+  /** a message about a dream that isn't open (e.g. its new picture couldn't be filed) */
+  onNotice: (message: string) => void;
   onClose: () => void;
   onSaved: (entry: DreamEntry) => void;
   onDeleted: (id: number) => void;
@@ -541,9 +544,14 @@ function DreamEditorModal({
   // the dream the editor is showing, and the analysis / image requests running for it; both are
   // dropped when another dream opens or the editor closes
   const entryIdRef = useRef<number | null>(null);
+  const readyRef = useRef(ready);
+  useEffect(() => { readyRef.current = ready; }, [ready]);
   const opsRef = useRef<{ analyze: object | null; image: object | null }>({ analyze: null, image: null });
   const formRef = useRef<DreamEditForm | null>(null);
   useEffect(() => { formRef.current = form; }, [form]);
+  // Pictures made for a dream after it was closed: still being filed in the background, or failed to
+  // file. Reopening that dream shows the picture; a failed one is saved again through the normal flow.
+  const pendingImagesRef = useRef(new Map<number, { imageUrl: string; failed: boolean }>());
 
   // the brief is read from a ref so a save started in one render (e.g. after an image finished)
   // still sends the newest one, even if an analysis replaced it meanwhile
@@ -686,7 +694,8 @@ function DreamEditorModal({
       setError("");
       return;
     }
-    setForm(toEditForm(entry));
+    const pendingImage = pendingImagesRef.current.get(entry.id);
+    setForm(pendingImage ? { ...toEditForm(entry), imageUrl: pendingImage.imageUrl, assetStatus: "generated" } : toEditForm(entry));
     setBrief(entry.visualBrief ?? null);
     setImagePromptEdited(false);
     setFollowUpQuestions([]);
@@ -695,6 +704,16 @@ function DreamEditorModal({
     setError("");
     setAutoSaveStatus("idle");
   }, [entry, flushPendingSave, setBrief]);
+
+  useEffect(() => {
+    if (!ready || !entry) return;
+    const pendingImage = pendingImagesRef.current.get(entry.id);
+    if (!pendingImage?.failed) return;
+    pendingImagesRef.current.delete(entry.id);
+    formDirtyRef.current = true;
+    formRevisionRef.current += 1;
+    setForm((prev) => (prev ? { ...prev, imageUrl: pendingImage.imageUrl, assetStatus: "generated" } : prev));
+  }, [ready, entry]);
 
   // leaving the page (Back, closing the tab) inside the 1.5 s autosave delay still saves the edit;
   // coming back from the back/forward cache, a "Saving…" left from that moment is stale
@@ -860,13 +879,36 @@ function DreamEditorModal({
         // dream (only its image fields change) without touching the form now on screen
         if (response.ok && payload.imageUrl && startedFor != null) {
           const imageUrl = payload.imageUrl;
+          const title = form?.title || entry?.title || "";
+          pendingImagesRef.current.set(startedFor, { imageUrl, failed: false });
           void enqueueSave(async () => {
             const res = await fetch(`/api/dreams?id=${startedFor}`, { cache: "no-store", signal: AbortSignal.timeout(SAVE_TIMEOUT_MS) });
             const full = ((await res.json()) as { entry?: DreamEntry }).entry;
             if (!res.ok || !full) throw new Error(M.updateFailed);
             const saved = await putNow(updateBodyFor(full.id, { ...toEditForm(full), imageUrl, assetStatus: "generated" }, full.visualBrief));
             onSaved(saved);
-          }).catch(() => {});
+            return saved;
+          }).then(
+            () => {
+              pendingImagesRef.current.delete(startedFor);
+              // reopened meanwhile: show the filed picture (already saved, so not an edit)
+              if (entryIdRef.current === startedFor) {
+                setForm((prev) => (prev ? { ...prev, imageUrl, assetStatus: "generated" } : prev));
+              }
+            },
+            () => {
+              if (entryIdRef.current === startedFor && readyRef.current) {
+                // open again: let the normal save (with its own error display) carry the picture
+                pendingImagesRef.current.delete(startedFor);
+                formDirtyRef.current = true;
+                formRevisionRef.current += 1;
+                setForm((prev) => (prev ? { ...prev, imageUrl, assetStatus: "generated" } : prev));
+              } else {
+                pendingImagesRef.current.set(startedFor, { imageUrl, failed: true });
+                onNotice(fill(T.archive.nb.imageFileFailed, { title }));
+              }
+            },
+          );
         }
         return;
       }
@@ -1406,6 +1448,7 @@ export default function DreamGrid({
   const turning = useRef(false);
   const [readyId, setReadyId] = useState<number | null>(null);
   const [openError, setOpenError] = useState("");
+  const [notice, setNotice] = useState("");
   const [clock, setClock] = useState<Clock | null>(null);
   const uid = useId();
   const tabId = (tab: ArchiveTab) => `${uid}-tab-${tab}`;
@@ -2445,6 +2488,13 @@ export default function DreamGrid({
         </Book>
       </main>
 
+      {notice ? (
+        <div className={`${s.ar} ${s.noticeSlip}`} role="alert">
+          <p>{notice}</p>
+          <button type="button" onClick={() => setNotice("")}>{N.closeDetail} ×</button>
+        </div>
+      ) : null}
+
       <DreamEditorModal
         entry={selected}
         ready={selected != null && readyId === selected.id && !selected.imageUrlOmitted}
@@ -2452,6 +2502,7 @@ export default function DreamGrid({
         onRetry={() => { if (selected) void openEntry(selected, true); }}
         thisYear={thisYear}
         restoreFocus={restoreFocus}
+        onNotice={setNotice}
         onClose={() => { openSeq.current += 1; setSelected(null); setReadyId(null); setOpenError(""); setOpeningEntryId(null); }}
         onSaved={handleSaved}
         onDeleted={handleDeleted}
