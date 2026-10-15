@@ -120,7 +120,7 @@ export default function LandingPage() {
   return (
     <NotebookShell>
       <main className="nb-stage" id="main">
-          <Book className={`${closed ? "nb-closed " : ""}${opening ? "nb-opening " : ""}nb-r-first`} pencil>
+          <Book className={`${closed ? "nb-closed " : ""}${opening ? "nb-opening " : ""}nb-r-first`} pen>
             <BookPage side="l" ruled indent folio="p. 214">
               <div className="nb-date-line">{dateLine.map((d, i) => i === 0 ? <b key={i}>{d}</b> : <span key={i}>{d}</span>)}</div>
               <p className="nb-hand nb-entry" ref={entry} />

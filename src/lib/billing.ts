@@ -6,7 +6,7 @@ export type UsageKind = "dream_entries" | "analysis" | "image_generations";
 
 type UsageColumn = "dream_entries_used" | "analysis_used" | "image_generations_used";
 
-export const PLAN_LIMITS: Record<PlanId, {
+const PLAN_LIMITS: Record<PlanId, {
   dreamEntries: number;
   analysis: number;
   imageGenerations: number;
@@ -153,7 +153,7 @@ function toStatus(
   };
 }
 
-export async function getLatestSubscription(userId: number): Promise<SubscriptionRow | null> {
+async function getLatestSubscription(userId: number): Promise<SubscriptionRow | null> {
   await ensureSchema();
   const pool = getPool();
   const result = await pool.query<SubscriptionRow>(

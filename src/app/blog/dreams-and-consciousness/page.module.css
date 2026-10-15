@@ -3,7 +3,7 @@
 .article { width: min(46rem, calc(100% - 3rem)); margin: 0 auto; padding-bottom: 7rem; }
 .hero { padding: clamp(3.5rem, 7vw, 5.5rem) 0 2.5rem; border-bottom: 1px solid var(--ink); }
 .eyebrow { font-family: var(--mono); font-size: 11px; letter-spacing: .16em; color: var(--ink-faint); text-transform: uppercase; }
-.sectionNumber { font-family: var(--latin); font-style: italic; font-size: 22px; color: var(--pencil); }
+.sectionNumber { font-family: var(--latin); font-style: italic; font-size: 22px; color: var(--red-ink); }
 .hero h1 { margin: 1rem 0 1.25rem; font-weight: 900; font-size: clamp(2rem, 3.4vw, 3rem); line-height: 1.22; letter-spacing: -.02em; text-wrap: balance; }
 .dek { color: var(--ink-soft); font-size: 1.08rem; line-height: 2; }
 .meta { margin-top: 1.4rem; font-family: var(--mono); font-size: 11px; letter-spacing: .1em; color: var(--ink-faint); }
@@ -15,15 +15,15 @@
 .proseSection h2, .practice h2 { margin: .5rem 0 1.2rem; font-weight: 900; font-size: clamp(1.45rem, 2.2vw, 1.85rem); line-height: 1.35; }
 .proseSection > p:not(.sectionNumber), .practice > p { margin-top: 1.1rem; color: #36322b; font-size: 1.04rem; line-height: 2.05; text-align: justify; }
 .personHeading { display: grid; grid-template-columns: 3rem 1fr; gap: .8rem; align-items: baseline; }
-.personHeading > p { font-family: var(--latin); font-style: italic; font-size: 22px; color: var(--pencil); }
+.personHeading > p { font-family: var(--latin); font-style: italic; font-size: 22px; color: var(--red-ink); }
 .personHeading h2 { margin: 0; font-weight: 900; font-size: clamp(1.5rem, 2.4vw, 2rem); line-height: 1.25; }
 .personHeading span { display: block; margin-top: .4rem; font-family: var(--mono); font-size: 11px; letter-spacing: .1em; color: var(--ink-faint); }
 .thesis { margin: 1.6rem 0 1.2rem; font-size: 1.2rem; font-weight: 600; line-height: 1.7; }
 .columns p { margin-top: 1rem; color: #36322b; font-size: 1.02rem; line-height: 2.05; text-align: justify; }
-.prompt { margin: 1.8rem 0 0; padding-left: 1.2rem; border-left: 2px solid var(--pencil); font-family: var(--hand); font-size: 1.15rem; line-height: 1.75; color: var(--hand-ink); }
+.prompt { margin: 1.8rem 0 0; padding-left: 1.2rem; border-left: 2px solid var(--red-ink); font-family: var(--hand); font-size: 1.15rem; line-height: 1.75; color: var(--hand-ink); }
 .practice ol { margin: 2rem 0 0; padding: 0; list-style: none; border-top: 1px solid rgba(31,28,23,.18); }
 .practice li { display: grid; grid-template-columns: 3rem minmax(0, 1fr); gap: .8rem; padding: 1.3rem 0; border-bottom: 1px dotted #c9bfac; }
-.practice li > span { font-family: var(--latin); font-style: italic; font-size: 18px; color: var(--pencil); }
+.practice li > span { font-family: var(--latin); font-style: italic; font-size: 18px; color: var(--red-ink); }
 .practice h3 { margin: 0 0 .35rem; font-size: 1rem; font-weight: 600; }
 .practice li p { color: var(--ink-soft); line-height: 1.85; }
 .closing { margin: clamp(3.5rem, 7vw, 5.5rem) 0 2rem; padding: 0; border: 0; font-family: var(--hand); font-size: clamp(1.3rem, 2vw, 1.7rem); line-height: 1.7; color: var(--hand-ink); text-align: center; }

@@ -13,7 +13,7 @@ import { onSoundChange, setSoundEnabled, soundEnabled, tap, unlock } from "@/lib
 const BOOK_ROUTES = new Set(["/", "/journal", "/archive", "/morning-pages"]);
 
 /* The page around everything: desk (book pages) or paper (flat pages), a top bar that folds
-   into a table of contents on phones, and the pencil-sound switch. `lean` zooms the fixed-size
+   into a table of contents on phones, and the pen-sound switch. `lean` zooms the fixed-size
    book to fill the window on working pages. */
 export function NotebookShell({ surface = "desk", lean = false, children }: {
   surface?: "desk" | "paper";

@@ -441,19 +441,6 @@ export async function deleteDreamEntry(id: number, userId: number): Promise<void
   }
 }
 
-export async function countTodayDreamEntries(userId: number): Promise<number> {
-  await ensureSchema();
-  const pool = getPool();
-  const result = await pool.query<{ count: string }>(
-    `SELECT COUNT(*) AS count FROM dream_entries
-     WHERE user_id = $1
-       AND created_at >= date_trunc('day', NOW() AT TIME ZONE 'UTC')
-       AND created_at <  date_trunc('day', NOW() AT TIME ZONE 'UTC') + INTERVAL '1 day'`,
-    [userId],
-  );
-  return parseInt(result.rows[0]?.count ?? "0", 10);
-}
-
 export async function listDreamEntries(userId: number, limit = 50): Promise<DreamEntry[]> {
   await ensureSchema();
   const pool = getPool();
