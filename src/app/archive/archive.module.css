@@ -209,8 +209,13 @@
 .ar .bookWrap[aria-busy="true"] :global(.nb-page) { cursor: progress; }
 .ar .editorBook { zoom: var(--lean, 1); animation: arRise .45s cubic-bezier(.2, .7, .2, 1); }
 @keyframes arRise { from { opacity: 0; transform: translateY(14px); } }
-.ar .editorClose { position: absolute; top: 16px; right: 28px; font-family: var(--mono); font-size: 12px; letter-spacing: .16em; color: #f3ebdc; padding: 6px 4px; z-index: 2; }
+.ar .editorTop { position: absolute; top: 12px; right: 28px; left: 28px; z-index: 2; display: flex; justify-content: flex-end; align-items: center; gap: 22px; }
+.ar .editorClose { font-family: var(--mono); font-size: 12px; letter-spacing: .16em; color: #f3ebdc; padding: 6px 4px; }
 .ar .editorClose:hover { color: #fff; }
+/* a failed load: a red-ink note on a paper slip, with the way to try again right beside it */
+.ar .loadFail { display: flex; align-items: baseline; gap: 14px; background: var(--slip); padding: 6px 14px; font-family: var(--hand); font-size: 15px; color: var(--red-ink);
+  box-shadow: 0 1px 1px rgba(0, 0, 0, .1), 0 8px 16px -10px rgba(20, 12, 4, .5); }
+.ar .loadFail button { font-family: var(--mono); font-size: 11px; letter-spacing: .1em; color: var(--red-ink); border-bottom: 1px solid var(--red-ink); padding: 1px 0; white-space: nowrap; }
 
 .ar .titleInput { width: 100%; margin-top: 8px; border: 0; background: transparent; font-family: var(--serif); font-weight: 600; font-size: 30px; line-height: 1.35; color: var(--ink); caret-color: var(--red-ink); }
 .ar .titleInput::placeholder { color: #b9b0a0; }
@@ -293,10 +298,12 @@
   .ar .rowMain { grid-template-columns: minmax(0, 1fr) auto 36px; min-height: 44px; }
 
   .ar.editorLayer { background: var(--paper); backdrop-filter: none; }
-  .ar .editorDialog { display: block; padding: 0 0 40px; min-height: 0; }
+  .ar .editorDialog { display: block; place-items: normal; padding: 0 0 40px; min-height: 0; }
   .ar .editorBook { zoom: 1; animation: none; }
-  .ar .editorClose { position: sticky; top: 0; display: block; width: 100%; text-align: right; padding: 16px 24px 12px; color: var(--ink); background: var(--paper); border-bottom: 1px solid rgba(31, 28, 23, .1); }
+  .ar .editorTop { position: sticky; top: 0; left: auto; right: auto; flex-wrap: wrap; gap: 8px 16px; padding: 12px 24px 10px; background: var(--paper); border-bottom: 1px solid rgba(31, 28, 23, .1); }
+  .ar .editorClose { color: var(--ink); padding: 4px 0; }
   .ar .editorClose:hover { color: var(--red-ink); }
+  .ar .loadFail { order: 2; flex-basis: 100%; box-shadow: none; padding: 6px 10px; }
   .ar .titleInput { font-size: 26px; }
   .ar .sleepGrid { margin-top: 26px; }
 }
@@ -317,8 +324,7 @@
   .ar .sleepGrid { grid-template-columns: 1fr 1fr; }
   .ar .span2 { grid-column: 1 / -1; }
   .ar .recap { grid-template-columns: 84px minmax(0, 1fr); }
-  .ar .recapScope { margin-top: 16px; font-family: var(--mono); font-size: 10.5px; line-height: 1.7; letter-spacing: .04em; color: var(--ink-faint); }
-.ar .recapSlip { max-width: none; }
+  .ar .recapSlip { max-width: none; }
 }
 @media (prefers-reduced-motion: reduce) {
   .ar .calGrid, .ar.editorLayer, .ar .editorBook, .ar .skeletonRules { animation: none; }

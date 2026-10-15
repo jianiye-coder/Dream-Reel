@@ -444,6 +444,7 @@ function DreamEditorModal({
   entry,
   ready,
   loadError,
+  onRetry,
   thisYear,
   restoreFocus,
   onClose,
@@ -454,6 +455,7 @@ function DreamEditorModal({
   /** false until the full entry (with its image and visual brief) has arrived; editing waits for it */
   ready: boolean;
   loadError?: string;
+  onRetry: () => void;
   thisYear: number;
   restoreFocus: () => void;
   onClose: () => void;
@@ -485,6 +487,88 @@ function DreamEditorModal({
   const titleId = useId();
   const closeButtonRef = useRef<HTMLButtonElement>(null);
 
+  const buildUpdateBody = useCallback((currentForm: DreamEditForm) => {
+    if (!entry) return null;
+
+    return {
+      id: entry.id,
+      title: currentForm.title,
+      inputMode: "text" as const,
+      rawText: currentForm.rawText,
+      cleanText: currentForm.cleanText.trim() || currentForm.rawText.trim(),
+      mood: currentForm.mood,
+      stressScore: currentForm.stressScore ? Number(currentForm.stressScore) : null,
+      tags: splitCommaList(currentForm.tags),
+      people: splitCommaList(currentForm.people),
+      locations: splitCommaList(currentForm.locations),
+      symbols: splitCommaList(currentForm.symbols),
+      capturedAt: currentForm.dreamDate || undefined,
+      imageUrl: currentForm.imageUrl,
+      assetStatus: currentForm.imageUrl ? (currentForm.assetStatus ?? "generated") : null,
+      sleepStart: currentForm.sleepStart || null,
+      wakeTime: currentForm.wakeTime || null,
+      sleepQuality: currentForm.sleepQuality,
+      preSleepMeal: currentForm.preSleepMeal || null,
+      preSleepActivity: currentForm.preSleepActivity || null,
+      sleepInsight: currentForm.sleepInsight || null,
+      // the current brief, including one a re-analysis just produced. Saves only happen once the
+      // full entry is loaded (see `ready`), so this is never the list copy's missing value.
+      visualBrief: localVisualBrief ?? null,
+    };
+  }, [entry, localVisualBrief]);
+
+  const putEntry = useCallback(async (body: NonNullable<ReturnType<typeof buildUpdateBody>>): Promise<DreamEntry> => {
+    const response = await fetch("/api/dreams", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+
+    const payload = (await response.json()) as {
+      entry?: DreamEntry;
+      error?: string;
+      details?: { fieldErrors?: Record<string, string[]>; formErrors?: string[] };
+    };
+
+    if (!response.ok || !payload.entry) {
+      const fieldErrors = Object.entries(payload.details?.fieldErrors ?? {})
+        .flatMap(([field, messages]) => messages.map((message) => `${field}: ${message}`));
+      const formErrors = payload.details?.formErrors ?? [];
+      const detailText = [...fieldErrors, ...formErrors].join("；");
+      const message = getApiErrorMessage(payload.error, lang, M.updateFailed);
+      throw new Error(detailText ? `${message}: ${detailText}` : message);
+    }
+
+    return payload.entry;
+  }, [lang, M.updateFailed]);
+
+  const updateEntry = useCallback(async (currentForm: DreamEditForm): Promise<DreamEntry> => {
+    const body = buildUpdateBody(currentForm);
+    if (!body) throw new Error(M.updateFailed);
+    return putEntry(body);
+  }, [buildUpdateBody, putEntry, M.updateFailed]);
+
+  // the save queued by autosave, kept so it can be sent right away if the editor goes before it fires
+  const pendingBodyRef = useRef<ReturnType<typeof buildUpdateBody>>(null);
+  const cancelPendingSave = useCallback(() => {
+    if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+    autoSaveTimerRef.current = null;
+    pendingBodyRef.current = null;
+  }, []);
+  const flushPendingSave = useCallback(() => {
+    const body = pendingBodyRef.current;
+    cancelPendingSave();
+    if (!body) return;
+    const json = JSON.stringify(body);
+    // keepalive lets the request outlive the page, but browsers cap its body at 64 KB
+    void fetch("/api/dreams", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: json,
+      keepalive: new Blob([json]).size < 60_000,
+    }).catch(() => {});
+  }, [cancelPendingSave]);
+
   const closeEditor = useCallback(async () => {
     if (!entry || !form || saving) return;
     // nothing can have been edited before the full entry arrived; never save the list copy
@@ -493,7 +577,7 @@ function DreamEditorModal({
       return;
     }
 
-    if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+    cancelPendingSave();
     setSaving(true);
     setAutoSaveStatus("saving");
     setError("");
@@ -509,18 +593,14 @@ function DreamEditorModal({
     } finally {
       setSaving(false);
     }
-  // updateEntry is intentionally defined below and only reads the current form state.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [entry, form, onClose, onSaved, saving, ready]);
+  }, [entry, form, onClose, onSaved, saving, ready, cancelPendingSave, updateEntry, M.updateFailed]);
 
   const { dialogRef, onKeyDown } = useModalFocus(Boolean(entry && form), () => void closeEditor(), closeButtonRef, restoreFocus);
 
   useEffect(() => {
-    // a save queued for the previous version of this entry must never fire with its fields
-    if (autoSaveTimerRef.current) {
-      clearTimeout(autoSaveTimerRef.current);
-      autoSaveTimerRef.current = null;
-    }
+    // the entry changed under the editor (opened, closed, or its full copy arrived): a save still
+    // queued for the one before goes out now rather than being lost
+    flushPendingSave();
     formDirtyRef.current = false;
     setDownloadError("");
     formRevisionRef.current = 0;
@@ -541,12 +621,16 @@ function DreamEditorModal({
     setMessage("");
     setError("");
     setAutoSaveStatus("idle");
-  }, [entry]);
+  }, [entry, flushPendingSave]);
 
-  // closing saves pending edits first, so a timer still queued at unmount is never needed
-  useEffect(() => () => {
-    if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
-  }, []);
+  // leaving the page (Back, closing the tab) inside the 1.5 s autosave delay still saves the edit
+  useEffect(() => {
+    addEventListener("pagehide", flushPendingSave);
+    return () => {
+      removeEventListener("pagehide", flushPendingSave);
+      flushPendingSave();
+    };
+  }, [flushPendingSave]);
 
   useEffect(() => {
     if (!entry || formRevisionRef.current === savedRevisionRef.current) return;
@@ -569,12 +653,17 @@ function DreamEditorModal({
   // Debounced auto-save: fires 1.5s after the last form change
   const triggerAutoSave = useCallback((currentForm: DreamEditForm) => {
     if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+    const body = buildUpdateBody(currentForm);
+    if (!body) return;
     setAutoSaveStatus("saving");
+    pendingBodyRef.current = body;
     const savingRevision = formRevisionRef.current;
     autoSaveTimerRef.current = setTimeout(() => {
+      autoSaveTimerRef.current = null;
+      pendingBodyRef.current = null;
       void (async () => {
         try {
-          const updatedEntry = await updateEntry(currentForm);
+          const updatedEntry = await putEntry(body);
           onSaved(updatedEntry);
           if (savingRevision === formRevisionRef.current) {
             savedRevisionRef.current = savingRevision;
@@ -587,10 +676,10 @@ function DreamEditorModal({
         }
       })();
     }, 1500);
-  }, [onSaved]);
+  }, [buildUpdateBody, putEntry, onSaved]);
 
   useEffect(() => {
-    if (!form || !formDirtyRef.current) return;
+    if (!form || !formDirtyRef.current || !ready) return;
     triggerAutoSave(form);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [form]);
@@ -620,62 +709,6 @@ function DreamEditorModal({
 
   if (!entry || !form) return null;
 
-  function buildUpdateBody(currentForm: DreamEditForm) {
-    if (!entry) return null;
-
-    return {
-      id: entry.id,
-      title: currentForm.title,
-      inputMode: "text" as const,
-      rawText: currentForm.rawText,
-      cleanText: currentForm.cleanText.trim() || currentForm.rawText.trim(),
-      mood: currentForm.mood,
-      stressScore: currentForm.stressScore ? Number(currentForm.stressScore) : null,
-      tags: splitCommaList(currentForm.tags),
-      people: splitCommaList(currentForm.people),
-      locations: splitCommaList(currentForm.locations),
-      symbols: splitCommaList(currentForm.symbols),
-      capturedAt: currentForm.dreamDate || undefined,
-      imageUrl: currentForm.imageUrl,
-      assetStatus: currentForm.imageUrl ? (currentForm.assetStatus ?? "generated") : null,
-      sleepStart: currentForm.sleepStart || null,
-      wakeTime: currentForm.wakeTime || null,
-      sleepQuality: currentForm.sleepQuality,
-      preSleepMeal: currentForm.preSleepMeal || null,
-      preSleepActivity: currentForm.preSleepActivity || null,
-      sleepInsight: currentForm.sleepInsight || null,
-      visualBrief: entry?.visualBrief ?? null,
-    };
-  }
-
-  async function updateEntry(currentForm: DreamEditForm): Promise<DreamEntry> {
-    const body = buildUpdateBody(currentForm);
-    if (!body) throw new Error(M.updateFailed);
-
-    const response = await fetch("/api/dreams", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-
-    const payload = (await response.json()) as {
-      entry?: DreamEntry;
-      error?: string;
-      details?: { fieldErrors?: Record<string, string[]>; formErrors?: string[] };
-    };
-
-    if (!response.ok || !payload.entry) {
-      const fieldErrors = Object.entries(payload.details?.fieldErrors ?? {})
-        .flatMap(([field, messages]) => messages.map((message) => `${field}: ${message}`));
-      const formErrors = payload.details?.formErrors ?? [];
-      const detailText = [...fieldErrors, ...formErrors].join("；");
-      const message = getApiErrorMessage(payload.error, lang, M.updateFailed);
-      throw new Error(detailText ? `${message}: ${detailText}` : message);
-    }
-
-    return payload.entry;
-  }
-
   async function deleteEntry() {
     if (!entry || deleting) return;
     if (!window.confirm(M.deleteConfirm)) return;
@@ -693,6 +726,7 @@ function DreamEditorModal({
       const payload = (await response.json()) as { error?: string };
       if (!response.ok) throw new Error(getApiErrorMessage(payload.error, lang, M.updateFailed));
 
+      cancelPendingSave();
       onDeleted(entry.id);
     } catch (deleteError) {
       setError(deleteError instanceof Error ? deleteError.message : M.updateFailed);
@@ -792,6 +826,9 @@ function DreamEditorModal({
       if (response.status === 402) { router.push("/pricing"); return; }
       if (!response.ok) throw new Error(getApiErrorMessage(payload.error, lang, M.analyzeError));
 
+      // the filled-in fields are an edit like any other: autosave them and save them on close
+      formDirtyRef.current = true;
+      formRevisionRef.current += 1;
       setForm((current) => {
         if (!current) return current;
         return {
@@ -923,15 +960,23 @@ function DreamEditorModal({
         className={s.editorDialog}
         data-backdrop="true"
       >
-        <button
-          ref={closeButtonRef}
-          type="button"
-          onClick={() => void closeEditor()}
-          disabled={saving}
-          className={s.editorClose}
-        >
-          {M.closeBtn} <span aria-hidden>×</span>
-        </button>
+        <div className={s.editorTop}>
+          {loadError ? (
+            <p className={s.loadFail} role="alert">
+              {loadError}
+              <button type="button" onClick={onRetry}>{T.archive.nb.retry}</button>
+            </p>
+          ) : null}
+          <button
+            ref={closeButtonRef}
+            type="button"
+            onClick={() => void closeEditor()}
+            disabled={saving}
+            className={s.editorClose}
+          >
+            {M.closeBtn} <span aria-hidden>×</span>
+          </button>
+        </div>
 
         <div className={s.bookWrap} inert={!ready} aria-busy={!ready}>
         <Book tilt={false} className={s.editorBook}>
@@ -1155,7 +1200,6 @@ function DreamEditorModal({
             </label>
 
             {message ? <p className={s.ok} aria-live="polite">{message}</p> : null}
-            {loadError ? <p className={s.err} role="alert">{loadError}</p> : null}
             {error ? <p className={s.err} role="alert">{error}</p> : null}
 
             <div className={s.pageFoot}>
@@ -1236,8 +1280,14 @@ export default function DreamGrid({
   const [tagBusy, setTagBusy] = useState(false);
   const [tagError, setTagError] = useState("");
   const bookRef = useRef<HTMLDivElement>(null);
-  // ids whose local copy is complete (image + visual brief), so the editor can open it without a refetch
-  const fullIds = useRef(new Set<number>());
+  // the fields list pages leave out (inline image, visual brief), per dream, once a full copy was seen;
+  // the editor can then open it straight away without a refetch
+  const fullCopies = useRef(new Map<number, Pick<DreamEntry, "imageUrl" | "thumbnailUrl" | "assetStatus" | "visualBrief">>());
+  const rememberFull = (full: DreamEntry) => {
+    fullCopies.current.set(full.id, { imageUrl: full.imageUrl, thumbnailUrl: full.thumbnailUrl, assetStatus: full.assetStatus, visualBrief: full.visualBrief });
+  };
+  // each open gets a number; a late reply for an earlier open is ignored
+  const openSeq = useRef(0);
   const openerRef = useRef<HTMLElement | null>(null);
   const turning = useRef(false);
   const [readyId, setReadyId] = useState<number | null>(null);
@@ -1313,7 +1363,7 @@ export default function DreamGrid({
 
   useEffect(() => {
     setLocalEntries(entries);
-    fullIds.current.clear();
+    fullCopies.current.clear();
   }, [entries]);
 
   useEffect(() => {
@@ -1398,7 +1448,7 @@ export default function DreamGrid({
   // List pages leave out inline (data URL) images. Fetch them for the open night so its photo can be
   // taped on, and merge only the image fields: anything edited meanwhile (autosave, rename, merge) stays.
   const shownId = shownEntry?.id ?? null;
-  const shownOmitted = Boolean(shownEntry?.imageUrlOmitted);
+  const shownOmitted = Boolean(shownEntry?.imageUrlOmitted) && activeTab === "calendar";
   useEffect(() => {
     if (shownId == null || !shownOmitted) return;
     const controller = new AbortController();
@@ -1413,7 +1463,7 @@ export default function DreamGrid({
             ? { ...item, imageUrl: full.imageUrl, thumbnailUrl: full.thumbnailUrl, imageUrlOmitted: undefined, assetStatus: full.assetStatus, visualBrief: full.visualBrief }
             : item
         )));
-        fullIds.current.add(full.id);
+        rememberFull(full);
       })
       .catch(() => {}); // stays omitted; the next visit to this night tries again
     return () => controller.abort();
@@ -1496,32 +1546,38 @@ export default function DreamGrid({
     if (!res.ok) throw new Error("Update failed");
   }
 
-  async function openEntry(entry: DreamEntry) {
-    // remember who opened it before the button disables itself while loading
-    openerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    unlock();
-    pageTurn({ dur: 0.7 });
+  async function openEntry(entry: DreamEntry, retry = false) {
+    const seq = ++openSeq.current;
+    if (!retry) {
+      // remember who opened it before the button disables itself while loading
+      openerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      unlock();
+      pageTurn({ dur: 0.7 });
+    }
     setOpenError("");
-    setSelected(entry);
-    if (fullIds.current.has(entry.id)) {
+    const known = fullCopies.current.get(entry.id);
+    if (known) {
+      setSelected({ ...entry, ...known, imageUrlOmitted: undefined });
       setReadyId(entry.id);
       return;
     }
     // the list copy lacks inline images and the visual brief; the editor stays read-only until the
     // full entry arrives, so no save can overwrite those fields with nulls
+    setSelected(entry);
     setReadyId(null);
     setOpeningEntryId(entry.id);
     try {
       const response = await fetch(`/api/dreams?id=${entry.id}`, { cache: "no-store" });
       const payload = (await response.json()) as { entry?: DreamEntry; error?: string };
+      if (seq !== openSeq.current) return; // closed, or another dream was opened meanwhile
       if (!response.ok || !payload.entry) throw new Error(getApiErrorMessage(payload.error, lang, N.openFailed));
       const full = payload.entry;
-      fullIds.current.add(full.id);
-      setSelected((current) => (current?.id === entry.id ? full : current));
+      rememberFull(full);
+      setSelected(full);
       setReadyId(full.id);
       setLocalEntries((current) => current.map((item) => (item.id === full.id ? full : item)));
     } catch (error) {
-      setOpenError(error instanceof Error ? error.message : N.openFailed);
+      if (seq === openSeq.current) setOpenError(error instanceof Error ? error.message : N.openFailed);
     } finally {
       setOpeningEntryId((current) => (current === entry.id ? null : current));
     }
@@ -1627,7 +1683,7 @@ export default function DreamGrid({
   }
 
   function handleSaved(updatedEntry: DreamEntry) {
-    fullIds.current.add(updatedEntry.id);
+    rememberFull(updatedEntry);
     setLocalEntries((current) => current.map((item) => (item.id === updatedEntry.id ? updatedEntry : item)));
   }
 
@@ -1670,8 +1726,9 @@ export default function DreamGrid({
 
   // back to whatever opened the editor; if it is gone or still disabled, the open night, then the tab
   const restoreFocus = useCallback(() => {
+    // Safari leaves activeElement on <body> after a mouse click, so body never counts as the opener
     const usable = (el: HTMLElement | null | undefined): el is HTMLElement =>
-      Boolean(el?.isConnected && !(el as HTMLButtonElement).disabled);
+      Boolean(el && el !== document.body && el.isConnected && !(el as HTMLButtonElement).disabled);
     const candidates = [
       openerRef.current,
       document.querySelector<HTMLElement>(".nb-stage [aria-current='true']"),
@@ -2275,11 +2332,12 @@ export default function DreamGrid({
 
       <DreamEditorModal
         entry={selected}
-        ready={selected != null && readyId === selected.id}
+        ready={selected != null && readyId === selected.id && !selected.imageUrlOmitted}
         loadError={openError}
+        onRetry={() => { if (selected) void openEntry(selected, true); }}
         thisYear={thisYear}
         restoreFocus={restoreFocus}
-        onClose={() => { setSelected(null); setOpenError(""); }}
+        onClose={() => { openSeq.current += 1; setSelected(null); setReadyId(null); setOpenError(""); }}
         onSaved={handleSaved}
         onDeleted={handleDeleted}
       />
