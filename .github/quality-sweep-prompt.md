@@ -40,12 +40,15 @@ Do not pick:
   zh and en, error codes from `API_ERROR_CODES`, `safeErrorMetadata()` for server logs.
 - **Never modify these protected paths:**
   - `src/app/api/billing/**`, `src/lib/billing.ts`, `src/lib/stripe.ts`
-  - `src/auth*.ts`, `src/middleware.ts`
+  - auth and accounts: `src/auth*.ts`, `src/middleware.ts`, `src/lib/session.ts`,
+    `src/lib/authRateLimit.ts`, `src/app/api/auth/**`, `src/app/api/user/**`, `src/types/next-auth.d.ts`
+  - `next.config.ts` (security headers / CSP)
   - `src/lib/db.ts`, `src/lib/dreamTextEncryption.ts`, and any database migration or schema
   - `.github/**`
   - dependency versions in `package.json` / `package-lock.json` (do not add, remove or bump packages)
-  - the scoring itself: `scripts/quality.mjs`, `quality/baseline.json`, `knip.json`, `tsconfig.json`,
-    `eslint.config.mjs`, `docs/golden-principles.md`
+  - the scoring and the gates themselves: `scripts/**`, `quality/**`, `knip.json`, `tsconfig.json`,
+    `eslint.config.mjs`, `vitest.config.ts`, `tests/unit/i18n-keys.test.ts`, `docs/golden-principles.md`
+  - existing tests: you may add a new test file, but never edit or delete an existing one
 - Run, and make sure all pass before you commit:
   `npm run lint`, `npm run typecheck`, `npm run knip`, `npm run test:unit`, then `npm run quality`
   for the score after your change.

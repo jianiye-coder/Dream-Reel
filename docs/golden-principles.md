@@ -124,7 +124,8 @@ rarely shows up in a click-through.
 `src/lib/session.ts`, `src/lib/authRateLimit.ts`, `src/app/api/auth/**`,
 `src/app/api/user/**`) or dream-text encryption ships with a unit or
 integration test that exercises it. These paths are off-limits to the
-automated sweep.
+automated sweep (the full list is in `.github/quality-sweep-prompt.md` and the
+`PROTECTED` pattern in `.github/workflows/quality-automerge.yml`).
 
 **How it's checked.** Quality score: the share of those modules imported by a
 test in `tests/unit` or `tests/integration`. Agent judgement: the PR's tests
