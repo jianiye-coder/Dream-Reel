@@ -7,7 +7,7 @@ import { flushSync } from "react-dom";
    A small dog-ear at rest. Hovering lifts it (the paper's back curling over a soft shadow) and moving
    away lets it fall back; keyboard focus lifts it the same way. One click, tap or Enter/Space turns
    the page (`onTurn`). A touch has no hover, so a tap plays the lift quickly first and the turn still
-   reads as a page being turned. With reduced motion there is no peel; a click still turns. */
+   reads as a page being turned. With reduced motion the corner still lifts on hover, without the animation; a click still turns. */
 export function PageCorner({ label, hint, onTurn, busy }: {
   /** accessible name, e.g. "翻到这一页 · 外婆家的走廊" */
   label: string;

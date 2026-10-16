@@ -445,6 +445,10 @@ html[lang="en"] .nb-root {
   .nb-corner .nb-curl { width: 24px; height: 24px; }
   .nb-root .nb-corner.nb-lifted, .nb-root .nb-corner:focus-visible { width: 76px; height: 76px; }
   .nb-corner.nb-lifted .nb-curl, .nb-corner:focus-visible .nb-curl { width: 68px; height: 68px; }
+  @media (hover: hover) {
+    .nb-root .nb-corner:hover { width: 76px; height: 76px; }
+    .nb-corner:hover .nb-curl { width: 68px; height: 68px; }
+  }
   .nb-ruled { --rule-offset: 82px;
     background-image:
       linear-gradient(90deg, transparent 44px, var(--margin) 44px 45px, transparent 45px),
