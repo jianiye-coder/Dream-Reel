@@ -249,16 +249,20 @@ npm run knip      # unused files, exports and dependencies (a CI gate)
 npm run quality   # writes quality/score.json and quality/REPORT.md: a 0–100 score per principle
 ```
 
-Every day at 13:00 UTC, `.github/workflows/quality-sweep.yml` scores `main`, and Claude (through `anthropics/claude-code-action`) fixes the single most valuable small drift in one PR labelled `quality-sweep`, or opens an issue when the fix needs a protected path (billing, auth, database, encryption, workflows, dependency versions, the scoring itself). It skips the day while a sweep PR is open. `.github/workflows/quality-automerge.yml` (run from `main`'s copy via `pull_request_target`; it never checks out the PR) enables squash auto-merge for a sweep PR only if `claude[bot]` opened, pushed and labelled it with only its own commits, it changes at most 150 lines in at most 10 files, touches no protected path and edits no existing test; otherwise it turns auto-merge off and comments asking for a human review. Runs can also be started by hand from the Actions tab (workflow_dispatch).
+Every day at 13:00 UTC (or by hand from the Actions tab), `.github/workflows/quality-sweep.yml` scores `main` and, unless a `quality-sweep` PR is already open, runs Claude through `anthropics/claude-code-action` with a read-only token. Claude may only edit files in the working tree (`src/`, `docs/`, new tests) and run lint, tsc, the unit tests and `npm run quality`: no git writes, no GitHub access, no web. The workflow re-runs the checks, then a separate job that runs no repository code validates the diff (at most 150 lines in 10 files, no binary files, no protected path, no edited or deleted tests), commits it as `github-actions[bot]`, pushes `quality-sweep/<date>-<slug>`, opens the PR labelled `quality-sweep` and dispatches CI on it. When the fix needs a protected path (API routes, billing, auth, data and privacy modules, config, workflows, dependencies, the scoring itself; full list in `.github/quality-sweep-prompt.md`) it files Claude's drafted issue instead.
+
+`.github/workflows/quality-automerge.yml` is the merge gate. It always runs from `main`'s copy, never checks out the PR, switches auto-merge off first on every run, and turns it back on (squash, pinned to the checked head commit) only for a PR the sweep opened and dispatched, with every commit by the GitHub-linked `github-actions[bot]` account, within the size and path rules. Any human push, label or reopen on a sweep PR leaves auto-merge off with a comment asking for review. A third job fails the run if `main` gained a commit that did not come through a merged PR.
+
+**Branch protection on `main` is the backstop for all of this**: nothing above should be able to land code on `main` without a pull request and a green CI run, and nothing (not GitHub Actions, not the Claude GitHub App) may be on the bypass list.
 
 Owner setup (once):
 
-1. Install the Claude GitHub App on the repository: https://github.com/apps/claude.
-2. Run `claude setup-token` locally (Claude Pro or Max) and add the token as the repository secret `CLAUDE_CODE_OAUTH_TOKEN` (Settings → Secrets and variables → Actions). Sweep runs draw from that subscription's usage limits.
+1. Run `claude setup-token` locally (Claude Pro or Max) and add the token as the repository secret `CLAUDE_CODE_OAUTH_TOKEN` (Settings → Secrets and variables → Actions). Sweep runs draw from that subscription's usage limits. The Claude GitHub App (https://github.com/apps/claude) is not needed for the sweep, which runs Claude with the workflow's own read-only token; install it only if you also want `@claude` on issues and PRs.
+2. Settings → Actions → General → Workflow permissions: enable **Allow GitHub Actions to create and approve pull requests** (the publish job opens the PR with the workflow token).
 3. Settings → General → enable **Allow auto-merge**.
-4. Settings → Branches (or Rules) → protect `main`: **Require a pull request before merging** (no bypass for the Claude app) and **Require status checks to pass** with the check **verify** (the CI job). Auto-merge only waits for required checks, and the pull-request rule keeps the sweep from pushing to `main` directly.
+4. Settings → Branches (or Rules) → protect `main`: **Require a pull request before merging** and **Require status checks to pass** with the check **verify** (the CI job); no bypass for anyone automated. Auto-merge only waits for required checks. Requiring one approval instead of zero keeps every sweep PR waiting for you, which is a fine stricter setting.
 
-Merges done by auto-merge are made with the workflow token, so the `push` run of CI on `main` does not start for them; the PR's own CI run is the check.
+Merges done by auto-merge are made with the workflow token, so the `push` run of CI on `main` does not start for them; the PR's dispatched CI run is the check.
 
 ---
 

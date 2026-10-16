@@ -123,9 +123,11 @@ rarely shows up in a click-through.
 `src/app/api/billing/**`), auth (`src/auth*.ts`, `src/middleware.ts`,
 `src/lib/session.ts`, `src/lib/authRateLimit.ts`, `src/app/api/auth/**`,
 `src/app/api/user/**`) or dream-text encryption ships with a unit or
-integration test that exercises it. These paths are off-limits to the
-automated sweep (the full list is in `.github/quality-sweep-prompt.md` and the
-`PROTECTED` pattern in `.github/workflows/quality-automerge.yml`).
+integration test that exercises it. These paths, and the rest of the protected
+list (all API routes, data and privacy modules, config, workflows,
+dependencies, the scoring itself), are off-limits to the automated sweep: see
+`.github/quality-sweep-prompt.md` and the `PROTECTED` pattern, kept identical,
+in `.github/workflows/quality-sweep.yml` and `quality-automerge.yml`.
 
 **How it's checked.** Quality score: the share of those modules imported by a
 test in `tests/unit` or `tests/integration`. Agent judgement: the PR's tests
@@ -140,9 +142,12 @@ work running beside them.
 changes in files another open PR owns. Automated sweep PRs stay at or under 150
 changed lines.
 
-**How it's checked.** `.github/workflows/quality-automerge.yml` only auto-merges
-sweep PRs of ≤150 changed lines outside protected paths. Agent judgement for
-everything else (not scored).
+**How it's checked.** The sweep only publishes, and
+`.github/workflows/quality-automerge.yml` only auto-merges, changes of ≤150 lines
+in ≤10 files outside the protected paths that edit no existing test. Branch
+protection on `main` (a pull request and a green `verify` check, with no bypass
+for GitHub Actions or the Claude app) is the backstop behind both. Agent
+judgement for everything else (not scored).
 
 ## 9. Motion is optional, every control has a name
 
