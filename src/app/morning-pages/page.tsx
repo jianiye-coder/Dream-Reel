@@ -7,7 +7,7 @@ import { LangToggle } from "@/components/LangToggle";
 import { Book, BookPage } from "@/components/notebook/Book";
 import { NotebookShell } from "@/components/notebook/NotebookShell";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { tap, writeChar } from "@/lib/notebookSound";
+import { tap } from "@/lib/notebookSound";
 import styles from "./page.module.css";
 import { DrawingBoard } from "./DrawingBoard";
 import type { DrawingStroke } from "@/lib/morningDrawing";
@@ -71,8 +71,6 @@ export default function MorningPages() {
   const passThrough = useRef(false);
   const leaving = useRef(false);
   const mounted = useRef(false);
-  const composing = useRef(false);
-  const lastSound = useRef(0);
 
   const refreshHistory = useCallback(async () => {
     try {
@@ -311,15 +309,6 @@ export default function MorningPages() {
     };
   }
 
-  // the pen sounds as each character lands; IME candidates are silent until committed
-  function penSound(text: string) {
-    const now = performance.now();
-    if (now - lastSound.current < 45) return;
-    lastSound.current = now;
-    let when = 0;
-    for (const ch of Array.from(text).slice(0, 4)) when += Math.max(writeChar(ch, when), 0.06);
-  }
-
   const statusText = M.status[status];
   const alertStatus = status === "error" || status === "conflict";
   const words = countWords(content);
@@ -421,11 +410,7 @@ export default function MorningPages() {
                 <div className={styles.surface} hidden={mode !== "text"}>
                   <textarea ref={editor} className={styles.editor} aria-label={M.contentLabel} placeholder={M.placeholder} value={content} maxLength={50000} readOnly={switching} spellCheck
                     onScroll={(e) => markEdges(e.currentTarget)}
-                    onCompositionStart={() => { composing.current = true; }}
-                    onCompositionEnd={(e) => { composing.current = false; penSound(e.data); }}
                     onChange={(e) => {
-                      const input = e.nativeEvent as InputEvent;
-                      if (!composing.current && !input.isComposing && input.inputType === "insertText" && input.data) penSound(input.data);
                       draft.current.content = e.target.value;
                       setContent(e.target.value);
                       setStatus(conflict.current ? "conflict" : "dirty");
