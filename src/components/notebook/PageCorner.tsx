@@ -39,6 +39,8 @@ export function PageCorner({ label, hint, liftedNote, onTurn, busy }: {
       className={`nb-corner${lifted ? " nb-lifted" : ""}`}
       aria-label={label}
       aria-disabled={busy || undefined}
+      // tabbing away lets a lifted corner fall back, as a click elsewhere does
+      onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setLifted(false); }}
       onClick={(event) => {
         if (busy) return;
         // a keyboard press (no pointer, detail 0) or a click on the lifted corner turns the page

@@ -115,7 +115,7 @@ export const Book = forwardRef<HTMLDivElement, {
   );
 });
 
-export function BookPage({ side, ruled, indent, folio, curl, corner, className, padClassName, children, ...rest }: {
+export function BookPage({ side, ruled, indent, folio, curl, corner, className, padClassName, padInert, children, ...rest }: {
   side: "l" | "r";
   ruled?: boolean;
   indent?: boolean;
@@ -126,11 +126,13 @@ export function BookPage({ side, ruled, indent, folio, curl, corner, className, 
   corner?: React.ReactNode;
   className?: string;
   padClassName?: string;
+  /** the page's content can't be reached for now (e.g. hidden while the page turns over) */
+  padInert?: boolean;
   children: React.ReactNode;
 } & Omit<React.HTMLAttributes<HTMLElement>, "children">) {
   return (
     <section className={["nb-page", `nb-page-${side}`, ruled && "nb-ruled", className].filter(Boolean).join(" ")} {...rest}>
-      <div className={["nb-pad", indent && "nb-indent", padClassName].filter(Boolean).join(" ")}>{children}</div>
+      <div className={["nb-pad", indent && "nb-indent", padClassName].filter(Boolean).join(" ")} inert={padInert || undefined}>{children}</div>
       {folio && <span className="nb-folio" aria-hidden>{folio}</span>}
       {curl && !corner && side === "r" && <span className="nb-curl" aria-hidden />}
       {corner}

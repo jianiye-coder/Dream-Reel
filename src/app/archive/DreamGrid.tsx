@@ -1566,6 +1566,7 @@ export default function DreamGrid({
   const selectableMonths = Array.from(new Set([...monthKeys, visibleMonth])).sort().reverse();
 
   function changeMonth(offset: number) {
+    if (turning.current) return; // the page is in the air
     tap();
     setActiveMonth((current) => {
       const [year, month] = current.split("-").map(Number);
@@ -2294,7 +2295,7 @@ export default function DreamGrid({
                 <div className={s.monthHead}>
                   <label className={s.monthPick}>
                     <span className={s.monthTitle} aria-hidden>{monthDisplay}</span>
-                    <select value={visibleMonth} onChange={(event) => { tap(); setActiveMonth(event.target.value); }} aria-label={G.monthFilter}>
+                    <select value={visibleMonth} onChange={(event) => { if (turning.current) return; tap(); setActiveMonth(event.target.value); }} aria-label={G.monthFilter}>
                       {selectableMonths.map((monthKey) => (
                         <option key={monthKey} value={monthKey}>{formatMonthLabel(monthKey, lang)}</option>
                       ))}
@@ -2376,6 +2377,7 @@ export default function DreamGrid({
             folio={folios[1]}
             curl
             className={turningAway ? s.turningAway : undefined}
+            padInert={turningAway}
             padClassName={`${s.pad} ${s.padScroll}`}
             {...pageProps("r")}
             corner={activeTab === "calendar" && shownEntry ? (

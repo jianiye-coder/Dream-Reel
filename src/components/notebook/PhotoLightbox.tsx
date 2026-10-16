@@ -39,6 +39,11 @@ export function PhotoLightbox({ src, alt, date, title, className, children }: {
     if (!open || !d) return;
     if (!d.open) d.showModal();
     closeBtn.current?.focus();
+    // the page behind the photo stays where it was (phones would scroll it under the desk)
+    const root = document.documentElement, body = document.body;
+    const was = [root.style.overflow, body.style.overflow];
+    root.style.overflow = "hidden";
+    body.style.overflow = "hidden";
     const onKey = (event: KeyboardEvent) => {
       event.stopPropagation();
       if (event.key === "Escape") { event.preventDefault(); setHost(null); }
@@ -53,6 +58,8 @@ export function PhotoLightbox({ src, alt, date, title, className, children }: {
       d.removeEventListener("keydown", onKey);
       d.removeEventListener("cancel", onCancel);
       if (d.open) d.close();
+      root.style.overflow = was[0];
+      body.style.overflow = was[1];
       if (opener?.isConnected) opener.focus({ preventScroll: true });
     };
   }, [open]);

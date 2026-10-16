@@ -112,11 +112,13 @@
 /* the whole dream, as written. A long one scrolls inside its own lines, so the title, clues, photo and
    foot stay put; it fades into the paper only at an edge with more past it (data-fade-*, edgeFade). */
 .ar .excerpt { font-size: 19px; white-space: pre-line; overflow-wrap: anywhere; }
-.ar .pad > .excerpt { flex: 0 1 auto; min-height: calc(var(--line) * 3); overflow-y: auto; overscroll-behavior: contain;
+.ar .pad > .excerpt { flex: 0 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain;
   margin: 0 -14px 0 -10px; padding: 0 14px 0 10px; scrollbar-width: thin; scrollbar-color: #d6cbb6 transparent;
   --fade-top: 0px; --fade-bottom: 0px;
   -webkit-mask-image: linear-gradient(180deg, transparent calc(var(--fade-top) * .3), #000 var(--fade-top), #000 calc(100% - var(--fade-bottom)), transparent calc(100% - var(--fade-bottom) * .3));
   mask-image: linear-gradient(180deg, transparent calc(var(--fade-top) * .3), #000 var(--fade-top), #000 calc(100% - var(--fade-bottom)), transparent calc(100% - var(--fade-bottom) * .3)); }
+/* a short dream is as short as it is; one that scrolls keeps at least three lines in view */
+.ar .pad > .excerpt[data-scrolls] { min-height: calc(var(--line) * 3); }
 .ar .pad > .excerpt[data-fade-top] { --fade-top: 40px; }
 .ar .pad > .excerpt[data-fade-bottom] { --fade-bottom: 44px; }
 /* focused to scroll with the keys: a red margin line beside the text, like the writing areas */
