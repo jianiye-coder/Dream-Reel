@@ -6,6 +6,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Book, BookPage } from "@/components/notebook/Book";
 import { NotebookShell } from "@/components/notebook/NotebookShell";
 import { TurnLink } from "@/components/notebook/TurnLink";
+import legalCss from "@/components/legal/legal.module.css";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { handwrite, sleep } from "@/lib/notebookHandwriting";
 import { pageTurn, stroke, unlock } from "@/lib/notebookSound";
@@ -219,7 +220,11 @@ export default function LandingPage() {
             <Link className="nb-act-quiet" href="/blog/dreams-and-consciousness">{L.blogLink}</Link>
           </div>
         </section>
-        <footer className="nb-landing-footer"><span>{L.footerA}</span><span>{L.footerB}</span><a href="mailto:yejiani0831@gmail.com">contact: yejiani0831@gmail.com</a></footer>
+        <footer className="nb-landing-footer">
+          <span>{L.footerA}</span><span>{L.footerB}</span>
+          <nav className={legalCss.footLinks} aria-label={T.legal.label}>{T.legal.nav.map((l) => <Link key={l.href} href={l.href}>{l.label}</Link>)}</nav>
+          <a href="mailto:yejiani0831@gmail.com">contact: yejiani0831@gmail.com</a>
+        </footer>
       </div>
     </NotebookShell>
   );
