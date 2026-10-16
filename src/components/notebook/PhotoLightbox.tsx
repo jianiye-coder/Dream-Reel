@@ -73,6 +73,8 @@ export function PhotoLightbox({ src, alt, date, title, className, children }: {
         <dialog
           ref={dialog}
           className="nb-lightbox"
+          // focusable itself, so a click on the print keeps focus (and Escape) inside the dialog
+          tabIndex={-1}
           aria-labelledby={captionId}
           onClick={(event) => {
             // a click on the desk around the print puts it down

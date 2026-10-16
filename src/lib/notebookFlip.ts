@@ -24,7 +24,11 @@ export function flipPage(book: HTMLElement, { back, dur = 850, onStart, onEnd }:
   wrap.setAttribute("aria-hidden", "true");
   wrap.style.cssText = `left:${right.offsetLeft}px;top:${right.offsetTop}px;width:${W}px;height:${H}px;`;
 
+  // clones don't keep scroll positions: mark what is scrolled (a long dream) and scroll the copies to match
+  const scrolled = Array.from(right.querySelectorAll<HTMLElement>("*")).filter((el) => el.scrollTop > 0);
+  scrolled.forEach((el) => { el.dataset.flipScroll = String(el.scrollTop); });
   const front = right.cloneNode(true) as HTMLElement;
+  scrolled.forEach((el) => { delete el.dataset.flipScroll; });
   front.querySelectorAll("textarea,input,button,a,[tabindex]").forEach((el) => el.setAttribute("tabindex", "-1"));
   // the snapshot is copied into every strip; ids would be duplicated dozens of times
   front.removeAttribute("id");
@@ -75,6 +79,7 @@ export function flipPage(book: HTMLElement, { back, dur = 850, onStart, onEnd }:
   const shL = document.createElement("div");
   shL.className = "nb-flip-shadow nb-l";
   book.append(shR, shL, wrap);
+  wrap.querySelectorAll<HTMLElement>("[data-flip-scroll]").forEach((el) => { el.scrollTop = Number(el.dataset.flipScroll); });
   onStart?.();
 
   const ease = (p: number) => (p < 0.5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2);

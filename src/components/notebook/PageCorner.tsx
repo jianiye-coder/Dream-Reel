@@ -9,11 +9,13 @@ import { tap } from "@/lib/notebookSound";
    Escape lets it fall back; give it a `key` so it also falls back when the page shows something else.
    From the keyboard one press turns the page: focus already lifts the corner a hair and writes what
    it does beside it, so a second press would only hide the action. */
-export function PageCorner({ label, hint, onTurn, busy }: {
+export function PageCorner({ label, hint, liftedNote, onTurn, busy }: {
   /** accessible name, e.g. "翻到这一页 · 外婆家的走廊" */
   label: string;
   /** a red-ink note shown beside the corner while it has keyboard focus */
   hint: string;
+  /** read out when a tap or click has lifted it (touch screen readers send real taps) */
+  liftedNote: string;
   onTurn: () => void;
   busy?: boolean;
 }) {
@@ -30,6 +32,7 @@ export function PageCorner({ label, hint, onTurn, busy }: {
   }, [lifted]);
 
   return (
+    <>
     <button
       ref={el}
       type="button"
@@ -48,5 +51,7 @@ export function PageCorner({ label, hint, onTurn, busy }: {
       <span className="nb-curl" aria-hidden />
       <span className="nb-corner-hint" aria-hidden>{hint}</span>
     </button>
+    <span className="nb-sr-only" aria-live="polite">{lifted ? liftedNote : ""}</span>
+    </>
   );
 }

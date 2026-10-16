@@ -368,6 +368,8 @@ function useModalFocus(isOpen: boolean, onClose: () => void, initialFocusRef?: R
     const onDocumentKey = (event: KeyboardEvent) => {
       const dialog = dialogRef.current;
       if (!dialog || dialog.contains(document.activeElement)) return;
+      // a photo held up over the editor (PhotoLightbox, a modal <dialog>) takes its own keys
+      if (document.querySelector("dialog[open]")) return;
       if (event.key === "Escape") {
         event.preventDefault();
         onCloseRef.current();
@@ -1696,6 +1698,19 @@ export default function DreamGrid({
     if (!res.ok) throw new Error("Update failed");
   }
 
+  // one request per dream at a time: a turn's prefetch and the open that follows it share it
+  const inflight = useRef(new Map<number, Promise<{ ok: boolean; entry?: DreamEntry; error?: string }>>());
+  function fetchFull(id: number) {
+    let pending = inflight.current.get(id);
+    if (!pending) {
+      pending = fetch(`/api/dreams?id=${id}`, { cache: "no-store" })
+        .then(async (response) => ({ ok: response.ok, ...((await response.json()) as { entry?: DreamEntry; error?: string }) }))
+        .finally(() => inflight.current.delete(id));
+      inflight.current.set(id, pending);
+    }
+    return pending;
+  }
+
   /** Opens the editor. "turned": the page already turned over (and made its sound) on the way here. */
   async function openEntry(entry: DreamEntry, mode: "open" | "retry" | "turned" = "open") {
     const seq = ++openSeq.current;
@@ -1719,10 +1734,9 @@ export default function DreamGrid({
     setReadyId(null);
     setOpeningEntryId(entry.id);
     try {
-      const response = await fetch(`/api/dreams?id=${entry.id}`, { cache: "no-store" });
-      const payload = (await response.json()) as { entry?: DreamEntry; error?: string };
+      const payload = await fetchFull(entry.id);
       if (seq !== openSeq.current) return; // closed, or another dream was opened meanwhile
-      if (!response.ok || !payload.entry) throw new Error(getApiErrorMessage(payload.error, lang, N.openFailed));
+      if (!payload.ok || !payload.entry) throw new Error(getApiErrorMessage(payload.error, lang, N.openFailed));
       const full = payload.entry;
       rememberFull(full);
       setSelected(full);
@@ -1917,10 +1931,9 @@ export default function DreamGrid({
 
   function prefetchFull(entry: DreamEntry) {
     if (fullCopies.current.has(entry.id)) return;
-    fetch(`/api/dreams?id=${entry.id}`, { cache: "no-store" })
-      .then((response) => (response.ok ? response.json() as Promise<{ entry?: DreamEntry }> : null))
-      .then((payload) => { if (payload?.entry && !fullCopies.current.has(entry.id)) rememberFull(payload.entry); })
-      .catch(() => {}); // openEntry fetches it again
+    fetchFull(entry.id)
+      .then((payload) => { if (payload.ok && payload.entry && !fullCopies.current.has(entry.id)) rememberFull(payload.entry); })
+      .catch(() => {}); // openEntry tries again and shows the error
   }
 
   function onTabKeyDown(event: React.KeyboardEvent<HTMLButtonElement>, tab: ArchiveTab) {
@@ -1940,7 +1953,7 @@ export default function DreamGrid({
 
   function selectDay(cell: CalendarCell) {
     const lead = cell.entries[0];
-    if (!lead) return;
+    if (!lead || turning.current) return;
     // a second tap on the open night turns to its page
     if (cell.key === dayKey) { turnToEntry(shownEntry ?? lead); return; }
     tap();
@@ -2370,6 +2383,7 @@ export default function DreamGrid({
                 key={shownEntry.id}
                 label={`${N.openPage} · ${dreamDisplayTitle(shownEntry)}`}
                 hint={N.openPage}
+                liftedNote={N.cornerLifted}
                 busy={openingEntryId === shownEntry.id}
                 onTurn={() => turnToEntry(shownEntry)}
               />
