@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { auth } from "@/auth";
+import { requireUserId } from "@/lib/session";
 import { checkAndConsumeUsage, refundConsumedUsage } from "@/lib/billing";
 import { ZH_DREAM_EMOTION_CALIBRATION } from "@/lib/dreamEmotionCalibration";
 import { getRealityQuestion, mentionsRealityContext } from "@/lib/dreamQuestions";
@@ -206,10 +206,8 @@ function unwrapAnalysisPayload(raw: unknown) {
 }
 
 export async function POST(request: NextRequest) {
-  const session = await auth() as { user?: { id?: string } } | null;
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: API_ERROR_CODES.unauthorized }, { status: 401 });
-  }
+  const userId = await requireUserId();
+  if (userId instanceof NextResponse) return userId;
 
   let consumedUsagePeriodId: number | undefined;
 
@@ -242,7 +240,7 @@ export async function POST(request: NextRequest) {
     }
 
     const { text, lang, preSleepMeal, preSleepActivity } = parsed.data;
-    const usage = await checkAndConsumeUsage(Number(session.user.id), "analysis");
+    const usage = await checkAndConsumeUsage(userId, "analysis");
     if (!usage.allowed) {
       return NextResponse.json(
         { error: API_ERROR_CODES.quotaExceeded, billingStatus: usage.status },

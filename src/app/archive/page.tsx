@@ -1,13 +1,11 @@
-import { auth } from "@/auth";
+import { sessionUserId } from "@/lib/session";
 import { listDreamEntriesPage } from "@/lib/dreams";
 import { redirect } from "next/navigation";
 import ArchiveShell from "./ArchiveShell";
 
 export default async function ArchivePage() {
-  const session = await auth();
-  const rawId = session?.user?.id ? parseInt(session.user.id, 10) : NaN;
-  const userId = Number.isInteger(rawId) && rawId > 0 ? rawId : undefined;
-  if (!userId) {
+  const userId = await sessionUserId();
+  if (userId === null) {
     redirect("/login?callbackUrl=/archive");
   }
 

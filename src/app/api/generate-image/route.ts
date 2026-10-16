@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { auth } from "@/auth";
+import { requireUserId } from "@/lib/session";
 import { checkAndConsumeUsage, refundConsumedUsage } from "@/lib/billing";
 import { API_ERROR_CODES } from "@/lib/apiErrors";
 import { put } from "@vercel/blob";
@@ -71,12 +71,8 @@ function getImageProvider() {
 }
 
 export async function POST(request: NextRequest) {
-  const session = await auth() as { user?: { id?: string } } | null;
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: API_ERROR_CODES.unauthorized }, { status: 401 });
-  }
-
-  const userId = Number(session.user.id);
+  const userId = await requireUserId();
+  if (userId instanceof NextResponse) return userId;
   let consumedUsagePeriodId: number | undefined;
 
   async function refundImageUsageOnce() {

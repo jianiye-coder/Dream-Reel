@@ -11,7 +11,7 @@ import {
   patchDreamEntryTags,
   updateDreamEntry,
 } from "@/lib/dreams";
-import { auth } from "@/auth";
+import { requireUserId } from "@/lib/session";
 import { z } from "zod";
 import { checkAndConsumeUsage, refundConsumedUsage } from "@/lib/billing";
 import { API_ERROR_CODES } from "@/lib/apiErrors";
@@ -19,20 +19,11 @@ import { scheduleDreamAgentJournalSaved } from "@/lib/dreamAgentMetrics";
 
 const deleteSchema = z.object({ id: z.number().int().positive() });
 
-function parseUserId(id: string | undefined): number | undefined {
-  if (!id) return undefined;
-  const n = parseInt(id, 10);
-  return Number.isInteger(n) && n > 0 ? n : undefined;
-}
-
 export async function GET(request: NextRequest) {
   const startedAt = performance.now();
   try {
-    const session = await auth();
-    const userId = parseUserId((session as { user?: { id?: string } } | null)?.user?.id);
-    if (!userId) {
-      return NextResponse.json({ error: "请先登录" }, { status: 401 });
-    }
+    const userId = await requireUserId();
+    if (userId instanceof NextResponse) return userId;
     const idParam = request.nextUrl.searchParams.get("id");
     if (idParam) {
       const id = Number(idParam);
@@ -71,11 +62,8 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const session = await auth();
-    const userId = parseUserId((session as { user?: { id?: string } } | null)?.user?.id);
-    if (!userId) {
-      return NextResponse.json({ error: API_ERROR_CODES.unauthorized }, { status: 401 });
-    }
+    const userId = await requireUserId();
+    if (userId instanceof NextResponse) return userId;
 
     const json = await request.json() as unknown;
     const parsed = dreamEntryInputSchema.safeParse(json);
@@ -111,11 +99,8 @@ export async function POST(request: NextRequest) {
 
 export async function PATCH(request: NextRequest) {
   try {
-    const session = await auth() as { user?: { id?: string } } | null;
-    const userId = parseUserId(session?.user?.id);
-    if (!userId) {
-      return NextResponse.json({ error: API_ERROR_CODES.unauthorized }, { status: 401 });
-    }
+    const userId = await requireUserId();
+    if (userId instanceof NextResponse) return userId;
     const json = await request.json() as unknown;
     const parsed = dreamEntryTagsPatchSchema.safeParse(json);
 
@@ -133,11 +118,8 @@ export async function PATCH(request: NextRequest) {
 
 export async function PUT(request: NextRequest) {
   try {
-    const session = await auth() as { user?: { id?: string } } | null;
-    const userId = parseUserId(session?.user?.id);
-    if (!userId) {
-      return NextResponse.json({ error: API_ERROR_CODES.unauthorized }, { status: 401 });
-    }
+    const userId = await requireUserId();
+    if (userId instanceof NextResponse) return userId;
     const json = await request.json() as unknown;
     const parsed = dreamEntryUpdateSchema.safeParse(json);
 
@@ -158,11 +140,8 @@ export async function PUT(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
-    const session = await auth() as { user?: { id?: string } } | null;
-    const userId = parseUserId(session?.user?.id);
-    if (!userId) {
-      return NextResponse.json({ error: API_ERROR_CODES.unauthorized }, { status: 401 });
-    }
+    const userId = await requireUserId();
+    if (userId instanceof NextResponse) return userId;
     const json = await request.json() as unknown;
     const parsed = deleteSchema.safeParse(json);
 

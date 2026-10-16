@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { auth } from "@/auth";
+import { requireUserId } from "@/lib/session";
 import { API_ERROR_CODES } from "@/lib/apiErrors";
 import { buildDreamExport } from "@/lib/dreamExport";
 import { listDreamEntries } from "@/lib/dreams";
@@ -13,18 +13,9 @@ const querySchema = z.object({
   lang: z.enum(["zh", "en"]).default("zh"),
 });
 
-function parseUserId(id: string | undefined): number | undefined {
-  if (!id) return undefined;
-  const value = Number.parseInt(id, 10);
-  return Number.isInteger(value) && value > 0 ? value : undefined;
-}
-
 export async function GET(request: NextRequest) {
-  const session = await auth() as { user?: { id?: string } } | null;
-  const userId = parseUserId(session?.user?.id);
-  if (!userId) {
-    return NextResponse.json({ error: API_ERROR_CODES.unauthorized }, { status: 401 });
-  }
+  const userId = await requireUserId();
+  if (userId instanceof NextResponse) return userId;
 
   const parsed = querySchema.safeParse({
     format: request.nextUrl.searchParams.get("format") ?? undefined,
