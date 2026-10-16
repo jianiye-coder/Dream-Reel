@@ -184,3 +184,6 @@ back from Stripe, `?upgraded=1` and `?billing=cancelled` become a calm green
 Only the two configured Plus prices grant Plus, so the customer portal must not
 offer plan switching. Plus dream entries are "unlimited" (a 9999 cap in
 `billing.ts`); the library card shows 不限 / unlimited, never the number.
+Setup, keys and tax are documented in the README ("Payments (Stripe)"): a
+restricted `rk_` key with least privilege, stored as a Vercel Sensitive
+variable; `automatic_tax` stays off until there is an active registration.
