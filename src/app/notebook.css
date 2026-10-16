@@ -256,21 +256,22 @@ html[lang="en"] .nb-root {
 }
 .nb-page-r:hover > .nb-curl { width: 40px; height: 40px; }
 
-/* the corner as the page's control: always a small dog-ear; a hair higher on hover or focus;
-   lifted clearly after the first click, when a second click turns the page */
+/* the corner as the page's control: a small dog-ear at rest, peeled up while the pointer is on it
+   or it has keyboard focus (and for a moment after a tap); a click turns the page (PageCorner) */
 .nb-root .nb-corner { position: absolute; right: 0; bottom: 0; z-index: 7; width: 48px; height: 48px; cursor: pointer;
   -webkit-tap-highlight-color: transparent; transition: width .25s cubic-bezier(.3, .7, .3, 1), height .25s cubic-bezier(.3, .7, .3, 1); }
 .nb-root .nb-corner:focus-visible { outline: none; }
 .nb-corner .nb-curl { width: 20px; height: 20px; }
-@media (hover: hover) { .nb-corner:hover .nb-curl { width: 28px; height: 28px; } }
-.nb-corner:focus-visible .nb-curl { width: 28px; height: 28px; }
-.nb-root .nb-corner.nb-lifted { width: 100px; height: 100px; }
-.nb-corner.nb-lifted .nb-curl { width: 94px; height: 94px; filter: drop-shadow(-5px -5px 7px rgba(60, 40, 20, .26)); }
+@media (hover: hover) {
+  .nb-root .nb-corner:hover { width: 100px; height: 100px; }
+  .nb-corner:hover .nb-curl { width: 94px; height: 94px; filter: drop-shadow(-5px -5px 7px rgba(60, 40, 20, .26)); }
+}
+.nb-root .nb-corner.nb-lifted, .nb-root .nb-corner:focus-visible { width: 100px; height: 100px; }
+.nb-corner.nb-lifted .nb-curl, .nb-corner:focus-visible .nb-curl { width: 94px; height: 94px; filter: drop-shadow(-5px -5px 7px rgba(60, 40, 20, .26)); }
 /* keyboard focus says what the corner does, in red ink just above it */
 .nb-corner-hint { position: absolute; right: 10px; bottom: calc(100% + 2px); white-space: nowrap; pointer-events: none;
   font-family: var(--hand); font-size: 14px; color: var(--red-ink); opacity: 0; transition: opacity .2s; }
 .nb-corner:focus-visible .nb-corner-hint { opacity: 1; }
-.nb-corner.nb-lifted .nb-corner-hint { opacity: 0; }
 @media (prefers-reduced-motion: reduce) { .nb-curl, .nb-root .nb-corner { transition: none; } }
 
 /* ribbon marker: tucked into a later page, only its tail hangs out below the book */
@@ -442,8 +443,8 @@ html[lang="en"] .nb-root {
   /* a corner that turns the page stays: a small folded corner at the bottom of that sheet */
   .nb-root .nb-corner { width: 44px; height: 44px; }
   .nb-corner .nb-curl { width: 24px; height: 24px; }
-  .nb-root .nb-corner.nb-lifted { width: 76px; height: 76px; }
-  .nb-corner.nb-lifted .nb-curl { width: 68px; height: 68px; }
+  .nb-root .nb-corner.nb-lifted, .nb-root .nb-corner:focus-visible { width: 76px; height: 76px; }
+  .nb-corner.nb-lifted .nb-curl, .nb-corner:focus-visible .nb-curl { width: 68px; height: 68px; }
   .nb-ruled { --rule-offset: 82px;
     background-image:
       linear-gradient(90deg, transparent 44px, var(--margin) 44px 45px, transparent 45px),

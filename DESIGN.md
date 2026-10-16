@@ -77,12 +77,11 @@ All self-hosted at build time, because the CSP only allows same-origin fonts
   pass page-module classes through `className` / `padClassName`.
 - **`PageCorner`** (`src/components/notebook/PageCorner.tsx`): the right page's
   bottom corner as the way to turn it (the archive's open night). A small
-  dog-ear at rest, a hair higher on hover; the first click or tap peels it up
-  (the paper's back over a soft shadow, `.nb-curl`), a second turns the page.
-  A click elsewhere, Escape or new content (`key`) lets it fall back. From the
-  keyboard one press turns the page; focus lifts it a hair and writes what it
-  does above it in red ink. On phones it stays as a small folded corner at the
-  bottom of that sheet and opens without a turn.
+  dog-ear at rest; hovering or keyboard focus peels it up (the paper's back over
+  a soft shadow, `.nb-curl`), moving away lets it fall back. One click, tap or
+  Enter/Space turns the page; a tap plays the lift quickly first. Focus also
+  writes what it does above it in red ink. On phones it stays as a small folded
+  corner at the bottom of that sheet and opens without a turn.
 - **`PhotoLightbox`** (`src/components/notebook/PhotoLightbox.tsx`): wraps a
   dream photo's image in a zoom-in button; opens the photo enlarged as a print
   on the softly blurred desk (warm, never a black overlay) with date and title.

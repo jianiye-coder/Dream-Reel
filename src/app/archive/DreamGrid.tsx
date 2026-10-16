@@ -2385,7 +2385,6 @@ export default function DreamGrid({
                 key={shownEntry.id}
                 label={`${N.openPage} · ${dreamDisplayTitle(shownEntry)}`}
                 hint={N.openPage}
-                liftedNote={N.cornerLifted}
                 busy={openingEntryId === shownEntry.id}
                 onTurn={() => turnToEntry(shownEntry)}
               />

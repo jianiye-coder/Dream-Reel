@@ -1,59 +1,52 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { tap } from "@/lib/notebookSound";
+import { flushSync } from "react-dom";
 
 /* The right page's bottom corner as the way to turn it (BookPage `corner`).
-   Hovering lifts it a hair; the first click or tap lifts it clearly, the paper's back showing over
-   a soft shadow; clicking the lifted corner turns the page (`onTurn`). A click anywhere else or
-   Escape lets it fall back; give it a `key` so it also falls back when the page shows something else.
-   From the keyboard one press turns the page: focus already lifts the corner a hair and writes what
-   it does beside it, so a second press would only hide the action. */
-export function PageCorner({ label, hint, liftedNote, onTurn, busy }: {
+   A small dog-ear at rest. Hovering lifts it (the paper's back curling over a soft shadow) and moving
+   away lets it fall back; keyboard focus lifts it the same way. One click, tap or Enter/Space turns
+   the page (`onTurn`). A touch has no hover, so a tap plays the lift quickly first and the turn still
+   reads as a page being turned. With reduced motion there is no peel; a click still turns. */
+export function PageCorner({ label, hint, onTurn, busy }: {
   /** accessible name, e.g. "翻到这一页 · 外婆家的走廊" */
   label: string;
   /** a red-ink note shown beside the corner while it has keyboard focus */
   hint: string;
-  /** read out when a tap or click has lifted it (touch screen readers send real taps) */
-  liftedNote: string;
   onTurn: () => void;
   busy?: boolean;
 }) {
+  // held up by a tap, for a moment before the turn (hover and focus lift it in CSS)
   const [lifted, setLifted] = useState(false);
-  const el = useRef<HTMLButtonElement>(null);
+  const touch = useRef(false);
+  const timer = useRef<number | null>(null);
+  useEffect(() => () => { if (timer.current !== null) clearTimeout(timer.current); }, []);
 
-  useEffect(() => {
-    if (!lifted) return;
-    const away = (event: PointerEvent) => { if (!el.current?.contains(event.target as Node)) setLifted(false); };
-    const key = (event: KeyboardEvent) => { if (event.key === "Escape") setLifted(false); };
-    addEventListener("pointerdown", away, true);
-    addEventListener("keydown", key);
-    return () => { removeEventListener("pointerdown", away, true); removeEventListener("keydown", key); };
-  }, [lifted]);
+  const turn = () => {
+    // the turning sheet is a snapshot taken in onTurn: raise the corner in the DOM first,
+    // so the sheet lifts from the raised corner (hover alone isn't copied into a snapshot)
+    flushSync(() => setLifted(true));
+    onTurn();
+    setLifted(false);
+  };
 
   return (
-    <>
     <button
-      ref={el}
       type="button"
       className={`nb-corner${lifted ? " nb-lifted" : ""}`}
       aria-label={label}
       aria-disabled={busy || undefined}
-      // tabbing away lets a lifted corner fall back, as a click elsewhere does
-      onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setLifted(false); }}
+      onPointerDown={(event) => { touch.current = event.pointerType !== "mouse"; }}
       onClick={(event) => {
-        if (busy) return;
-        // a keyboard press (no pointer, detail 0) or a click on the lifted corner turns the page
-        // (the turning sheet is a snapshot taken in onTurn, so it still lifts from the raised corner)
-        if (event.detail === 0 || lifted) { onTurn(); setLifted(false); return; }
-        tap();
+        if (busy || timer.current !== null) return;
+        const quick = touch.current && event.detail > 0 && !matchMedia("(prefers-reduced-motion: reduce)").matches;
+        if (!quick) { turn(); return; }
         setLifted(true);
+        timer.current = window.setTimeout(() => { timer.current = null; turn(); }, 220);
       }}
     >
       <span className="nb-curl" aria-hidden />
       <span className="nb-corner-hint" aria-hidden>{hint}</span>
     </button>
-    <span className="nb-sr-only" aria-live="polite">{lifted ? liftedNote : ""}</span>
-    </>
   );
 }
