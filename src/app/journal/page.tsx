@@ -10,6 +10,7 @@ import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import type { DreamAgentMemory, DreamAgentNextAction, DreamAgentStage } from "@/lib/dreamFollowUpAgent";
 import type { DreamAgentResponseMeta } from "@/lib/dreamAgentTelemetry";
+import { openStripe, useBillingReturn } from "@/lib/billingClient";
 import { getRealityQuestion } from "@/lib/dreamQuestions";
 import { buildDreamImagePrompt } from "@/lib/imagePrompt";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -155,6 +156,7 @@ type ActivePanel = "none" | "image";
 type BillingStatus = {
   plan: "free" | "plus";
   isUnlimited?: boolean;
+  checkoutAvailable?: boolean;
   remaining: { dreamEntries: number; analysis: number; imageGenerations: number };
 };
 
@@ -331,13 +333,16 @@ export default function JournalPage() {
   }, []);
 
   async function refreshBillingStatus() {
-    if (!session?.user) return;
+    if (!session?.user) return null;
     try {
       const res = await fetch("/api/billing/status", { cache: "no-store" });
-      if (!res.ok) return;
-      setBillingStatus((await res.json()) as BillingStatus);
+      if (!res.ok) return null;
+      const status = (await res.json()) as BillingStatus;
+      setBillingStatus(status);
+      return status;
     } catch {
       // Billing status is useful guidance, but it should not block dream capture.
+      return null;
     }
   }
 
@@ -345,19 +350,9 @@ export default function JournalPage() {
     setIsCheckoutLoading(true);
     setBillingMessage("");
     try {
-      const res = await fetch("/api/billing/checkout", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ lang, currency: lang === "zh" ? "cny" : "usd" }),
-      });
-      const data = (await res.json()) as { url?: string; error?: string };
-      if (!res.ok || !data.url) {
-        throw new Error(getApiErrorMessage(data.error, lang, B.checkoutError));
-      }
-      window.location.href = data.url;
+      await openStripe("checkout", lang, "/journal", B.checkoutError);
     } catch (error) {
       setBillingMessage(error instanceof Error ? error.message : B.checkoutError);
-    } finally {
       setIsCheckoutLoading(false);
     }
   }
@@ -367,13 +362,19 @@ export default function JournalPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session?.user, lang]);
 
+  useBillingReturn({
+    pending: () => setBillingMessage(B.upgradePending),
+    active: () => setBillingMessage(B.upgraded),
+    cancelled: () => setBillingMessage(B.checkoutCancelled),
+    isPlus: async () => (await refreshBillingStatus())?.plan === "plus",
+  });
+
+  // billing notes are a slip on the desk, not a permanent fixture
   useEffect(() => {
-    if (typeof window !== "undefined" && new URLSearchParams(window.location.search).get("upgraded") === "1") {
-      setBillingMessage(B.upgraded);
-      void refreshBillingStatus();
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lang]);
+    if (!billingMessage) return;
+    const timer = setTimeout(() => setBillingMessage(""), 7000);
+    return () => clearTimeout(timer);
+  }, [billingMessage]);
 
   // Seed or update welcome message when lang changes
   useEffect(() => {
@@ -1668,6 +1669,8 @@ export default function JournalPage() {
                   <span className={css.billing}>
                     {billingStatus.plan === "plus" ? (
                       <span className="nb-mono" title={quota}>PLUS</span>
+                    ) : billingStatus.checkoutAvailable === false ? (
+                      <span className="nb-mono" title={quota}>{B.comingSoon}</span>
                     ) : (
                       <button type="button" className={css.upgrade} onClick={() => void openCheckout()} disabled={isCheckoutLoading} title={quota}>
                         {isCheckoutLoading ? "…" : "Free → Plus"}

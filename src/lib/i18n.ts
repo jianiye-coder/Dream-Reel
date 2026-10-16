@@ -287,6 +287,13 @@ const zh = {
     imagesLeft: "还剩 {count} 次图片显影",
     checkoutError: "暂时无法打开付款页面，请稍后再试。",
     portalError: "暂时无法打开订阅管理页面。",
+    opening: "正在打开…",
+    comingSoon: "Plus 即将开放",
+    comingSoonNote: "付款通道还在准备中。现在可以先免费使用全部功能。",
+    upgradePending: "付款已完成，Plus 正在开启，稍等片刻就好。",
+    checkoutCancelled: "没有扣款。想升级的时候，随时回来。",
+    pastDue: "上一次扣款没有成功，可以在“管理订阅”里更新付款方式。",
+    endsOn: "Plus 会保留到 {date}，之后回到免费版。",
   },
 
   legal: {
@@ -1013,6 +1020,13 @@ const en: typeof zh = {
     imagesLeft: "{count} image developments left",
     checkoutError: "Unable to open checkout right now. Please try again.",
     portalError: "Unable to open subscription management right now.",
+    opening: "Opening…",
+    comingSoon: "Plus is coming soon",
+    comingSoonNote: "Payments aren’t open yet. Everything in Free works in the meantime.",
+    upgradePending: "Payment received. Plus is switching on; it takes a moment.",
+    checkoutCancelled: "Nothing was charged. Come back whenever you like.",
+    pastDue: "The last payment didn’t go through. You can update your card under Manage Subscription.",
+    endsOn: "Plus stays on until {date}, then you’re back on Free.",
   },
 
   legal: {

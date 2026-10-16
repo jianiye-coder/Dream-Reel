@@ -1,0 +1,4 @@
+/* Plus while payments aren't switched on: a pencilled note where the button will be */
+:global(.nb-root) .soon { margin-top: 36px; display: grid; gap: 6px; max-width: 22em; }
+:global(.nb-root) .soon b { font-family: var(--mono); font-weight: 500; font-size: 11.5px; letter-spacing: .14em; color: var(--ink-soft); }
+:global(.nb-root) .soon span { font-family: var(--hand); font-size: 16px; color: var(--ink-faint); line-height: 1.6; }
