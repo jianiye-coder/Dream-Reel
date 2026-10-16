@@ -29,7 +29,7 @@ export function DreamConversationControls({ goal, onGoalChange, disabled, lang, 
   return (
     <section className={css.controls} aria-label={zh ? "对话方向" : "Conversation focus"}>
       <fieldset className={css.goals} disabled={disabled}>
-        <legend className="sr-only">{zh ? "对话方向" : "Conversation focus"}</legend>
+        <legend className="nb-sr-only">{zh ? "对话方向" : "Conversation focus"}</legend>
         {(["recall", "support"] as const).map((value) => (
           <label key={value} className={goal === value ? `${css.goal} ${css.selected}` : css.goal}>
             <input type="radio" name="conversationGoal" value={value} checked={goal === value} onChange={() => onGoalChange(value)} />

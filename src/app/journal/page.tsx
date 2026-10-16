@@ -1217,8 +1217,8 @@ export default function JournalPage() {
   );
 
   const slip = (children: React.ReactNode, extra?: string, props?: React.HTMLAttributes<HTMLDivElement>) => (
-    <div className={`${css.slip}${extra ? ` ${extra}` : ""}`} {...props}>
-      <span className={css.slipLabel} aria-hidden>{N.aiLabel}</span>
+    <div className={`nb-slip ${css.slip}${extra ? ` ${extra}` : ""}`} {...props}>
+      <span className="nb-slip-label" aria-hidden>{N.aiLabel}</span>
       {children}
     </div>
   );
@@ -1250,7 +1250,7 @@ export default function JournalPage() {
       <div className={css.promptFoot}>
         <button
           type="button"
-          className={css.redAct}
+          className={`nb-red-act ${css.redAct}`}
           onClick={() => void generateImage()}
           disabled={isGeneratingImage || !imagePrompt.trim()}
         >
@@ -1411,11 +1411,11 @@ export default function JournalPage() {
         {visibleMessages.map((msg) => msg.role === "user" ? (
           <p key={msg.id} className={`nb-hand ${css.said}`}>{msg.content}</p>
         ) : (
-          <div key={msg.id} className={`${css.slip}${msg.isError ? ` ${css.slipError}` : ""}`}>
-            <span className={css.slipLabel} aria-hidden>{N.aiLabel}</span>
+          <div key={msg.id} className={`nb-slip ${css.slip}${msg.isError ? ` ${css.slipError}` : ""}`}>
+            <span className="nb-slip-label" aria-hidden>{N.aiLabel}</span>
             <p className={css.slipText}>{msg.content}</p>
             {msg.isError && (
-              <button type="button" className={css.redAct} onClick={() => editAndRetry(msg)}>{N.editRetry}</button>
+              <button type="button" className={`nb-red-act ${css.redAct}`} onClick={() => editAndRetry(msg)}>{N.editRetry}</button>
             )}
             {msg.meta?.feedbackToken && !msg.isError && (
               <div className={css.feedback} role="group" aria-label={N.rate}>
@@ -1441,15 +1441,15 @@ export default function JournalPage() {
         {isTyping && slip(<p className={css.slipText}>{inkDots}</p>, css.typing, { role: "status", "aria-label": N.thinking })}
 
         {agentReadyToAnalyze && (
-          <div className={`${css.slip} ${css.decision}`}>
-            <span className={css.slipLabel} aria-hidden>{N.aiLabel}</span>
+          <div className={`nb-slip ${css.slip} ${css.decision}`}>
+            <span className="nb-slip-label" aria-hidden>{N.aiLabel}</span>
             <p className={css.slipText}>{agentDecisionCopy}</p>
             <div className={css.redActs}>
-              <button type="button" className={css.redAct} onClick={() => void analyzeDream()} disabled={isAnalyzing}>{organizeDreamLabel}</button>
-              <button type="button" className={css.redAct} onClick={() => void generateImage()} disabled={isGeneratingImage || !hasContent} aria-busy={isGeneratingImage}>
+              <button type="button" className={`nb-red-act ${css.redAct}`} onClick={() => void analyzeDream()} disabled={isAnalyzing}>{organizeDreamLabel}</button>
+              <button type="button" className={`nb-red-act ${css.redAct}`} onClick={() => void generateImage()} disabled={isGeneratingImage || !hasContent} aria-busy={isGeneratingImage}>
                 {isGeneratingImage ? J.image.genLoading : J.quickFlow.generateImage}
               </button>
-              {panel !== "image" && <button type="button" className={css.redAct} onClick={openImagePrompt}>{N.editPrompt}</button>}
+              {panel !== "image" && <button type="button" className={`nb-red-act ${css.redAct}`} onClick={openImagePrompt}>{N.editPrompt}</button>}
             </div>
             {!!latestAgentDecision.memory?.observedSignals?.length && (
               <p className={css.signals}>{latestAgentDecision.memory.observedSignals.slice(0, 3).join(" · ")}</p>
@@ -1462,7 +1462,7 @@ export default function JournalPage() {
             <span className="nb-kicker">{N.suggestions}</span>
             <div className={css.redActs}>
               {latestQuestions.map((q, i) => (
-                <button type="button" key={i} className={css.redAct} onClick={() => appendQuestion(q)}>{q}</button>
+                <button type="button" key={i} className={`nb-red-act ${css.redAct}`} onClick={() => appendQuestion(q)}>{q}</button>
               ))}
             </div>
           </div>
@@ -1608,7 +1608,7 @@ export default function JournalPage() {
                         className={sleepQuality != null && n <= sleepQuality ? css.on : undefined}
                         aria-pressed={sleepQuality === n}
                         title={`${n} / 5`}
-                      ><span className="sr-only">{n}</span></button>
+                      ><span className="nb-sr-only">{n}</span></button>
                     ))}
                   </div>
                 </fieldset>

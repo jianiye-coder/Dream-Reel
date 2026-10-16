@@ -399,30 +399,9 @@ function useModalFocus(isOpen: boolean, onClose: () => void, initialFocusRef?: R
   return { dialogRef, onKeyDown };
 }
 
-/* Tally marks the way you'd count on paper: 正 strokes in Chinese, gate-fives in English. */
-function Tally({ count, lang, label }: { count: number; lang: Lang; label: string }) {
-  if (count > 20) {
-    return <span className={s.tally} role="img" aria-label={label}><span className={s.tallyNum} aria-hidden>{count}</span></span>;
-  }
-  if (lang === "zh") {
-    const strokes = "一丅下止正";
-    const text = "正".repeat(Math.floor(count / 5)) + (count % 5 ? strokes[(count % 5) - 1] : "");
-    return <span className={s.tally} role="img" aria-label={label}><span aria-hidden>{text}</span></span>;
-  }
-  const groups: number[] = [];
-  for (let left = count; left > 0; left -= 5) groups.push(Math.min(5, left));
-  return (
-    <span className={s.tally} role="img" aria-label={label}>
-      {groups.map((n, g) => (
-        <svg key={g} viewBox="0 0 24 16" width="22" height="15" aria-hidden>
-          {Array.from({ length: Math.min(n, 4) }, (_, i) => (
-            <path key={i} d={`M${4 + i * 5} ${2 + (i % 2) * 0.6} L${4.4 + i * 5} 14.2`} />
-          ))}
-          {n === 5 ? <path d="M1.5 11.5 L22.5 4" /> : null}
-        </svg>
-      ))}
-    </span>
-  );
+/* How often a name or symbol turns up: a numeral in red ink, read out in full ("出现 3 次" / "appears 3 times"). */
+function Count({ count, label }: { count: number; label: string }) {
+  return <span className={s.count}><span aria-hidden>{count}</span><span className="nb-sr-only">{label}</span></span>;
 }
 
 function TagChipInput({
@@ -1150,7 +1129,7 @@ function DreamEditorModal({
             />
             <div className={s.metaRow}>
               <label className={s.dateField}>
-                <span className={s.srOnly}>{M.date}</span>
+                <span className="nb-sr-only">{M.date}</span>
                 <input
                   type="date"
                   name="dreamDate"
@@ -1165,7 +1144,7 @@ function DreamEditorModal({
             </div>
 
             <label className={s.textField}>
-              <span className={s.srOnly}>{M.dreamContent}</span>
+              <span className="nb-sr-only">{M.dreamContent}</span>
               <textarea
                 name="dreamText"
                 autoComplete="off"
@@ -1179,15 +1158,15 @@ function DreamEditorModal({
               type="button"
               onClick={analyzeAndAsk}
               disabled={isAnalyzing || !form.rawText.trim() || saving}
-              className={s.redAct}
+              className={`nb-red-act ${s.redAct}`}
             >
               {isAnalyzing ? M.analyzingBtn : M.analyzeBtn}
             </button>
 
             {followUpQuestions.length > 0 && (
-              <div className={s.slip}>
+              <div className={`nb-slip ${s.slip}`}>
                 <div className={s.slipHead}>
-                  <span className={s.slipLabel}>{M.slipLabel} · {M.followUpTitle}</span>
+                  <span className={`nb-slip-label ${s.slipLabel}`}>{M.slipLabel} · {M.followUpTitle}</span>
                   <button type="button" onClick={() => setFollowUpQuestions([])} className={s.quiet}>
                     {M.followUpClose}
                   </button>
@@ -1208,7 +1187,7 @@ function DreamEditorModal({
                         className="nb-hand"
                       />
                       {followUpAnswers[i]?.trim() && (
-                        <button type="button" onClick={() => appendAnswer(i)} className={s.redAct}>
+                        <button type="button" onClick={() => appendAnswer(i)} className={`nb-red-act ${s.redAct}`}>
                           {M.appendBtn}
                         </button>
                       )}
@@ -1219,7 +1198,7 @@ function DreamEditorModal({
             )}
 
             <fieldset className={s.sleepGrid}>
-              <legend className={s.srOnly}>{M.sleepTitle}</legend>
+              <legend className="nb-sr-only">{M.sleepTitle}</legend>
               <label>
                 <span>{M.sleepStart}</span>
                 <input type="time" name="sleepStart" autoComplete="off" value={form.sleepStart} onChange={(event) => updateForm({ sleepStart: event.target.value })} />
@@ -1319,7 +1298,7 @@ function DreamEditorModal({
                   </button>
                 ) : null}
                 {downloadError && <p role="alert" className={s.err}>{downloadError}</p>}
-                <button type="button" onClick={generateImage} disabled={generatingImage} className={s.redAct}>
+                <button type="button" onClick={generateImage} disabled={generatingImage} className={`nb-red-act ${s.redAct}`}>
                   {generatingImage ? M.generating : form.imageUrl ? M.replaceImage : M.addImage}
                 </button>
                 <details className={s.promptBox}>
@@ -1343,8 +1322,8 @@ function DreamEditorModal({
               </div>
             </div>
 
-            <label className={`${s.slip} ${s.insightSlip}`}>
-              <span className={s.slipLabel}>{M.slipLabel} · {M.insight}</span>
+            <label className={`nb-slip ${s.slip} ${s.insightSlip}`}>
+              <span className={`nb-slip-label ${s.slipLabel}`}>{M.slipLabel} · {M.insight}</span>
               <textarea
                 name="sleepInsight"
                 autoComplete="off"
@@ -2048,7 +2027,7 @@ export default function DreamGrid({
                 if (e.key === "Escape") setEditingTag(null);
               }}
             />
-            <button type="button" className={s.redAct} onClick={() => void handleRenameTag(item.kind, item.label, editingTag.draft)} disabled={tagBusy}>
+            <button type="button" className={`nb-red-act ${s.redAct}`} onClick={() => void handleRenameTag(item.kind, item.label, editingTag.draft)} disabled={tagBusy}>
               {tagBusy ? N.saving : N.save}
             </button>
             <button type="button" className={s.quiet} onClick={() => setEditingTag(null)}>{N.cancel}</button>
@@ -2059,7 +2038,7 @@ export default function DreamGrid({
               {item.label}
               {rel || genderText ? <small>{[rel, genderText].filter(Boolean).join(" · ")}</small> : null}
             </button>
-            <Tally count={item.count} lang={lang} label={timesLabel(item.count)} />
+            <Count count={item.count} label={timesLabel(item.count)} />
             <div className={s.menuWrap} data-tag-menu>
               <button
                 type="button"
@@ -2137,7 +2116,7 @@ export default function DreamGrid({
               ))}
             </div>
             <div className={s.inlineActions}>
-              <button type="button" className={s.redAct} onClick={() => savePersonRelationship(personKey, relDraft)}>{N.done}</button>
+              <button type="button" className={`nb-red-act ${s.redAct}`} onClick={() => savePersonRelationship(personKey, relDraft)}>{N.done}</button>
               <button type="button" className={s.quiet} onClick={() => setEditingRelKey(null)}>{N.cancel}</button>
             </div>
           </div>
@@ -2186,7 +2165,7 @@ export default function DreamGrid({
               })}
             </ul>
             <div className={s.inlineActions}>
-              <button type="button" className={s.redAct} onClick={() => void handleAddTag()} disabled={tagBusy || addingTag.selectedIds.size === 0}>
+              <button type="button" className={`nb-red-act ${s.redAct}`} onClick={() => void handleAddTag()} disabled={tagBusy || addingTag.selectedIds.size === 0}>
                 {tagBusy ? N.saving : fill(N.addTo, { count: addingTag.selectedIds.size })}
               </button>
               <button type="button" className={s.quiet} onClick={() => setAddingTag(null)}>{N.cancel}</button>
@@ -2216,7 +2195,7 @@ export default function DreamGrid({
         {title ? <p className={s.bigTitle} aria-hidden>{title}</p> : null}
         {addPanel(kind)}
         {items.length > 0
-          ? <ul className={s.tallyList}>{items.map((item) => keywordRow(item, items))}</ul>
+          ? <ul className={s.kwList}>{items.map((item) => keywordRow(item, items))}</ul>
           : <p className={s.emptyNote}>{empty}</p>}
       </section>
     );
@@ -2255,7 +2234,7 @@ export default function DreamGrid({
 
           {/* ═════════ left-hand page ═════════ */}
           <BookPage side="l" folio={folios[0]} padClassName={s.pad} {...pageProps("l")}>
-            <h1 className={s.srOnly}>{A.title}</h1>
+            <h1 className="nb-sr-only">{A.title}</h1>
             {dataNotice}
 
             {activeTab === "calendar" && (
@@ -2423,12 +2402,12 @@ export default function DreamGrid({
                     <section className={`${s.kwSection} ${s.symbolsSection}`}>
                       <div className={s.secHead}><h2 className="nb-kicker">{N.symbolsKicker}</h2></div>
                       {symbolCounts.length > 0 ? (
-                        <ul className={s.tallyList}>
+                        <ul className={s.kwList}>
                           {symbolCounts.slice(0, 6).map((item) => (
                             <li key={item.item} className={s.row}>
                               <div className={s.rowMain}>
                                 <span className={s.rowName}>{item.item}</span>
-                                <Tally count={item.count} lang={lang} label={timesLabel(item.count)} />
+                                <Count count={item.count} label={timesLabel(item.count)} />
                               </div>
                             </li>
                           ))}
@@ -2470,8 +2449,8 @@ export default function DreamGrid({
                 {!recap.complete ? (
                   <p className={s.recapScope}>{fill(N.recapPartial, { count: localEntries.length })}</p>
                 ) : null}
-                <div className={`${s.slip} ${s.recapSlip}`}>
-                  <span className={s.slipLabel}>{T.modal.slipLabel}</span>
+                <div className={`nb-slip ${s.slip} ${s.recapSlip}`}>
+                  <span className={`nb-slip-label ${s.slipLabel}`}>{T.modal.slipLabel}</span>
                   {recap.slip.map((line) => <p key={line}>{line}</p>)}
                 </div>
                 {exportError}
