@@ -266,11 +266,14 @@ databaseDescribe("Stripe webhook → Plus in PostgreSQL", () => {
     globalThis.dreamPool = wide;
     // the first read is slow and sees the older state; the second sees the newer one
     let reads = 0;
+    let firstReadStarted!: () => void;
+    const started = new Promise<void>((resolve) => { firstReadStarted = resolve; });
     const base = fetchMock.getMockImplementation()!;
     fetchMock.mockImplementation(async (input, init) => {
       if (!String(input).includes("/v1/subscriptions/")) return base(input, init);
       reads += 1;
       if (reads === 1) {
+        firstReadStarted();
         await new Promise((resolve) => setTimeout(resolve, 250));
         return new Response(JSON.stringify(subscription("past_due")), { status: 200 });
       }
@@ -279,7 +282,8 @@ databaseDescribe("Stripe webhook → Plus in PostgreSQL", () => {
     try {
       await Promise.all([
         deliver(event("customer.subscription.updated", subscription("past_due"))),
-        new Promise((resolve) => setTimeout(resolve, 50)).then(() => deliver(event("customer.subscription.updated", subscription("active")))),
+        // the second event arrives while the first handler is still reading Stripe
+        started.then(() => deliver(event("customer.subscription.updated", subscription("active")))),
       ]);
     } finally {
       fetchMock.mockImplementation(base);
