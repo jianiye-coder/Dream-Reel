@@ -31,7 +31,7 @@ Voice input uses the browser's `SpeechRecognition` / `webkitSpeechRecognition` A
 | Layer | Implementation |
 | --- | --- |
 | Application | Next.js 16 App Router, React 19, TypeScript |
-| Styling | Tailwind CSS 3, custom CSS design system |
+| Styling | Plain CSS notebook design system (`notebook.css` + per-page CSS modules, see [DESIGN.md](DESIGN.md)); Tailwind CSS 3 for the base reset |
 | Server | Next.js Route Handlers on the Node.js runtime; Zod validation |
 | Database | PostgreSQL through `pg`, parameterized SQL, no ORM |
 | Authentication | Auth.js v5 beta, PostgreSQL adapter, JWT sessions, bcrypt password hashes |
@@ -135,7 +135,7 @@ src/
     account/              Profile and account management
     pricing/              Subscription plans
     api/                  Authenticated data/AI/billing routes and health check
-    globals.css           Shared visual system
+    notebook.css          Notebook design system (see DESIGN.md); globals.css holds only the base outside it
   auth.ts                 Credentials authentication and JWT sessions
   lib/
     db.ts                 Shared connection pool, versioned schema initialization
