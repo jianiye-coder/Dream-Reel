@@ -10,6 +10,8 @@
 .ar button:disabled { cursor: default; opacity: .5; }
 .ar .inlineEdit input:focus-visible, .ar .field > input:focus-visible, .ar .sleepGrid input:focus-visible,
 .ar .titleInput:focus-visible, .ar .questions textarea:focus-visible { outline: none !important; box-shadow: 0 2px 0 var(--red-ink) !important; border-radius: 0; }
+/* the page corner shows focus by lifting a hair and writing what it does beside it (notebook.css) */
+.ar :global(.nb-corner):focus-visible { outline: none !important; }
 /* chips: the underline belongs to the whole row, so the row shows the focus */
 .ar .chips input:focus-visible { outline: none !important; }
 .ar .chips:focus-within { box-shadow: 0 2px 0 var(--red-ink); }
@@ -119,6 +121,10 @@
 .ar .pad > .excerpt[data-fade-bottom] { --fade-bottom: 44px; }
 /* focused to scroll with the keys: a red margin line beside the text, like the writing areas */
 .ar .pad > .excerpt:focus-visible { outline: none !important; box-shadow: inset 2px 0 0 var(--red-ink) !important; border-radius: 0; }
+/* the night's foot keeps the bottom corner clear: that corner turns the page (PageCorner) */
+.ar .footClear { justify-content: flex-start; }
+/* the page turning over to open a dream: beneath it, a fresh sheet */
+.ar .turningAway :global(.nb-pad), .ar .turningAway :global(.nb-corner) { opacity: 0; pointer-events: none; }
 .ar .clues { display: flex; flex-wrap: wrap; gap: 4px 20px; margin-top: 14px; font-size: 15.5px; }
 .ar .dayPhoto { width: 184px; margin: 22px 6px 0 auto; transform: rotate(2.6deg); padding: 8px 8px 30px; }
 .ar .dayPhoto img { height: auto; aspect-ratio: 4 / 3; }

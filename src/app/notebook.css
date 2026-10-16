@@ -234,15 +234,44 @@ html[lang="en"] .nb-root {
 .nb-folio { position: absolute; bottom: 15px; font-family: var(--latin); font-style: italic; font-size: 13px; color: var(--ink-faint); z-index: 3; }
 .nb-page-l .nb-folio { left: 52px; } .nb-page-r .nb-folio { right: 50px; }
 
-/* corner lift on the right page — an invitation to turn */
+/* the right page's bottom corner, peeled up: where it was, the next sheet shows, shaded by the flap;
+   the flap (the paper's back) curls over the page along the fold, its edges and tip a little rounded,
+   with a soft shadow beneath. `curl` on a BookPage shows it on hover, an invitation to turn;
+   .nb-corner makes the corner the control that turns the page (PageCorner). */
 .nb-curl {
-  position: absolute; right: 0; bottom: 0; width: 0; height: 0; z-index: 6;
-  background: linear-gradient(315deg, transparent 50%, #e9dfcc 50%, #fbf7ef 64%, #e2d6c1 100%);
-  box-shadow: -3px -3px 8px rgba(60, 40, 20, .16);
-  border-top-left-radius: 5px;
-  transition: width .35s cubic-bezier(.2, .7, .2, 1), height .35s cubic-bezier(.2, .7, .2, 1);
+  position: absolute; right: 0; bottom: 0; width: 0; height: 0; z-index: 6; pointer-events: none;
+  filter: drop-shadow(-2px -2px 3px rgba(60, 40, 20, .2));
+  transition: width .25s cubic-bezier(.3, .7, .3, 1), height .25s cubic-bezier(.3, .7, .3, 1), filter .25s ease;
 }
-.nb-page-r:hover .nb-curl { width: 40px; height: 40px; }
+.nb-curl::before, .nb-curl::after { content: ""; position: absolute; inset: 0; }
+/* the next sheet, in the corner the flap has left; darker toward the fold, under the flap */
+.nb-curl::before {
+  clip-path: polygon(100% 0, 100% 100%, 0 100%);
+  background: linear-gradient(to top left, #e8dfcd 0%, #e0d6c3 30%, #d3c7b0 44%, #bfb197 50%);
+}
+.nb-curl::after {
+  background: linear-gradient(to top left, #cbbea6 50%, #e7dece 53.5%, #f8f3e9 64%, #fbf8f1 78%, #efe7d8 94%, #e2d8c5 100%);
+  -webkit-mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100' preserveAspectRatio='none'><path d='M100 0 C 66 1.5, 31 2.5, 12 6.5 Q 5.5 8, 6.5 14 C 2.8 33, 1.6 67, 0 100 Z'/></svg>") 0 0 / 100% 100% no-repeat;
+  mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100' preserveAspectRatio='none'><path d='M100 0 C 66 1.5, 31 2.5, 12 6.5 Q 5.5 8, 6.5 14 C 2.8 33, 1.6 67, 0 100 Z'/></svg>") 0 0 / 100% 100% no-repeat;
+}
+.nb-page-r:hover > .nb-curl { width: 40px; height: 40px; }
+
+/* the corner as the page's control: always a small dog-ear; a hair higher on hover or focus;
+   lifted clearly after the first click, when a second click turns the page */
+.nb-root .nb-corner { position: absolute; right: 0; bottom: 0; z-index: 7; width: 48px; height: 48px; cursor: pointer;
+  -webkit-tap-highlight-color: transparent; transition: width .25s cubic-bezier(.3, .7, .3, 1), height .25s cubic-bezier(.3, .7, .3, 1); }
+.nb-root .nb-corner:focus-visible { outline: none; }
+.nb-corner .nb-curl { width: 20px; height: 20px; }
+@media (hover: hover) { .nb-corner:hover .nb-curl { width: 28px; height: 28px; } }
+.nb-corner:focus-visible .nb-curl { width: 28px; height: 28px; }
+.nb-root .nb-corner.nb-lifted { width: 100px; height: 100px; }
+.nb-corner.nb-lifted .nb-curl { width: 94px; height: 94px; filter: drop-shadow(-5px -5px 7px rgba(60, 40, 20, .26)); }
+/* keyboard focus says what the corner does, in red ink just above it */
+.nb-corner-hint { position: absolute; right: 10px; bottom: calc(100% + 2px); white-space: nowrap; pointer-events: none;
+  font-family: var(--hand); font-size: 14px; color: var(--red-ink); opacity: 0; transition: opacity .2s; }
+.nb-corner:focus-visible .nb-corner-hint { opacity: 1; }
+.nb-corner.nb-lifted .nb-corner-hint { opacity: 0; }
+@media (prefers-reduced-motion: reduce) { .nb-curl, .nb-root .nb-corner { transition: none; } }
 
 /* ribbon marker: tucked into a later page, only its tail hangs out below the book */
 .nb-ribbon {
@@ -408,7 +437,12 @@ html[lang="en"] .nb-root {
     background: none; opacity: 1; mix-blend-mode: normal; letter-spacing: 0; padding-top: 8px; }
   .nb-pad, .nb-page-l .nb-pad, .nb-page-r .nb-pad { position: relative; padding: 30px 26px 44px; }
   .nb-page-l .nb-pad.nb-indent { padding-left: 62px; }
-  .nb-folio, .nb-curl, .nb-margin-note { display: none !important; }
+  .nb-folio, .nb-page > .nb-curl, .nb-margin-note { display: none !important; }
+  /* a corner that turns the page stays: a small folded corner at the bottom of that sheet */
+  .nb-root .nb-corner { width: 44px; height: 44px; }
+  .nb-corner .nb-curl { width: 24px; height: 24px; }
+  .nb-root .nb-corner.nb-lifted { width: 76px; height: 76px; }
+  .nb-corner.nb-lifted .nb-curl { width: 68px; height: 68px; }
   .nb-ruled { --rule-offset: 82px;
     background-image:
       linear-gradient(90deg, transparent 44px, var(--margin) 44px 45px, transparent 45px),

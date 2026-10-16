@@ -15,6 +15,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { formatDateTime, formatMonthLabel, type Lang } from "@/lib/i18n";
 import { getApiErrorMessage } from "@/lib/apiErrors";
 import { Book, BookPage } from "@/components/notebook/Book";
+import { PageCorner } from "@/components/notebook/PageCorner";
 import { PhotoLightbox } from "@/components/notebook/PhotoLightbox";
 import { TurnLink } from "@/components/notebook/TurnLink";
 import { edgeFade } from "@/lib/edgeFade";
@@ -1436,6 +1437,8 @@ export default function DreamGrid({
   const openSeq = useRef(0);
   const openerRef = useRef<HTMLElement | null>(null);
   const turning = useRef(false);
+  // while the right-hand page turns over to open a dream, the page beneath reads as a fresh sheet
+  const [turningAway, setTurningAway] = useState(false);
   const [readyId, setReadyId] = useState<number | null>(null);
   const [openError, setOpenError] = useState("");
   const [notice, setNotice] = useState("");
@@ -1693,9 +1696,10 @@ export default function DreamGrid({
     if (!res.ok) throw new Error("Update failed");
   }
 
-  async function openEntry(entry: DreamEntry, retry = false) {
+  /** Opens the editor. "turned": the page already turned over (and made its sound) on the way here. */
+  async function openEntry(entry: DreamEntry, mode: "open" | "retry" | "turned" = "open") {
     const seq = ++openSeq.current;
-    if (!retry) {
+    if (mode === "open") {
       // remember who opened it before the button disables itself while loading
       openerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
       unlock();
@@ -1895,6 +1899,30 @@ export default function DreamGrid({
     flipPage(book, { dur: 720, onStart: () => onTabChange(tab), onEnd: () => { turning.current = false; } });
   }
 
+  // ── turning to a dream's own spread: the right-hand page turns over on desktop, then the editor opens ──
+  function turnToEntry(entry: DreamEntry) {
+    if (turning.current) return;
+    const book = bookRef.current;
+    if (!book || matchMedia(`${PHONE}, (prefers-reduced-motion: reduce)`).matches) { void openEntry(entry); return; }
+    openerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    unlock();
+    turning.current = true;
+    prefetchFull(entry); // fetched while the sheet is in the air, so the spread opens ready
+    flipPage(book, {
+      dur: 760,
+      onStart: () => setTurningAway(true),
+      onEnd: () => { turning.current = false; void openEntry(entry, "turned"); setTurningAway(false); },
+    });
+  }
+
+  function prefetchFull(entry: DreamEntry) {
+    if (fullCopies.current.has(entry.id)) return;
+    fetch(`/api/dreams?id=${entry.id}`, { cache: "no-store" })
+      .then((response) => (response.ok ? response.json() as Promise<{ entry?: DreamEntry }> : null))
+      .then((payload) => { if (payload?.entry && !fullCopies.current.has(entry.id)) rememberFull(payload.entry); })
+      .catch(() => {}); // openEntry fetches it again
+  }
+
   function onTabKeyDown(event: React.KeyboardEvent<HTMLButtonElement>, tab: ArchiveTab) {
     const order: ArchiveTab[] = ["calendar", "tags", "recent"];
     const at = order.indexOf(tab);
@@ -1914,7 +1942,7 @@ export default function DreamGrid({
     const lead = cell.entries[0];
     if (!lead) return;
     // a second tap on the open night turns to its page
-    if (cell.key === dayKey) { void openEntry(shownEntry ?? lead); return; }
+    if (cell.key === dayKey) { turnToEntry(shownEntry ?? lead); return; }
     tap();
     setSelectedDayKey(cell.key);
     setSelectedDayEntryId(null);
@@ -2330,7 +2358,23 @@ export default function DreamGrid({
           </BookPage>
 
           {/* ═════════ right-hand page ═════════ */}
-          <BookPage side="r" folio={folios[1]} curl padClassName={`${s.pad} ${s.padScroll}`} {...pageProps("r")}>
+          <BookPage
+            side="r"
+            folio={folios[1]}
+            curl
+            className={turningAway ? s.turningAway : undefined}
+            padClassName={`${s.pad} ${s.padScroll}`}
+            {...pageProps("r")}
+            corner={activeTab === "calendar" && shownEntry ? (
+              <PageCorner
+                key={shownEntry.id}
+                label={`${N.openPage} · ${dreamDisplayTitle(shownEntry)}`}
+                hint={N.openPage}
+                busy={openingEntryId === shownEntry.id}
+                onTurn={() => turnToEntry(shownEntry)}
+              />
+            ) : null}
+          >
             {activeTab === "calendar" && (
               shownEntry ? (
                 <>
@@ -2373,10 +2417,8 @@ export default function DreamGrid({
                     </figure>
                   ) : null}
                   {exportError}
-                  <div className={s.pageFoot}>
-                    <button type="button" className="nb-act" onClick={() => void openEntry(shownEntry)} disabled={openingEntryId === shownEntry.id}>
-                      {openingEntryId === shownEntry.id ? N.opening : N.openPage} <span aria-hidden>→</span>
-                    </button>
+                  {/* the way on is the page's corner (PageCorner); the foot keeps clear of it */}
+                  <div className={`${s.pageFoot} ${s.footClear}`}>
                     <div className={s.quietRow}>{exportLinks(false)}</div>
                   </div>
                 </>
@@ -2496,7 +2538,7 @@ export default function DreamGrid({
         entry={selected}
         ready={selected != null && readyId === selected.id && !selected.imageUrlOmitted}
         loadError={openError}
-        onRetry={() => { if (selected) void openEntry(selected, true); }}
+        onRetry={() => { if (selected) void openEntry(selected, "retry"); }}
         thisYear={thisYear}
         restoreFocus={restoreFocus}
         onNotice={setNotice}

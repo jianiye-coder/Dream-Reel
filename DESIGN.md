@@ -72,8 +72,26 @@ All self-hosted at build time, because the CSP only allows same-origin fonts
   lies on the stack; the sheets' edges run down the fore-edge, round the
   corners and along head and tail, drawn on canvases by `edgeTextures`), spine
   crease, ribbon, optional fountain pen (`pen`), optional pointer tilt (`tilt`).
-  `BookPage side="l" | "r"` with `ruled`, `indent`, `folio`, `curl`; pass
-  page-module classes through `className` / `padClassName`.
+  `BookPage side="l" | "r"` with `ruled`, `indent`, `folio`, `curl` (the
+  bottom corner peels up a little on hover), `corner` (a `PageCorner` instead);
+  pass page-module classes through `className` / `padClassName`.
+- **`PageCorner`** (`src/components/notebook/PageCorner.tsx`): the right page's
+  bottom corner as the way to turn it (the archive's open night). A small
+  dog-ear at rest, a hair higher on hover; the first click or tap peels it up
+  (the paper's back over a soft shadow, `.nb-curl`), a second turns the page.
+  A click elsewhere, Escape or new content (`key`) lets it fall back. From the
+  keyboard one press turns the page; focus lifts it a hair and writes what it
+  does above it in red ink. On phones it stays as a small folded corner at the
+  bottom of that sheet and opens without a turn.
+- **`PhotoLightbox`** (`src/components/notebook/PhotoLightbox.tsx`): wraps a
+  dream photo's image in a zoom-in button; opens the photo enlarged as a print
+  on the softly blurred desk (warm, never a black overlay) with date and title.
+  A native modal `<dialog>` portalled to `.nb-root`; ×, Escape or a click on the
+  desk put it down and focus returns to the print.
+- **`edgeFade`** (`src/lib/edgeFade.ts`): ref callback for a scroll pane on a
+  page: `data-fade-top` / `data-fade-bottom` for a mask that fades into the paper
+  only where there is more to read (`focusable` adds a tab stop while it
+  scrolls).
 - **`TurnLink`** (`src/components/notebook/TurnLink.tsx`): a link between book
   pages (`/`, `/journal`, `/morning-pages`, `/archive`) turns the right-hand
   page instead of navigating flat; off-book links and phones navigate normally.

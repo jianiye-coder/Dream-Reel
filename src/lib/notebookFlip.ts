@@ -29,7 +29,9 @@ export function flipPage(book: HTMLElement, { back, dur = 850, onStart, onEnd }:
   // the snapshot is copied into every strip; ids would be duplicated dozens of times
   front.removeAttribute("id");
   front.querySelectorAll("[id]").forEach((el) => el.removeAttribute("id"));
-  front.querySelector(".nb-curl")?.remove();
+  // a corner curl shown on hover stays behind; a corner the reader lifted to turn the page lifts with it
+  front.querySelectorAll(".nb-curl").forEach((curl) => { if (!curl.closest(".nb-lifted")) curl.remove(); });
+  front.querySelectorAll(".nb-corner-hint").forEach((hint) => hint.remove());
 
   const segs: { seg: HTMLElement; fShade: HTMLElement; bShade: HTMLElement }[] = [];
   let parent: HTMLElement = wrap;
