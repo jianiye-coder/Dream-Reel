@@ -19,8 +19,6 @@ holds what sits outside the notebook: Tailwind base, the page canvas colour,
 `::selection`, the skip link and its focus ring, and the iOS rule that keeps
 form fields at 16px on phones (≤520px) so Safari doesn't zoom.
 
-`design-system/dream-reel/MASTER.md` predates the notebook and is not current.
-
 ## Tokens
 
 Declared on `.nb-root`; use them by name, never as raw hex.
@@ -170,10 +168,11 @@ lay out a book (journal, morning pages, archive) add their own
 ## Sounds
 
 Off until the first gesture (browser autoplay rules) and switchable from the
-shell (`dr-sound` in localStorage). Writing strokes are grains of a real
-fountain-pen recording, played per committed character (`writeChar`; IME
-composition stays silent until it commits, see `src/app/journal/usePenSound.ts`).
-The tap and the page turn are synthesised with Web Audio.
+shell (`dr-sound` in localStorage). The fountain-pen writing sound belongs to
+the landing page only: grains of a real recording played as the demo dream is
+handwritten (`writeChar` from `handwrite`). Where people actually write (journal,
+morning pages) typing is silent. The tap and the page turn are synthesised with
+Web Audio.
 
 Recording: "Writing with Fountain Pen Nib" by black_trillium on Freesound
 (https://freesound.org/s/397282/), CC0 1.0. Processing notes and files:
