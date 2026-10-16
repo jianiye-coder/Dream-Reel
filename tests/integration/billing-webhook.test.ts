@@ -1,5 +1,6 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
+import { Pool } from "pg";
 import { signStripePayload } from "@/lib/stripe";
 
 /* Signed fake Stripe events go through the real webhook route into PostgreSQL; only
@@ -225,6 +226,39 @@ databaseDescribe("Stripe webhook → Plus in PostgreSQL", () => {
     stripeSubscriptions.set(current.subscription, subscription("active", {}, ended));
     await deliver(checkoutCompleted());
     expect(await getBillingStatus(userId)).toMatchObject({ plan: "free", subscriptionStatus: "active" });
+  });
+
+  it("handles concurrent events for one subscription one at a time, so the newest state wins", async () => {
+    stripeSubscriptions.set(current.subscription, subscription("active"));
+    await deliver(checkoutCompleted());
+    // production uses one connection per serverless instance; two instances = two connections
+    const single = globalThis.dreamPool;
+    const wide = new Pool({ connectionString: process.env.TEST_DATABASE_URL, max: 4 });
+    globalThis.dreamPool = wide;
+    // the first read is slow and sees the older state; the second sees the newer one
+    let reads = 0;
+    const base = fetchMock.getMockImplementation()!;
+    fetchMock.mockImplementation(async (input, init) => {
+      if (!String(input).includes("/v1/subscriptions/")) return base(input, init);
+      reads += 1;
+      if (reads === 1) {
+        await new Promise((resolve) => setTimeout(resolve, 250));
+        return new Response(JSON.stringify(subscription("past_due")), { status: 200 });
+      }
+      return new Response(JSON.stringify(subscription("active")), { status: 200 });
+    });
+    try {
+      await Promise.all([
+        deliver(event("customer.subscription.updated", subscription("past_due"))),
+        new Promise((resolve) => setTimeout(resolve, 50)).then(() => deliver(event("customer.subscription.updated", subscription("active")))),
+      ]);
+    } finally {
+      fetchMock.mockImplementation(base);
+      globalThis.dreamPool = single;
+      await wide.end();
+    }
+    expect(reads).toBe(2);
+    expect(await getBillingStatus(userId)).toMatchObject({ plan: "plus", subscriptionStatus: "active" });
   });
 
   it("never brings an ended subscription back", async () => {

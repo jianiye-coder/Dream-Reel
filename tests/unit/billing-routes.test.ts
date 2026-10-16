@@ -151,6 +151,25 @@ describe("POST /api/billing/checkout", () => {
     expect(sentParams(1).params.customer_email).toBe("reader@example.com");
   });
 
+  it("starts over with the email when the stored customer bills in the other currency", async () => {
+    billing.getStripeCustomerId.mockResolvedValue("cus_cny");
+    fetchMock
+      .mockResolvedValueOnce(new Response(JSON.stringify({ error: { type: "invalid_request_error", message: "You cannot combine currencies on a single customer." } }), { status: 400 }))
+      .mockResolvedValueOnce(stripeOk({ url: "https://checkout.stripe.com/c/pay/cs_test_3" }));
+    const res = await checkout(post("/api/billing/checkout", { lang: "en" }));
+    expect(await res.json()).toEqual({ url: "https://checkout.stripe.com/c/pay/cs_test_3" });
+    expect(sentParams(1).params.customer).toBeUndefined();
+    expect(sentParams(1).params["line_items[0][price]"]).toBe("price_usd_199");
+  });
+
+  it("does not retry other Stripe rejections", async () => {
+    billing.getStripeCustomerId.mockResolvedValue("cus_existing");
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ error: { message: "No such price", param: "line_items[0][price]" } }), { status: 400 }));
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    expect((await checkout(post("/api/billing/checkout", { lang: "en" }))).status).toBe(502);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
   it.each([
     [{ ...freeStatus, plan: "plus", subscriptionStatus: "active" }],
     [{ ...freeStatus, subscriptionStatus: "past_due" }],
@@ -216,6 +235,14 @@ describe("POST /api/billing/portal", () => {
     const { url, params } = sentParams();
     expect(url).toBe("https://api.stripe.com/v1/billing_portal/sessions");
     expect(params).toEqual({ customer: "cus_existing", return_url: "https://dream-reel.example/account", locale: "en" });
+  });
+
+  it("treats a customer Stripe no longer knows as NO_SUBSCRIPTION", async () => {
+    billing.getStripeCustomerId.mockResolvedValue("cus_gone");
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ error: { code: "resource_missing", param: "customer", message: "No such customer" } }), { status: 400 }));
+    const res = await portal(post("/api/billing/portal", {}));
+    expect(res.status).toBe(404);
+    expect(await res.json()).toEqual({ error: "NO_SUBSCRIPTION" });
   });
 
   it("hides portal failures behind PAYMENT_ERROR", async () => {

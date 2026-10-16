@@ -77,10 +77,11 @@ export async function POST(request: NextRequest) {
     try {
       session = await stripeRequest("POST", "/checkout/sessions", checkoutParams(input));
     } catch (error) {
-      // the stored customer was deleted in the Dashboard: let Checkout create a fresh one
-      if (!(error instanceof StripeApiError && error.code === "resource_missing" && error.param === "customer" && input.customerId)) {
-        throw error;
-      }
+      // the stored customer was deleted in the Dashboard, or already bills in the other
+      // currency (a customer can't mix currencies): let Checkout create a fresh one
+      const customerRejected = error instanceof StripeApiError && error.status === 400 && input.customerId &&
+        (error.param === "customer" || /currenc/i.test(error.message));
+      if (!customerRejected) throw error;
       session = await stripeRequest("POST", "/checkout/sessions", checkoutParams({ ...input, customerId: null }));
     }
 
@@ -89,7 +90,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error("[billing] checkout failed", {
       ...safeErrorMetadata(error),
-      ...(error instanceof StripeApiError ? { status: error.status, stripeCode: error.code } : {}),
+      ...(error instanceof StripeApiError ? { status: error.status, stripeCode: error.code, stripeParam: error.param } : {}),
     });
     return errorJson(API_ERROR_CODES.paymentError, 502);
   }

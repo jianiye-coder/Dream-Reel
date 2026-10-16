@@ -96,7 +96,7 @@ export default function AccountPage() {
   const [billing, setBilling] = useState<ClientBillingStatus | null>(null);
   const [billingState, setBillingState] = useState<"loading" | "ready" | "error">("loading");
   const [billingErr, setBillingErr] = useState("");
-  const [billingNote, setBillingNote] = useState<"" | "upgradePending" | "upgraded" | "checkoutCancelled">("");
+  const [billingNote, setBillingNote] = useState<"" | "upgradePending" | "upgradeSlow" | "upgraded" | "checkoutCancelled">("");
   const [opening, setOpening] = useState(false);
   async function loadBilling() {
     const s = await fetchBillingStatus();
@@ -111,6 +111,7 @@ export default function AccountPage() {
   useBillingReturn({
     pending: () => setBillingNote("upgradePending"),
     active: () => setBillingNote("upgraded"),
+    slow: () => setBillingNote("upgradeSlow"),
     cancelled: () => setBillingNote("checkoutCancelled"),
     isPlus: async () => (await loadBilling()).plan === "plus",
   });

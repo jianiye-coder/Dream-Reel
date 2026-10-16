@@ -25,7 +25,7 @@ export type ClientBillingStatus = {
 export type BillingFrom = "/pricing" | "/account" | "/journal";
 
 /** A Stripe subscription the reader still has to settle (it's theirs, but Plus is paused). */
-export const needsPaymentFix = (status: Pick<ClientBillingStatus, "subscriptionStatus"> | null) =>
+export const needsPaymentFix = (status: { subscriptionStatus?: string | null } | null) =>
   status?.subscriptionStatus === "past_due" || status?.subscriptionStatus === "unpaid";
 
 export async function fetchBillingStatus(): Promise<ClientBillingStatus | null> {
@@ -60,6 +60,8 @@ export async function openStripe(kind: "checkout" | "portal", lang: Lang, from: 
 export function useBillingReturn(handlers: {
   pending: () => void;
   active: () => void;
+  /** the webhook hasn't landed after ~25 s */
+  slow: () => void;
   cancelled: () => void;
   isPlus: () => Promise<boolean>;
 }) {
@@ -92,6 +94,7 @@ export function useBillingReturn(handlers: {
       if (stopped) return;
       if (plus) { ref.current.active(); return; }
       if (++tries < 10) timer = setTimeout(() => void check(), 2500);
+      else ref.current.slow();
     };
     void check();
     return () => { stopped = true; clearTimeout(timer); };

@@ -565,6 +565,7 @@ html[lang="en"] .nb-root {
     .nb-later .nb-cta-row { flex-direction: column; align-items: flex-start; gap: 14px; }
     .nb-sheet-section { box-shadow: none; border-top: 1px solid rgba(31,28,23,.15); }
     .nb-entry { min-height: calc(var(--line) * 4); }
+    .nb-landing-footer { flex-wrap: wrap; gap: 10px 22px; padding: 24px 26px 72px; }
   }
 
 /* ── Paper pages: shared bits ───────────────────────────────────────────── */

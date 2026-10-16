@@ -45,6 +45,11 @@ async function currentSubscription(id: string): Promise<StripeSubscription> {
   }
 }
 
+/** One handler per subscription at a time: the next one reads Stripe only after this one commits. */
+async function lockSubscription(id: string, client: PoolClient) {
+  await client.query("SELECT pg_advisory_xact_lock(hashtext('stripe-subscription'), hashtext($1))", [id]);
+}
+
 async function saveSubscription(subscription: StripeSubscription, userId: number, client: PoolClient, customerId?: string | null) {
   const period = subscriptionPeriod(subscription);
   await upsertStripeSubscription({
@@ -66,6 +71,7 @@ async function handleCheckoutCompleted(object: Record<string, unknown> & { metad
   if (!userId || !subscriptionId) return;
   if (!(await userExists(userId, client))) return;
 
+  await lockSubscription(subscriptionId, client);
   const subscription = await currentSubscription(subscriptionId);
   await saveSubscription(subscription, userId, client, stripeId(object.customer));
 }
@@ -73,6 +79,7 @@ async function handleCheckoutCompleted(object: Record<string, unknown> & { metad
 async function handleSubscriptionEvent(event: StripeEvent, client: PoolClient) {
   const sent = event.data?.object as StripeSubscription | undefined;
   if (!sent?.id) return;
+  await lockSubscription(sent.id, client);
   const subscription = event.type === "customer.subscription.deleted"
     ? { ...sent, status: "canceled" }
     : await currentSubscription(sent.id);
@@ -136,7 +143,7 @@ export async function POST(request: NextRequest) {
     console.error("[billing] webhook failed", {
       type: event.type,
       ...safeErrorMetadata(error),
-      ...(error instanceof StripeApiError ? { status: error.status, stripeCode: error.code } : {}),
+      ...(error instanceof StripeApiError ? { status: error.status, stripeCode: error.code, stripeParam: error.param } : {}),
     });
     return errorJson(API_ERROR_CODES.internalError, 500);
   }

@@ -10,7 +10,7 @@ import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import type { DreamAgentMemory, DreamAgentNextAction, DreamAgentStage } from "@/lib/dreamFollowUpAgent";
 import type { DreamAgentResponseMeta } from "@/lib/dreamAgentTelemetry";
-import { openStripe, useBillingReturn } from "@/lib/billingClient";
+import { needsPaymentFix, openStripe, useBillingReturn } from "@/lib/billingClient";
 import { getRealityQuestion } from "@/lib/dreamQuestions";
 import { buildDreamImagePrompt } from "@/lib/imagePrompt";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -157,6 +157,7 @@ type BillingStatus = {
   plan: "free" | "plus";
   isUnlimited?: boolean;
   checkoutAvailable?: boolean;
+  subscriptionStatus?: string | null;
   remaining: { dreamEntries: number; analysis: number; imageGenerations: number };
 };
 
@@ -365,6 +366,7 @@ export default function JournalPage() {
   useBillingReturn({
     pending: () => setBillingMessage(B.upgradePending),
     active: () => setBillingMessage(B.upgraded),
+    slow: () => setBillingMessage(B.upgradeSlow),
     cancelled: () => setBillingMessage(B.checkoutCancelled),
     isPlus: async () => (await refreshBillingStatus())?.plan === "plus",
   });
@@ -1669,6 +1671,8 @@ export default function JournalPage() {
                   <span className={css.billing}>
                     {billingStatus.plan === "plus" ? (
                       <span className="nb-mono" title={quota}>PLUS</span>
+                    ) : needsPaymentFix(billingStatus) ? (
+                      <Link className={css.upgrade} href="/account" title={B.pastDue}>{B.manage}</Link>
                     ) : billingStatus.checkoutAvailable === false ? (
                       <span className="nb-mono" title={quota}>{B.comingSoon}</span>
                     ) : (

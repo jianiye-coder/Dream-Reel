@@ -28,9 +28,12 @@ export async function POST(request: NextRequest) {
     if (!session.url) return errorJson(API_ERROR_CODES.paymentError, 502);
     return privateJson({ url: session.url });
   } catch (error) {
+    if (error instanceof StripeApiError && error.code === "resource_missing" && error.param === "customer") {
+      return errorJson(API_ERROR_CODES.noSubscription, 404);
+    }
     console.error("[billing] portal failed", {
       ...safeErrorMetadata(error),
-      ...(error instanceof StripeApiError ? { status: error.status, stripeCode: error.code } : {}),
+      ...(error instanceof StripeApiError ? { status: error.status, stripeCode: error.code, stripeParam: error.param } : {}),
     });
     return errorJson(API_ERROR_CODES.paymentError, 502);
   }

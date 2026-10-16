@@ -21,13 +21,14 @@ export function PricingView({ checkoutAvailable }: { checkoutAvailable: boolean 
   const [billing, setBilling] = useState<ClientBillingStatus | null>(null);
   const [opening, setOpening] = useState(false);
   const [error, setError] = useState("");
-  const [note, setNote] = useState<"" | "upgradePending" | "upgraded" | "checkoutCancelled">("");
+  const [note, setNote] = useState<"" | "upgradePending" | "upgradeSlow" | "upgraded" | "checkoutCancelled">("");
   useEffect(() => {
     if (signedIn) fetchBillingStatus().then(setBilling).catch(() => undefined);
   }, [signedIn]);
   useBillingReturn({
     pending: () => setNote("upgradePending"),
     active: () => setNote("upgraded"),
+    slow: () => setNote("upgradeSlow"),
     cancelled: () => setNote("checkoutCancelled"),
     isPlus: async () => {
       const s = await fetchBillingStatus();
