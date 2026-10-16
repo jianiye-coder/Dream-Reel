@@ -1,0 +1,95 @@
+name: Quality sweep
+
+# Once a day: score main against docs/golden-principles.md (npm run quality), then let Claude fix the
+# single most valuable small drift in one PR labelled quality-sweep (or open an issue when the fix
+# needs a protected path). quality-automerge.yml decides whether that PR may merge on its own.
+#
+# Auth: CLAUDE_CODE_OAUTH_TOKEN (from `claude setup-token`, a Claude Pro/Max subscription; runs draw
+# from its usage limits). The action exchanges this job's OIDC token (id-token: write) for a Claude
+# GitHub App token and uses it for git push and gh, so the PR is authored by claude[bot] and its CI
+# runs (pushes and PRs made with the workflow's GITHUB_TOKEN would not trigger workflows).
+
+on:
+  schedule:
+    - cron: "0 13 * * *" # 13:00 UTC: 8:00 in Chicago during daylight time, 7:00 in winter
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: quality-sweep
+  cancel-in-progress: false
+
+jobs:
+  sweep:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      # one sweep PR at a time: skip the whole run (and the Claude usage) while one is open
+      - name: Look for an open sweep PR
+        id: gate
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          open=$(gh pr list --repo "$GITHUB_REPOSITORY" --label quality-sweep --state open --json number --jq length)
+          echo "open=$open" >> "$GITHUB_OUTPUT"
+          if [ "$open" != "0" ]; then
+            echo "A quality-sweep PR is already open; skipping today's sweep." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - uses: actions/setup-node@v4
+        if: steps.gate.outputs.open == '0'
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install
+        if: steps.gate.outputs.open == '0'
+        run: npm ci
+
+      - name: Score main
+        if: steps.gate.outputs.open == '0'
+        run: |
+          npm run quality > /dev/null
+          cp quality/score.json quality/score-main.json
+          cat quality/REPORT.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Make sure the quality-sweep label exists
+        if: steps.gate.outputs.open == '0'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh label create quality-sweep --repo "$GITHUB_REPOSITORY" --color 5319e7 --description "Daily golden-principles sweep" --force
+
+      - name: Build the prompt
+        if: steps.gate.outputs.open == '0'
+        id: prompt
+        run: |
+          {
+            echo "text<<QUALITY_SWEEP_PROMPT"
+            echo "Repository: $GITHUB_REPOSITORY. Today (UTC): $(date -u +%F)."
+            echo
+            cat .github/quality-sweep-prompt.md
+            echo "QUALITY_SWEEP_PROMPT"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Sweep
+        if: steps.gate.outputs.open == '0'
+        uses: anthropics/claude-code-action@374f254f5efaf968abfe15d399fd90972e8138b9 # v1.0.251
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          base_branch: main
+          prompt: ${{ steps.prompt.outputs.text }}
+          claude_args: |
+            --max-turns 80
+            --allowedTools "Read,Edit,Write,Glob,Grep,Bash(git status:*),Bash(git diff:*),Bash(git log:*),Bash(git show:*),Bash(git checkout -b quality-sweep/*),Bash(git add:*),Bash(git commit:*),Bash(git push -u origin quality-sweep/*),Bash(npm run lint),Bash(npm run typecheck),Bash(npm run knip),Bash(npm run test:unit),Bash(npm run test:unit -- *),Bash(npm run quality),Bash(npx tsx scripts/i18n-audit.ts),Bash(gh pr list:*),Bash(gh pr view:*),Bash(gh pr create:*),Bash(gh issue list:*),Bash(gh issue create:*),Bash(date:*)"
