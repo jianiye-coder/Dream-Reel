@@ -11,7 +11,8 @@ export async function POST(request: NextRequest) {
   const user = await sessionUser();
   if (!user) return errorJson(API_ERROR_CODES.unauthorized, 401);
 
-  if (!stripeSecretKey()) return errorJson(API_ERROR_CODES.billingUnavailable, 503);
+  const origin = appOrigin(request.nextUrl.origin);
+  if (!stripeSecretKey() || !origin) return errorJson(API_ERROR_CODES.billingUnavailable, 503);
 
   const body = await request.json().catch(() => ({})) as { lang?: unknown };
 
@@ -21,7 +22,7 @@ export async function POST(request: NextRequest) {
 
     const params = new URLSearchParams();
     params.set("customer", customerId);
-    params.set("return_url", `${appOrigin(request.nextUrl.origin)}/account`);
+    params.set("return_url", `${origin}/account`);
     params.set("locale", body.lang === "en" ? "en" : "zh");
 
     const session = await stripeRequest<{ url?: string | null }>("POST", "/billing_portal/sessions", params);

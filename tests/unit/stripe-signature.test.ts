@@ -2,6 +2,7 @@ import { createHmac } from "crypto";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   appOrigin,
+  billsPlusPrice,
   isCheckoutConfigured,
   signStripePayload,
   subscriptionPeriod,
@@ -81,7 +82,7 @@ describe("Stripe configuration", () => {
     STRIPE_PLUS_PRICE_ID_USD: "price_usd",
     STRIPE_PLUS_PRICE_ID_CNY: "price_cny",
     STRIPE_WEBHOOK_SECRET: "whsec_x",
-  };
+  } as Record<string, string | undefined>;
 
   it("needs the key, both prices and the webhook secret", () => {
     expect(isCheckoutConfigured(full)).toBe(true);
@@ -90,6 +91,26 @@ describe("Stripe configuration", () => {
       expect(isCheckoutConfigured({ ...full, [name]: "  " })).toBe(false);
     }
     expect(isCheckoutConfigured({})).toBe(false);
+  });
+
+  it("needs NEXT_PUBLIC_APP_URL in production, not locally", () => {
+    expect(isCheckoutConfigured({ ...full, NODE_ENV: "production" })).toBe(false);
+    expect(isCheckoutConfigured({ ...full, NODE_ENV: "production", NEXT_PUBLIC_APP_URL: "not a url" })).toBe(false);
+    expect(isCheckoutConfigured({ ...full, NODE_ENV: "production", NEXT_PUBLIC_APP_URL: "javascript:alert(1)" })).toBe(false);
+    expect(isCheckoutConfigured({ ...full, NODE_ENV: "production", NEXT_PUBLIC_APP_URL: "https://dream-reel.vercel.app" })).toBe(true);
+    expect(isCheckoutConfigured({ ...full, NODE_ENV: "development" })).toBe(true);
+    // production never builds Stripe return URLs from the request's Host header
+    expect(appOrigin("https://attacker.example", { NODE_ENV: "production" })).toBeNull();
+    expect(appOrigin("https://attacker.example", { NODE_ENV: "production", NEXT_PUBLIC_APP_URL: "https://dream-reel.vercel.app/x" })).toBe("https://dream-reel.vercel.app");
+  });
+
+  it("recognises only the configured Plus prices", () => {
+    const sub = (price: unknown) => ({ id: "sub_1", customer: "cus_1", status: "active", items: { data: [{ price }] } }) as Parameters<typeof billsPlusPrice>[0];
+    expect(billsPlusPrice(sub({ id: "price_cny" }), full)).toBe(true);
+    expect(billsPlusPrice(sub("price_usd"), full)).toBe(true);
+    expect(billsPlusPrice(sub({ id: "price_other" }), full)).toBe(false);
+    expect(billsPlusPrice({ id: "sub_1", customer: "cus_1", status: "active" }, full)).toBe(false);
+    expect(billsPlusPrice(sub({ id: "price_cny" }), {})).toBe(false);
   });
 
   it("uses NEXT_PUBLIC_APP_URL's origin, else the request origin", () => {

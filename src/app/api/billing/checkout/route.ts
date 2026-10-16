@@ -55,7 +55,8 @@ export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => ({})) as { lang?: unknown; from?: unknown };
   const lang: BillingLang = body.lang === "en" ? "en" : "zh";
   const priceId = plusPriceId(lang);
-  if (!priceId) return errorJson(API_ERROR_CODES.billingUnavailable, 503);
+  const origin = appOrigin(request.nextUrl.origin);
+  if (!priceId || !origin) return errorJson(API_ERROR_CODES.billingUnavailable, 503);
 
   try {
     const status = await getBillingStatus(user.id);
@@ -69,7 +70,7 @@ export async function POST(request: NextRequest) {
       customerId: await getStripeCustomerId(user.id),
       priceId,
       lang,
-      origin: appOrigin(request.nextUrl.origin),
+      origin,
       from: returnPage(body.from),
     };
 

@@ -90,6 +90,7 @@ describe("POST /api/billing/checkout", () => {
     expect(init.headers).toMatchObject({
       Authorization: "Bearer sk_test_123",
       "Content-Type": "application/x-www-form-urlencoded",
+      "Stripe-Version": "2025-03-31.basil",
     });
     expect(params).toEqual({
       mode: "subscription",
@@ -122,6 +123,18 @@ describe("POST /api/billing/checkout", () => {
     const { params } = sentParams();
     expect(params["line_items[0][price]"]).toBe("price_usd_199");
     expect(params.cancel_url).toBe("https://dream-reel.example/pricing?billing=cancelled");
+  });
+
+  it("is unavailable in production without NEXT_PUBLIC_APP_URL (no Host-header return URLs)", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("NEXT_PUBLIC_APP_URL", "");
+    const res = await checkout(post("/api/billing/checkout", { lang: "zh" }));
+    expect(res.status).toBe(503);
+    expect(await res.json()).toEqual({ error: "BILLING_UNAVAILABLE" });
+    billing.getStripeCustomerId.mockResolvedValue("cus_existing");
+    expect((await portal(post("/api/billing/portal", {}))).status).toBe(503);
+    expect(await (await status()).json()).toMatchObject({ checkoutAvailable: false });
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("falls back to the request origin without NEXT_PUBLIC_APP_URL", async () => {
