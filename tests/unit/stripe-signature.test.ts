@@ -99,6 +99,8 @@ describe("Stripe configuration", () => {
     expect(isCheckoutConfigured({ ...full, NODE_ENV: "production", NEXT_PUBLIC_APP_URL: "javascript:alert(1)" })).toBe(false);
     expect(isCheckoutConfigured({ ...full, NODE_ENV: "production", NEXT_PUBLIC_APP_URL: "https://dream-reel.vercel.app" })).toBe(true);
     expect(isCheckoutConfigured({ ...full, NODE_ENV: "development" })).toBe(true);
+    expect(isCheckoutConfigured({ ...full, NODE_ENV: "production", NEXT_PUBLIC_APP_URL: "http://dream-reel.vercel.app" })).toBe(false);
+    expect(appOrigin("http://localhost:3000", { NODE_ENV: "development", NEXT_PUBLIC_APP_URL: "http://localhost:3033" })).toBe("http://localhost:3033");
     // production never builds Stripe return URLs from the request's Host header
     expect(appOrigin("https://attacker.example", { NODE_ENV: "production" })).toBeNull();
     expect(appOrigin("https://attacker.example", { NODE_ENV: "production", NEXT_PUBLIC_APP_URL: "https://dream-reel.vercel.app/x" })).toBe("https://dream-reel.vercel.app");

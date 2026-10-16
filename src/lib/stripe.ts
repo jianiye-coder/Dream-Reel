@@ -23,7 +23,9 @@ function configuredOrigin(env: Env): string | null {
   if (!configured) return null;
   try {
     const url = new URL(configured);
-    return url.protocol === "https:" || url.protocol === "http:" ? url.origin : null;
+    // readers are sent here from Stripe with their session: https only in production
+    const allowed = env.NODE_ENV === "production" ? ["https:"] : ["https:", "http:"];
+    return allowed.includes(url.protocol) ? url.origin : null;
   } catch {
     return null;
   }
@@ -60,9 +62,13 @@ export function plusPriceId(lang: BillingLang): string | null {
   return id?.trim() || null;
 }
 
-/** The configured Plus prices; a subscription grants Plus only if it bills one of them. */
+/**
+ * Prices that grant Plus: the two current ones plus STRIPE_PLUS_PRICE_IDS_LEGACY (comma list).
+ * When a price id changes, move the old id to the legacy list, or existing payers lose Plus.
+ */
 export function plusPriceIds(env: Env = process.env): Set<string> {
-  return new Set([env.STRIPE_PLUS_PRICE_ID_USD?.trim(), env.STRIPE_PLUS_PRICE_ID_CNY?.trim()].filter((id): id is string => Boolean(id)));
+  const ids = [env.STRIPE_PLUS_PRICE_ID_USD, env.STRIPE_PLUS_PRICE_ID_CNY, ...(env.STRIPE_PLUS_PRICE_IDS_LEGACY ?? "").split(",")];
+  return new Set(ids.map((id) => id?.trim()).filter((id): id is string => Boolean(id)));
 }
 
 // ── webhook signatures ────────────────────────────────────────────────────────
@@ -229,21 +235,44 @@ export function billsPlusPrice(subscription: StripeSubscription, env: Env = proc
   });
 }
 
-type InvoicePaymentRef = { payment_intent?: string | { id: string } | null; charge?: string | { id: string } | null };
+type PaymentRef = { payment_intent?: string | { id: string } | null; charge?: string | { id: string } | null };
+type InvoicePaymentEntry = { status?: string; payment?: PaymentRef & { type?: string } };
 
-/** The payment behind an invoice, as a refund parameter; null for a $0 or unpaid invoice. */
-export async function invoicePayment(invoiceId: string): Promise<["payment_intent" | "charge", string] | null> {
-  // older API shapes carried the payment on the invoice itself
-  const invoice = await stripeRequest<InvoicePaymentRef & { amount_paid?: number }>("GET", `/invoices/${encodeURIComponent(invoiceId)}`);
-  if (invoice.amount_paid === 0) return null;
-  const direct = stripeId(invoice.payment_intent) ?? stripeId(invoice.charge);
-  if (direct) return [direct.startsWith("ch_") ? "charge" : "payment_intent", direct];
-
-  const params = new URLSearchParams({ invoice: invoiceId, status: "paid", limit: "1" });
-  const payments = await stripeRequest<{ data?: { payment?: InvoicePaymentRef & { type?: string } }[] }>("GET", "/invoice_payments", params);
-  const payment = payments.data?.[0]?.payment;
-  const intent = stripeId(payment?.payment_intent);
+function paymentOf(ref: PaymentRef | undefined | null): ["payment_intent" | "charge", string] | null {
+  const intent = stripeId(ref?.payment_intent);
   if (intent) return ["payment_intent", intent];
-  const charge = stripeId(payment?.charge);
+  const charge = stripeId(ref?.charge);
   return charge ? ["charge", charge] : null;
+}
+
+/**
+ * What a refund of this invoice needs, whatever the API shape: Basil+ lists payments on the
+ * invoice (`expand[]=payments`); older versions carry payment_intent / charge on the invoice;
+ * the invoice_payments list is the last resort.
+ */
+export async function invoiceForRefund(invoiceId: string): Promise<{
+  amountPaid: number;
+  billingReason: string | null;
+  payment: ["payment_intent" | "charge", string] | null;
+}> {
+  const invoice = await stripeRequest<PaymentRef & {
+    amount_paid?: number;
+    billing_reason?: string | null;
+    payments?: { data?: InvoicePaymentEntry[] };
+  }>("GET", `/invoices/${encodeURIComponent(invoiceId)}`, new URLSearchParams({ "expand[]": "payments" }));
+  const amountPaid = invoice.amount_paid ?? 0;
+  const billingReason = invoice.billing_reason ?? null;
+  const paid = (entries?: InvoicePaymentEntry[]) => entries?.find((entry) => !entry.status || entry.status === "paid")?.payment;
+
+  let payment = paymentOf(paid(invoice.payments?.data)) ?? paymentOf(invoice);
+  if (!payment && amountPaid > 0) {
+    const params = new URLSearchParams({ invoice: invoiceId, status: "paid", limit: "1" });
+    // an API version without this endpoint answers 400/404; that only means "not found here"
+    const list = await stripeRequest<{ data?: InvoicePaymentEntry[] }>("GET", "/invoice_payments", params).catch((error: unknown) => {
+      if (error instanceof StripeApiError && (error.status === 400 || error.status === 404)) return null;
+      throw error;
+    });
+    payment = paymentOf(paid(list?.data));
+  }
+  return { amountPaid, billingReason, payment };
 }

@@ -352,6 +352,30 @@ export async function otherPlusSubscriptionIds(userId: number, subscriptionId: s
   return result.rows.map((row) => row.provider_subscription_id);
 }
 
+/**
+ * Something about money the code must not decide alone (a refund Stripe refused, a duplicate
+ * found after a renewal). Kept in payment_events with status 'needs_action'; one row per
+ * subscription and kind, so retries don't pile up:
+ *   SELECT * FROM payment_events WHERE status = 'needs_action';
+ */
+export async function recordManualAction(client: PoolClient, action: {
+  kind: "refund" | "cancel";
+  subscriptionId: string;
+  keptSubscriptionId: string;
+  invoiceId?: string | null;
+  reason: string;
+  stripeCode?: string;
+}) {
+  await client.query(
+    `
+      INSERT INTO payment_events (id, provider, type, payload, status)
+      VALUES ($1, 'stripe', $2, $3, 'needs_action')
+      ON CONFLICT (id) DO NOTHING
+    `,
+    [`action:${action.kind}:${action.subscriptionId}`, `manual.${action.kind}`, JSON.stringify(action)],
+  );
+}
+
 export async function userExists(userId: number, client?: PoolClient): Promise<boolean> {
   await ensureSchema();
   const result = await (client ?? getPool()).query(`SELECT 1 FROM users WHERE id = $1`, [userId]);

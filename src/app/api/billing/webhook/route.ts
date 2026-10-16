@@ -5,6 +5,7 @@ import {
   findUserIdForStripeCustomer,
   otherPlusSubscriptionIds,
   processStripeEvent,
+  recordManualAction,
   upsertStripeSubscription,
   userExists,
 } from "@/lib/billing";
@@ -12,7 +13,7 @@ import { errorJson, parseUserId, privateJson } from "@/lib/billingHttp";
 import { safeErrorMetadata } from "@/lib/safeServerLog";
 import {
   billsPlusPrice,
-  invoicePayment,
+  invoiceForRefund,
   retrieveSubscription,
   StripeApiError,
   stripeId,
@@ -83,46 +84,92 @@ async function writeSubscription(subscription: StripeSubscription, userId: numbe
   }, client);
 }
 
-/** The subscription Stripe created first; ids break a tie. */
-function isOlder(a: StripeSubscription, b: StripeSubscription) {
+/**
+ * Which of two Plus subscriptions the reader keeps: one that is paid and staying (active, no
+ * cancellation scheduled) beats one that is ending or still in trial; then the older one.
+ */
+function keepRank(subscription: StripeSubscription) {
+  if (subscription.status !== "active") return 0;
+  return subscription.cancel_at_period_end || subscription.cancel_at ? 1 : 2;
+}
+function keepFirst(a: StripeSubscription, b: StripeSubscription) {
+  if (keepRank(a) !== keepRank(b)) return keepRank(a) > keepRank(b);
   if (a.created !== undefined && b.created !== undefined && a.created !== b.created) return a.created < b.created;
   return a.id < b.id;
 }
 
-/**
- * Two Checkout pages left open (two tabs, sessions last 24 h) can both be paid. The reader keeps
- * the older subscription; the newer one is refunded and cancelled at once. Refund first: if
- * cancelling then fails, Stripe's retry finds the subscription still active and finishes the job,
- * and the idempotency keys make every step safe to repeat.
- */
-async function dropDuplicate(drop: StripeSubscription, keep: StripeSubscription) {
-  const invoiceId = stripeId(drop.latest_invoice);
-  const payment = invoiceId ? await invoicePayment(invoiceId) : null;
-  if (payment) {
-    const params = new URLSearchParams({
-      [payment[0]]: payment[1],
-      reason: "duplicate",
-      "metadata[reason]": "duplicate_plus_subscription",
-      "metadata[subscription]": drop.id,
-    });
-    try {
-      await stripeRequest("POST", "/refunds", params, { idempotencyKey: `dreamreel-duplicate-refund-${drop.id}` });
-    } catch (error) {
-      if (!(error instanceof StripeApiError && error.code === "charge_already_refunded")) throw error;
-    }
-  }
-  try {
-    await stripeRequest("DELETE", `/subscriptions/${encodeURIComponent(drop.id)}`, undefined, { idempotencyKey: `dreamreel-duplicate-cancel-${drop.id}` });
-  } catch (error) {
-    // already cancelled is fine; anything else is retried by Stripe
-    const now = await retrieveSubscription(drop.id).catch(() => null);
-    if (now?.status !== "canceled") throw error;
-  }
-  console.warn("[billing] cancelled a duplicate Plus subscription", { kept: keep.id, cancelled: drop.id, refunded: Boolean(payment) });
+/** Network trouble, timeouts, rate limits, Stripe 5xx: worth Stripe's retry. Anything else won't change. */
+function isTransient(error: unknown) {
+  if (!(error instanceof StripeApiError)) return true;
+  return error.status === 0 || error.status === 409 || error.status === 429 || error.status >= 500;
 }
 
+async function needsOwner(client: PoolClient, action: Parameters<typeof recordManualAction>[1]) {
+  console.error("[billing] duplicate subscription needs the owner", {
+    subscription: action.subscriptionId, kept: action.keptSubscriptionId, invoice: action.invoiceId, reason: action.reason, stripeCode: action.stripeCode,
+  });
+  await recordManualAction(client, action);
+}
+
+/**
+ * Two Checkout pages left open (two tabs, sessions last 24 h) can both be paid. The reader keeps
+ * one subscription; the other is cancelled at once and, if this is its first invoice, refunded.
+ * Refund before cancel with idempotency keys, so a transient failure part-way is finished by
+ * Stripe's retry without refunding twice. A refund or cancel Stripe will never accept is not
+ * retried (that would hold up every later event for this reader): it is recorded in
+ * payment_events with status 'needs_action' for the owner to settle by hand.
+ * Returns whether the duplicate is now cancelled in Stripe.
+ */
+async function dropDuplicate(drop: StripeSubscription, keep: StripeSubscription, client: PoolClient): Promise<boolean> {
+  const base = { subscriptionId: drop.id, keptSubscriptionId: keep.id };
+  const invoiceId = stripeId(drop.latest_invoice);
+  let refunded = false;
+  try {
+    const invoice = invoiceId ? await invoiceForRefund(invoiceId) : null;
+    if (invoice && invoice.amountPaid > 0) {
+      if (invoice.billingReason !== "subscription_create") {
+        // found late, after a renewal: cancel, but a person decides about money already taken
+        await needsOwner(client, { ...base, kind: "refund", invoiceId, reason: "not_first_invoice" });
+      } else if (!invoice.payment) {
+        await needsOwner(client, { ...base, kind: "refund", invoiceId, reason: "payment_not_found" });
+      } else {
+        const params = new URLSearchParams({
+          [invoice.payment[0]]: invoice.payment[1],
+          reason: "duplicate",
+          "metadata[reason]": "duplicate_plus_subscription",
+          "metadata[subscription]": drop.id,
+        });
+        try {
+          await stripeRequest("POST", "/refunds", params, { idempotencyKey: `dreamreel-duplicate-refund-${drop.id}` });
+          refunded = true;
+        } catch (error) {
+          if (error instanceof StripeApiError && error.code === "charge_already_refunded") refunded = true;
+          else if (isTransient(error)) throw error;
+          else await needsOwner(client, { ...base, kind: "refund", invoiceId, reason: "refund_rejected", stripeCode: (error as StripeApiError).code });
+        }
+      }
+    }
+  } catch (error) {
+    if (isTransient(error)) throw error;
+    await needsOwner(client, { ...base, kind: "refund", invoiceId, reason: "invoice_unreadable", stripeCode: (error as StripeApiError).code });
+  }
+
+  let cancelled = false;
+  try {
+    await stripeRequest("DELETE", `/subscriptions/${encodeURIComponent(drop.id)}`, undefined, { idempotencyKey: `dreamreel-duplicate-cancel-${drop.id}` });
+    cancelled = true;
+  } catch (error) {
+    const now = await retrieveSubscription(drop.id).catch(() => null);
+    if (now?.status === "canceled") cancelled = true;
+    else if (isTransient(error)) throw error;
+    else await needsOwner(client, { ...base, kind: "cancel", reason: "cancel_rejected", stripeCode: (error as StripeApiError).code });
+  }
+  console.warn("[billing] duplicate Plus subscription", { kept: keep.id, dropped: drop.id, cancelled, refunded });
+  return cancelled;
+}
+
+/** Records the reader's subscription and, if it grants Plus, settles any second one. */
 async function saveSubscription(subscription: StripeSubscription, userId: number, client: PoolClient, customerId?: string | null) {
-  await lockUser(userId, client);
   await writeSubscription(subscription, userId, client, customerId);
   if (!grantsPlus(subscription)) return;
 
@@ -139,13 +186,16 @@ async function saveSubscription(subscription: StripeSubscription, userId: number
       await writeSubscription(other, userId, client);
       continue;
     }
-    const [keep, drop] = isOlder(other, subscription) ? [other, subscription] : [subscription, other];
-    await dropDuplicate(drop, keep);
-    await writeSubscription({ ...drop, status: "canceled" }, userId, client);
+    const [keep, drop] = keepFirst(other, subscription) ? [other, subscription] : [subscription, other];
+    if (await dropDuplicate(drop, keep, client)) await writeSubscription({ ...drop, status: "canceled" }, userId, client);
     if (drop.id === subscription.id) return;
   }
 }
 
+/*
+ * Lock order is always: this subscription, then its reader; only then is Stripe read. A handler
+ * that waited therefore reads the state after the one before it committed, never a stale one.
+ */
 async function handleCheckoutCompleted(object: Record<string, unknown> & { metadata?: Record<string, string> }, client: PoolClient) {
   if (object.mode !== "subscription") return;
   const userId = parseUserId(object.client_reference_id) ?? parseUserId(object.metadata?.user_id);
@@ -154,6 +204,7 @@ async function handleCheckoutCompleted(object: Record<string, unknown> & { metad
   if (!(await userExists(userId, client))) return;
 
   await lockSubscription(subscriptionId, client);
+  await lockUser(userId, client);
   const subscription = await currentSubscription(subscriptionId);
   await saveSubscription(subscription, userId, client, stripeId(object.customer));
 }
@@ -162,20 +213,22 @@ async function handleSubscriptionEvent(event: StripeEvent, client: PoolClient) {
   const sent = event.data?.object as StripeSubscription | undefined;
   if (!sent?.id) return;
   await lockSubscription(sent.id, client);
-  const subscription = event.type === "customer.subscription.deleted"
-    ? { ...sent, status: "canceled" }
-    : await currentSubscription(sent.id);
 
-  const customerId = stripeId(subscription.customer);
-  const metadataUser = parseUserId(subscription.metadata?.user_id);
+  // the reader comes from what we set at checkout (metadata) or the customer we already know
+  const customerId = stripeId(sent.customer);
+  const metadataUser = parseUserId(sent.metadata?.user_id);
   const userId = metadataUser && (await userExists(metadataUser, client))
     ? metadataUser
     : customerId
-      ? await findUserIdForStripeCustomer(customerId, subscription.id, client)
+      ? await findUserIdForStripeCustomer(customerId, sent.id, client)
       : null;
   // not ours yet: checkout.session.completed links it when it arrives
   if (!userId) return;
 
+  await lockUser(userId, client);
+  const subscription = event.type === "customer.subscription.deleted"
+    ? { ...sent, status: "canceled" }
+    : await currentSubscription(sent.id);
   await saveSubscription(subscription, userId, client);
 }
 

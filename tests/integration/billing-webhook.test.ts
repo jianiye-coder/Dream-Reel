@@ -31,7 +31,12 @@ databaseDescribe("Stripe webhook → Plus in PostgreSQL", () => {
   // what GET /v1/subscriptions/:id answers, per subscription id
   const stripeSubscriptions = new Map<string, Record<string, unknown> | { error: number }>();
   const refundedKeys = new Set<string>();
-  const stripeFailures = { cancel: 0, refundAlreadyDone: false };
+  const stripeFailures: {
+    cancel: number;
+    refundAlreadyDone: boolean;
+    refund?: { status: number; error: Record<string, string> };
+  } = { cancel: 0, refundAlreadyDone: false };
+  const invoiceOverrides = new Map<string, Record<string, unknown>>();
   const callsTo = (method: string, path: string) => fetchMock.mock.calls.filter(([input, init]) =>
     (init?.method ?? "GET") === method && String(input).split("?")[0] === `https://api.stripe.com/v1${path}`);
   const fetchMock = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
@@ -50,13 +55,26 @@ databaseDescribe("Stripe webhook → Plus in PostgreSQL", () => {
       stripeSubscriptions.set(id, { ...found, status: "canceled" });
       return new Response(JSON.stringify({ ...found, status: "canceled" }), { status: 200 });
     }
-    const invoice = url.match(/^https:\/\/api\.stripe\.com\/v1\/invoices\/([^/?]+)$/);
-    if (invoice) return new Response(JSON.stringify({ id: invoice[1], object: "invoice", amount_paid: invoice[1].includes("trial") ? 0 : 1299 }), { status: 200 });
+    const invoice = url.match(/^https:\/\/api\.stripe\.com\/v1\/invoices\/([^/?]+)(\?.*)?$/);
+    if (invoice) {
+      const id = invoice[1];
+      const override = invoiceOverrides.get(id);
+      if (override && "error" in override) return new Response(JSON.stringify({ error: override.error }), { status: Number(override.status ?? 400) });
+      const expanded = new URL(url).searchParams.get("expand[]") === "payments";
+      return new Response(JSON.stringify({
+        id, object: "invoice", billing_reason: "subscription_create", amount_paid: id.includes("trial") ? 0 : 1299,
+        ...(expanded ? { payments: { object: "list", data: [{ object: "invoice_payment", status: "paid", payment: { type: "payment_intent", payment_intent: `pi_for_${id}` } }] } } : {}),
+        ...override,
+      }), { status: 200 });
+    }
     if (url.startsWith("https://api.stripe.com/v1/invoice_payments?")) {
       const invoiceId = new URL(url).searchParams.get("invoice")!;
-      return new Response(JSON.stringify({ object: "list", data: [{ object: "invoice_payment", status: "paid", payment: { type: "payment_intent", payment_intent: `pi_for_${invoiceId}` } }] }), { status: 200 });
+      return new Response(JSON.stringify({ object: "list", data: [{ object: "invoice_payment", status: "paid", payment: { type: "charge", charge: `ch_listed_${invoiceId}` } }] }), { status: 200 });
     }
     if (url === "https://api.stripe.com/v1/refunds") {
+      if (stripeFailures.refund) {
+        return new Response(JSON.stringify({ error: stripeFailures.refund.error }), { status: stripeFailures.refund.status });
+      }
       const key = new Headers(init?.headers).get("Idempotency-Key")!;
       if (refundedKeys.has(key) && stripeFailures.refundAlreadyDone) {
         return new Response(JSON.stringify({ error: { code: "charge_already_refunded", message: "already refunded" } }), { status: 400 });
@@ -147,7 +165,8 @@ databaseDescribe("Stripe webhook → Plus in PostgreSQL", () => {
     fetchMock.mockClear();
     stripeSubscriptions.clear();
     refundedKeys.clear();
-    Object.assign(stripeFailures, { cancel: 0, refundAlreadyDone: false });
+    Object.assign(stripeFailures, { cancel: 0, refundAlreadyDone: false, refund: undefined });
+    invoiceOverrides.clear();
     seq += 1;
     current = ids();
     const { rows } = await getPool().query<{ id: number }>(
@@ -376,6 +395,101 @@ databaseDescribe("Stripe webhook → Plus in PostgreSQL", () => {
       expect(await getBillingStatus(userId)).toMatchObject({ plan: "plus", subscriptionStatus: "active" });
     });
 
+    const needsAction = async () => (await getPool().query(
+      "SELECT id, type, payload FROM payment_events WHERE status = 'needs_action' AND payload->>'subscriptionId' LIKE $1 ORDER BY id",
+      [`${current.subscription}%`],
+    )).rows;
+
+    async function twoActive(newer = second()) {
+      stripeSubscriptions.set(current.subscription, subscription("active"));
+      await deliver(checkoutCompleted());
+      stripeSubscriptions.set(newer.id, newer);
+      return newer;
+    }
+
+    it("still cancels when Stripe refuses the refund, records it for the owner, and keeps processing", async () => {
+      vi.spyOn(console, "warn").mockImplementation(() => undefined);
+      const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
+      const newer = await twoActive();
+      stripeFailures.refund = { status: 400, error: { code: "charge_disputed", message: "This charge has been disputed" } };
+      expect(await deliver(checkoutCompleted({ id: "cs_b", subscription: newer.id }))).toEqual({ status: 200, body: { received: true } });
+      expect(stripeSubscriptions.get(newer.id)).toMatchObject({ status: "canceled" });
+      expect(await needsAction()).toEqual([{
+        id: `action:refund:${newer.id}`,
+        type: "manual.refund",
+        payload: expect.objectContaining({ reason: "refund_rejected", stripeCode: "charge_disputed", invoiceId: `in_${newer.id}`, keptSubscriptionId: current.subscription }),
+      }]);
+      expect(JSON.stringify(log.mock.calls)).not.toContain("has been disputed");
+
+      // later events for this reader (a renewal of the kept subscription) go through
+      stripeSubscriptions.set(current.subscription, subscription("active", { cancel_at_period_end: true }));
+      expect((await deliver(event("customer.subscription.updated", subscription("active"))))).toEqual({ status: 200, body: { received: true } });
+      expect(await getBillingStatus(userId)).toMatchObject({ plan: "plus", cancelAtPeriodEnd: true });
+      expect(await needsAction()).toHaveLength(1);
+    });
+
+    it("retries a transient refund failure instead of recording it", async () => {
+      vi.spyOn(console, "warn").mockImplementation(() => undefined);
+      vi.spyOn(console, "error").mockImplementation(() => undefined);
+      const newer = await twoActive();
+      stripeFailures.refund = { status: 503, error: { message: "try again" } };
+      const completed = checkoutCompleted({ id: "cs_b", subscription: newer.id });
+      expect((await deliver(completed)).status).toBe(500);
+      expect(stripeSubscriptions.get(newer.id)).toMatchObject({ status: "active" });
+      expect(await needsAction()).toHaveLength(0);
+
+      stripeFailures.refund = undefined;
+      expect((await deliver(completed)).status).toBe(200);
+      expect(refundedKeys).toEqual(new Set([`dreamreel-duplicate-refund-${newer.id}`]));
+      expect(stripeSubscriptions.get(newer.id)).toMatchObject({ status: "canceled" });
+    });
+
+    it("found after a renewal: cancels without refunding and asks the owner", async () => {
+      vi.spyOn(console, "warn").mockImplementation(() => undefined);
+      vi.spyOn(console, "error").mockImplementation(() => undefined);
+      const newer = await twoActive();
+      invoiceOverrides.set(`in_${newer.id}`, { billing_reason: "subscription_cycle" });
+      expect((await deliver(checkoutCompleted({ id: "cs_b", subscription: newer.id }))).status).toBe(200);
+      expect(callsTo("POST", "/refunds")).toHaveLength(0);
+      expect(callsTo("DELETE", `/subscriptions/${newer.id}`)).toHaveLength(1);
+      expect((await needsAction())[0].payload).toMatchObject({ reason: "not_first_invoice", invoiceId: `in_${newer.id}` });
+    });
+
+    it("records an unreadable invoice and still cancels", async () => {
+      vi.spyOn(console, "warn").mockImplementation(() => undefined);
+      vi.spyOn(console, "error").mockImplementation(() => undefined);
+      const newer = await twoActive();
+      invoiceOverrides.set(`in_${newer.id}`, { error: { code: "resource_missing" }, status: 404 });
+      expect((await deliver(checkoutCompleted({ id: "cs_b", subscription: newer.id }))).status).toBe(200);
+      expect(stripeSubscriptions.get(newer.id)).toMatchObject({ status: "canceled" });
+      expect((await needsAction())[0].payload).toMatchObject({ reason: "invoice_unreadable" });
+    });
+
+    it("refunds through the charge when the invoice lists its payment only via invoice_payments", async () => {
+      vi.spyOn(console, "warn").mockImplementation(() => undefined);
+      const newer = await twoActive();
+      invoiceOverrides.set(`in_${newer.id}`, { payments: { data: [] } });
+      await deliver(checkoutCompleted({ id: "cs_b", subscription: newer.id }));
+      const refund = Object.fromEntries(new URLSearchParams(String(callsTo("POST", "/refunds")[0][1]!.body)));
+      expect(refund.charge).toBe(`ch_listed_in_${newer.id}`);
+    });
+
+    it.each([
+      ["a cancellation is scheduled on the older one", { cancel_at_period_end: true }, "active"],
+      ["the older one is still in trial", {}, "trialing"],
+    ])("keeps the paid, staying subscription when %s", async (_label, olderExtra, olderStatus) => {
+      vi.spyOn(console, "warn").mockImplementation(() => undefined);
+      const older = subscription(olderStatus, olderExtra);
+      stripeSubscriptions.set(older.id, older);
+      await deliver(checkoutCompleted());
+      const newer = second();
+      stripeSubscriptions.set(newer.id, newer);
+      await deliver(checkoutCompleted({ id: "cs_b", subscription: newer.id }));
+      expect(callsTo("DELETE", `/subscriptions/${older.id}`)).toHaveLength(1);
+      expect(callsTo("DELETE", `/subscriptions/${newer.id}`)).toHaveLength(0);
+      expect(await getBillingStatus(userId)).toMatchObject({ plan: "plus", subscriptionStatus: "active", cancelAtPeriodEnd: false });
+    });
+
     it("cancels without a refund when nothing was charged (trial)", async () => {
       vi.spyOn(console, "warn").mockImplementation(() => undefined);
       stripeSubscriptions.set(current.subscription, subscription("active"));
@@ -386,6 +500,17 @@ databaseDescribe("Stripe webhook → Plus in PostgreSQL", () => {
       expect(callsTo("POST", "/refunds")).toHaveLength(0);
       expect(callsTo("DELETE", `/subscriptions/${newer.id}`)).toHaveLength(1);
     });
+  });
+
+  it("keeps Plus for a price id moved to STRIPE_PLUS_PRICE_IDS_LEGACY", async () => {
+    const legacy = { items: { data: [{ current_period_start: nowSec(), current_period_end: nowSec() + 30 * DAY, price: { id: "price_2025_cny" } }] } };
+    stripeSubscriptions.set(current.subscription, subscription("active", legacy));
+    vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    await deliver(checkoutCompleted());
+    expect(await plan()).toBe("free");
+    vi.stubEnv("STRIPE_PLUS_PRICE_IDS_LEGACY", "price_2024_usd, price_2025_cny");
+    await deliver(event("customer.subscription.updated", subscription("active", legacy)));
+    expect(await plan()).toBe("plus");
   });
 
   it("pins the Stripe API version on every call", async () => {
