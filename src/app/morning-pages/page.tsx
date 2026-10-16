@@ -7,6 +7,7 @@ import { LangToggle } from "@/components/LangToggle";
 import { Book, BookPage } from "@/components/notebook/Book";
 import { NotebookShell } from "@/components/notebook/NotebookShell";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { localDayKey, writtenDate } from "@/lib/dates";
 import { tap } from "@/lib/notebookSound";
 import styles from "./page.module.css";
 import { DrawingBoard } from "./DrawingBoard";
@@ -16,11 +17,6 @@ type Entry = { date: string; content: string; drawing: DrawingStroke[]; revision
 type Day = Pick<Entry, "date" | "updatedAt">;
 type Draft = { date: string; content: string; savedContent: string; drawing: DrawingStroke[]; savedDrawing: DrawingStroke[]; revision: number };
 type SaveStatus = "idle" | "dirty" | "saving" | "saved" | "error" | "conflict";
-
-function localDate() {
-  const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
-}
 
 // Cameron's three pages come to roughly 750 words; Chinese, Japanese kana and Hangul count per character,
 // other scripts count words
@@ -35,14 +31,6 @@ function markEdges(el: HTMLTextAreaElement) {
   // more than the bottom padding still below: a line is actually cut off there
   const bottom = el.scrollHeight - (el.scrollTop + el.clientHeight) > 20;
   el.dataset.edge = [top && "top", bottom && "bottom"].filter(Boolean).join(" ");
-}
-
-// a date as you would write it at the top of a page: 十月十五日 周四 / October 15 Thursday
-const CN_DIGITS = "零一二三四五六七八九十";
-function cnNumber(n: number) {
-  if (n <= 10) return CN_DIGITS[n];
-  if (n < 20) return `十${CN_DIGITS[n - 10]}`;
-  return `${CN_DIGITS[Math.floor(n / 10)]}十${n % 10 ? CN_DIGITS[n % 10] : ""}`;
 }
 
 export default function MorningPages() {
@@ -112,7 +100,7 @@ export default function MorningPages() {
   }, []);
 
   useEffect(() => {
-    void loadDay(localDate());
+    void loadDay(localDayKey());
     void refreshHistory();
     return () => { requestId.current += 1; };
   }, [loadDay, refreshHistory]);
@@ -294,15 +282,11 @@ export default function MorningPages() {
   const locale = lang === "zh" ? "zh-CN" : "en-US";
   function dateLine(value: string) {
     const day = new Date(`${value}T12:00:00`);
-    return {
-      day: lang === "zh" ? `${cnNumber(day.getMonth() + 1)}月${cnNumber(day.getDate())}日` : day.toLocaleDateString(locale, { month: "long", day: "numeric" }),
-      weekday: day.toLocaleDateString(locale, { weekday: lang === "zh" ? "short" : "long" }),
-      year: String(day.getFullYear()),
-    };
+    return { ...writtenDate(day, lang), year: String(day.getFullYear()) };
   }
   function tocDate(value: string) {
     const day = new Date(`${value}T12:00:00`);
-    const sameYear = value.slice(0, 4) === localDate().slice(0, 4);
+    const sameYear = value.slice(0, 4) === localDayKey().slice(0, 4);
     return {
       day: day.toLocaleDateString(locale, { month: "short", day: "numeric", ...(sameYear ? {} : { year: "numeric" }) }),
       weekday: day.toLocaleDateString(locale, { weekday: "short" }),
@@ -316,7 +300,7 @@ export default function MorningPages() {
   const progressText = words >= PAGE_WORDS * 3 ? M.progressDone : M.progress.replace("{page}", String(page));
   // dates depend on the reader's clock, so they appear once the page has loaded on the client
   const heading = date ? dateLine(date) : null;
-  const isToday = Boolean(date) && date === localDate();
+  const isToday = Boolean(date) && date === localDayKey();
   const writable = !loading && !loadError && !finished;
   // every morning is its own spread: folios follow the day of the year
   const dayOfYear = date ? Math.round((Date.parse(`${date}T12:00:00`) - Date.parse(`${date.slice(0, 4)}-01-01T12:00:00`)) / 864e5) + 1 : 0;
@@ -362,7 +346,7 @@ export default function MorningPages() {
 
             <aside className={styles.dates} aria-label={M.datesLabel}>
               <div className={styles.pick}>
-                <button type="button" className={styles.todayButton} disabled={loading || switching} onClick={() => void selectDay(localDate())}>{M.today}</button>
+                <button type="button" className={styles.todayButton} disabled={loading || switching} onClick={() => void selectDay(localDayKey())}>{M.today}</button>
                 <label className={styles.dateField}><span>{M.date}</span>
                   <input type="date" value={date} disabled={loading || switching} onChange={(e) => void selectDay(e.target.value)} />
                 </label>

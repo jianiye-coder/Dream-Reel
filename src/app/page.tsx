@@ -9,13 +9,7 @@ import { TurnLink } from "@/components/notebook/TurnLink";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { handwrite, sleep } from "@/lib/notebookHandwriting";
 import { pageTurn, stroke, unlock } from "@/lib/notebookSound";
-
-const CN = "〇一二三四五六七八九";
-function cnNum(n: number) {
-  if (n <= 10) return n === 10 ? "十" : CN[n];
-  if (n < 20) return "十" + CN[n % 10];
-  return CN[Math.floor(n / 10)] + "十" + (n % 10 ? CN[n % 10] : "");
-}
+import { writtenDate } from "@/lib/dates";
 
 export default function LandingPage() {
   const { lang, T } = useLanguage();
@@ -36,10 +30,8 @@ export default function LandingPage() {
   const run = useRef(0);
 
   useEffect(() => {
-    const now = new Date();
-    setDateLine(lang === "zh"
-      ? [`${cnNum(now.getMonth() + 1)}月${cnNum(now.getDate())}日`, "周" + "日一二三四五六"[now.getDay()], "六点四十二分"]
-      : [now.toLocaleDateString("en-US", { month: "long", day: "numeric" }), now.toLocaleDateString("en-US", { weekday: "long" }), "6:42 am"]);
+    const { day, weekday } = writtenDate(new Date(), lang);
+    setDateLine([day, weekday, lang === "zh" ? "六点四十二分" : "6:42 am"]);
   }, [lang]);
 
   // write the sample dream once the book is open; restart if the language changes mid-way
