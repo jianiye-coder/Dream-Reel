@@ -139,7 +139,7 @@ src/
   auth.ts                 Credentials authentication and JWT sessions
   lib/
     db.ts                 Shared connection pool, versioned schema initialization
-    dreams.ts             Validation, user-scoped SQL, row mapping, weekly recap
+    dreams.ts             Validation, user-scoped SQL, row mapping
     dreamTextEncryption.ts Narrative encryption and key rotation
     dreamFollowUpAgent.ts Conversation state and recall policy
     dreamSupport.ts       Optional emotional support and self-report notes
