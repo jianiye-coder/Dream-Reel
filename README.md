@@ -128,15 +128,22 @@ Readers pay in the language they read in: `zh` gets the CNY price, `en` the USD 
 Webhook endpoint: `https://<your domain>/api/billing/webhook`, subscribed to exactly
 
 - `checkout.session.completed`
-- `customer.subscription.created`
-- `customer.subscription.updated`
-- `customer.subscription.deleted`
+- `customer.subscription.created`, `customer.subscription.updated`, `customer.subscription.deleted`
+- `invoice.paid` (Stripe's recommended signal to provision and extend access), `invoice.payment_failed`
+- `charge.refunded`
+- `charge.dispute.created`, `radar.early_fraud_warning.created`
+
+Subscription, invoice and checkout events all go through the same locked re-sync: the subscription (found on the invoice via `parent.subscription_details.subscription`, or `subscription` in older shapes) is read back from Stripe. A **full** refund of a subscription payment (`charge.refunded`, resolved charge → PaymentIntent → invoice payments → invoice → subscription) cancels that subscription immediately, as the refund policy says; partial refunds and one-off charges are left alone. Disputes and early fraud warnings are recorded as `needs_action` rows (ids only) for the owner.
+
+Dream Reel sends no billing emails itself. In Dashboard → Billing → Revenue recovery, turn on **Smart Retries** and Stripe's customer emails for failed payments and expiring cards (and the upcoming-renewal reminder if you want one).
 
 The handler verifies the signature (raw body, 5-minute tolerance, any of several `v1` signatures), records each event id once in `payment_events` (a failed event is not recorded, so Stripe's retry runs it again), and reads the subscription back from Stripe instead of trusting event order. Only a subscription billing one of the two configured price ids grants Plus; any other subscription is recorded as `free` and logged by id. If a reader ends up with two active Plus subscriptions (two Checkout tabs both paid), they keep the one that is paid and staying (active, no cancellation scheduled, not in trial; then the older), and the other is cancelled immediately. It is refunded (reason `duplicate`) only if the charge is its first invoice (`billing_reason=subscription_create`). Anything the code won't settle alone (a duplicate found after a renewal, a refund or cancel Stripe refuses, a payment it can't find) is still cancelled where possible, returns 2xx so later events keep flowing, and is recorded for the owner: `SELECT * FROM payment_events WHERE status = 'needs_action';`. Only transient Stripe failures (network, timeouts, 409/429, 5xx) make the webhook fail so Stripe retries. `active` and `trialing` mean Plus until `current_period_end`; `past_due`, `unpaid`, `incomplete`, `incomplete_expired`, `paused` and `canceled` do not. Both the item-level billing period (API `2025-03-31.basil` and later) and the older top-level fields are understood. Plan limits and usage periods are defined in `src/lib/billing.ts`.
 
 Readers manage and cancel in the Stripe customer portal (Account → Manage Subscription), which needs a saved portal configuration in **both** test and live mode. **Turn plan switching (and quantity changes) off** in the portal: a reader switched to any other price would lose Plus, and there is nothing else to switch to. Stripe also asks for the policy pages at `/terms`, `/privacy` and `/refund` before activation. Their text is a draft the owner must review.
 
 **Before going live, do a duplicate-refund dry run in test mode**: open Checkout in two tabs, pay both with a test card, and check that one subscription is cancelled and its payment refunded in the Dashboard (this exercises the invoice/payment shapes of your account's API version for real).
+
+Test renewals, failed renewals and cancellation at period end with **test clocks** in the sandbox (Billing → Subscriptions → Test clocks): create a customer on a clock, subscribe via Checkout, then advance the clock past the period end and watch `invoice.paid` / `invoice.payment_failed` arrive.
 
 Local check with the Stripe CLI: `stripe listen --forward-to localhost:3000/api/billing/webhook` prints a `whsec_…` for `STRIPE_WEBHOOK_SECRET`.
 

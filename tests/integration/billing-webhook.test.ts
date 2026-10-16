@@ -37,6 +37,7 @@ databaseDescribe("Stripe webhook → Plus in PostgreSQL", () => {
     refund?: { status: number; error: Record<string, string> };
   } = { cancel: 0, refundAlreadyDone: false };
   const invoiceOverrides = new Map<string, Record<string, unknown>>();
+  const invoiceForIntent = new Map<string, string>();
   const callsTo = (method: string, path: string) => fetchMock.mock.calls.filter(([input, init]) =>
     (init?.method ?? "GET") === method && String(input).split("?")[0] === `https://api.stripe.com/v1${path}`);
   const fetchMock = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
@@ -68,6 +69,11 @@ databaseDescribe("Stripe webhook → Plus in PostgreSQL", () => {
       }), { status: 200 });
     }
     if (url.startsWith("https://api.stripe.com/v1/invoice_payments?")) {
+      const byIntent = new URL(url).searchParams.get("payment[payment_intent]");
+      if (byIntent) {
+        const invoiceId = invoiceForIntent.get(byIntent);
+        return new Response(JSON.stringify({ object: "list", data: invoiceId ? [{ object: "invoice_payment", invoice: invoiceId, status: "paid" }] : [] }), { status: 200 });
+      }
       const invoiceId = new URL(url).searchParams.get("invoice")!;
       return new Response(JSON.stringify({ object: "list", data: [{ object: "invoice_payment", status: "paid", payment: { type: "charge", charge: `ch_listed_${invoiceId}` } }] }), { status: 200 });
     }
@@ -167,6 +173,7 @@ databaseDescribe("Stripe webhook → Plus in PostgreSQL", () => {
     refundedKeys.clear();
     Object.assign(stripeFailures, { cancel: 0, refundAlreadyDone: false, refund: undefined });
     invoiceOverrides.clear();
+    invoiceForIntent.clear();
     seq += 1;
     current = ids();
     const { rows } = await getPool().query<{ id: number }>(
@@ -185,7 +192,7 @@ databaseDescribe("Stripe webhook → Plus in PostgreSQL", () => {
 
   afterAll(async () => {
     if (users.length) await getPool().query("DELETE FROM users WHERE id = ANY($1::int[])", [users]);
-    await getPool().query("DELETE FROM payment_events WHERE id LIKE $1", [`evt_${run}_%`]);
+    await getPool().query("DELETE FROM payment_events WHERE id LIKE $1 OR payload->>'subscriptionId' LIKE $2", [`evt_${run}_%`, `sub_${run}_%`]);
     await getPool().end();
     globalThis.dreamPool = undefined;
   });
@@ -513,6 +520,128 @@ databaseDescribe("Stripe webhook → Plus in PostgreSQL", () => {
     expect(await plan()).toBe("plus");
   });
 
+  describe("invoice events (Stripe's guide: provision on invoice.paid)", () => {
+    const basilInvoice = (extra: Record<string, unknown> = {}) => ({
+      id: `in_${current.subscription}_renewal`, object: "invoice", customer: current.customer, billing_reason: "subscription_cycle",
+      parent: { type: "subscription_details", subscription_details: { subscription: current.subscription, metadata: { user_id: String(userId) } } },
+      ...extra,
+    });
+
+    it("extends Plus on invoice.paid by re-reading the subscription", async () => {
+      stripeSubscriptions.set(current.subscription, subscription("active"));
+      await deliver(checkoutCompleted());
+      const renewed = { start: nowSec() + 29 * DAY, end: nowSec() + 59 * DAY };
+      stripeSubscriptions.set(current.subscription, subscription("active", {}, renewed));
+      expect(await deliver(event("invoice.paid", basilInvoice()))).toEqual({ status: 200, body: { received: true } });
+      const status = await getBillingStatus(userId);
+      expect(status.plan).toBe("plus");
+      expect(new Date(status.periodEnd).getTime()).toBe(renewed.end * 1000);
+    });
+
+    it("links an invoice through the older top-level subscription field too", async () => {
+      stripeSubscriptions.set(current.subscription, subscription("incomplete"));
+      await deliver(checkoutCompleted({ payment_status: "unpaid" }));
+      expect(await plan()).toBe("free");
+      stripeSubscriptions.set(current.subscription, subscription("active"));
+      await deliver(event("invoice.paid", { id: "in_old", object: "invoice", customer: current.customer, subscription: current.subscription }));
+      expect(await plan()).toBe("plus");
+    });
+
+    it("re-syncs on invoice.payment_failed (past_due is not Plus)", async () => {
+      stripeSubscriptions.set(current.subscription, subscription("active"));
+      await deliver(checkoutCompleted());
+      stripeSubscriptions.set(current.subscription, subscription("past_due"));
+      await deliver(event("invoice.payment_failed", basilInvoice()));
+      expect(await getBillingStatus(userId)).toMatchObject({ plan: "free", subscriptionStatus: "past_due" });
+    });
+
+    it("ignores one-off invoices and invoices of unknown subscriptions", async () => {
+      expect((await deliver(event("invoice.paid", { id: "in_oneoff", object: "invoice", customer: current.customer, parent: null }))).status).toBe(200);
+      expect((await deliver(event("invoice.paid", basilInvoice({ parent: { subscription_details: { subscription: "sub_unknown" } }, customer: "cus_unknown" })))).status).toBe(200);
+      expect(callsTo("GET", "/subscriptions/sub_unknown")).toHaveLength(0);
+      expect(await plan()).toBe("free");
+    });
+  });
+
+  describe("charge.refunded", () => {
+    const refundedCharge = (extra: Record<string, unknown> = {}) => ({
+      id: `ch_${current.subscription}`, object: "charge", customer: current.customer, payment_intent: `pi_${current.subscription}`,
+      amount: 1299, amount_refunded: 1299, refunded: true, ...extra,
+    });
+    function linkCharge() {
+      invoiceForIntent.set(`pi_${current.subscription}`, `in_${current.subscription}`);
+      invoiceOverrides.set(`in_${current.subscription}`, { parent: { subscription_details: { subscription: current.subscription } } });
+    }
+
+    it("a full refund cancels the subscription at once, idempotently (Basil: PaymentIntent → invoice payments → invoice)", async () => {
+      vi.spyOn(console, "warn").mockImplementation(() => undefined);
+      stripeSubscriptions.set(current.subscription, subscription("active"));
+      await deliver(checkoutCompleted());
+      linkCharge();
+      expect(await deliver(event("charge.refunded", refundedCharge()))).toEqual({ status: 200, body: { received: true } });
+      const cancels = callsTo("DELETE", `/subscriptions/${current.subscription}`);
+      expect(cancels).toHaveLength(1);
+      expect(new Headers(cancels[0][1]!.headers).get("Idempotency-Key")).toBe(`dreamreel-refunded-cancel-${current.subscription}`);
+      expect(await getBillingStatus(userId)).toMatchObject({ plan: "free", subscriptionStatus: "canceled" });
+
+      // the same refund reported again changes nothing
+      await deliver(event("charge.refunded", refundedCharge()));
+      expect(callsTo("DELETE", `/subscriptions/${current.subscription}`)).toHaveLength(1);
+    });
+
+    it("finds the invoice on the charge in older API shapes", async () => {
+      vi.spyOn(console, "warn").mockImplementation(() => undefined);
+      stripeSubscriptions.set(current.subscription, subscription("active"));
+      await deliver(checkoutCompleted());
+      invoiceOverrides.set("in_legacy", { subscription: current.subscription });
+      await deliver(event("charge.refunded", refundedCharge({ invoice: "in_legacy", payment_intent: null })));
+      expect(await plan()).toBe("free");
+    });
+
+    it("leaves the subscription alone for a partial refund or a one-off charge", async () => {
+      stripeSubscriptions.set(current.subscription, subscription("active"));
+      await deliver(checkoutCompleted());
+      linkCharge();
+      await deliver(event("charge.refunded", refundedCharge({ refunded: false, amount_refunded: 500 })));
+      await deliver(event("charge.refunded", refundedCharge({ id: "ch_oneoff", payment_intent: "pi_oneoff" })));
+      expect(callsTo("DELETE", `/subscriptions/${current.subscription}`)).toHaveLength(0);
+      expect(await plan()).toBe("plus");
+    });
+
+    it("does not cancel again after our own duplicate refund", async () => {
+      vi.spyOn(console, "warn").mockImplementation(() => undefined);
+      stripeSubscriptions.set(current.subscription, subscription("active"));
+      await deliver(checkoutCompleted());
+      const newer = { ...subscription("active"), id: `${current.subscription}_b`, created: nowSec(), latest_invoice: `in_${current.subscription}_b` };
+      stripeSubscriptions.set(newer.id, newer);
+      await deliver(checkoutCompleted({ id: "cs_b", subscription: newer.id }));
+      expect(callsTo("DELETE", `/subscriptions/${newer.id}`)).toHaveLength(1);
+
+      invoiceForIntent.set(`pi_for_in_${newer.id}`, `in_${newer.id}`);
+      invoiceOverrides.set(`in_${newer.id}`, { parent: { subscription_details: { subscription: newer.id } } });
+      await deliver(event("charge.refunded", refundedCharge({ id: "ch_dup", payment_intent: `pi_for_in_${newer.id}` })));
+      expect(callsTo("DELETE", `/subscriptions/${newer.id}`)).toHaveLength(1);
+      expect(callsTo("DELETE", `/subscriptions/${current.subscription}`)).toHaveLength(0);
+      expect(await getBillingStatus(userId)).toMatchObject({ plan: "plus", subscriptionStatus: "active" });
+    });
+  });
+
+  it.each([
+    ["charge.dispute.created", "dispute", { id: "dp_test_1", object: "dispute", charge: "ch_1", payment_intent: "pi_1", reason: "fraudulent", evidence: { customer_email_address: "reader@example.test" } }],
+    ["radar.early_fraud_warning.created", "early_fraud_warning", { id: "issfr_test_1", object: "radar.early_fraud_warning", charge: "ch_1", payment_intent: "pi_1", fraud_type: "card_never_received" }],
+  ])("records %s for the owner, ids only", async (type, kind, object) => {
+    vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const sent = event(type, object);
+    expect(await deliver(sent)).toEqual({ status: 200, body: { received: true } });
+    expect(await deliver(sent)).toEqual({ status: 200, body: { received: true, duplicate: true } });
+    const { rows } = await getPool().query("SELECT type, payload FROM payment_events WHERE id = $1 AND status = 'needs_action'", [`action:${kind}:${object.id}`]);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].type).toBe(`manual.${kind}`);
+    expect(rows[0].payload).toMatchObject({ chargeId: "ch_1", paymentIntentId: "pi_1", eventId: sent.id });
+    expect(JSON.stringify(rows[0].payload)).not.toContain("example.test");
+    await getPool().query("DELETE FROM payment_events WHERE id = $1", [`action:${kind}:${object.id}`]);
+  });
+
   it("pins the Stripe API version on every call", async () => {
     stripeSubscriptions.set(current.subscription, subscription("active"));
     await deliver(checkoutCompleted());
@@ -572,7 +701,7 @@ databaseDescribe("Stripe webhook → Plus in PostgreSQL", () => {
   });
 
   it("acknowledges events it doesn't handle without storing them", async () => {
-    const other = event("invoice.paid", { id: "in_1", customer: current.customer });
+    const other = event("customer.created", { id: current.customer });
     expect(await deliver(other)).toEqual({ status: 200, body: { received: true, ignored: true } });
     const { rows } = await getPool().query("SELECT 1 FROM payment_events WHERE id = $1", [other.id]);
     expect(rows).toHaveLength(0);

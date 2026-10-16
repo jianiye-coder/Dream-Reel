@@ -6,6 +6,7 @@ import {
   otherPlusSubscriptionIds,
   processStripeEvent,
   recordManualAction,
+  recordNeedsAction,
   upsertStripeSubscription,
   userExists,
 } from "@/lib/billing";
@@ -19,8 +20,11 @@ import {
   stripeId,
   STRIPE_WEBHOOK_EVENTS,
   stripeRequest,
+  subscriptionForCharge,
+  subscriptionOfInvoice,
   subscriptionPeriod,
   verifyStripeSignature,
+  type StripeInvoiceRef,
   type StripeSubscription,
 } from "@/lib/stripe";
 
@@ -209,27 +213,88 @@ async function handleCheckoutCompleted(object: Record<string, unknown> & { metad
   await saveSubscription(subscription, userId, client, stripeId(object.customer));
 }
 
+/** The reader: the user id we set at checkout (metadata), else the subscription or customer we know. */
+async function readerFor(subscriptionId: string, customerId: string | null, metadataUserId: unknown, client: PoolClient) {
+  const fromMetadata = parseUserId(metadataUserId);
+  if (fromMetadata && (await userExists(fromMetadata, client))) return fromMetadata;
+  return customerId ? findUserIdForStripeCustomer(customerId, subscriptionId, client) : null;
+}
+
+/** The locked re-sync every subscription-shaped event goes through. */
+async function resync(
+  subscriptionId: string,
+  hint: { customerId: string | null; metadataUserId?: unknown; deleted?: StripeSubscription },
+  client: PoolClient,
+) {
+  await lockSubscription(subscriptionId, client);
+  const userId = await readerFor(subscriptionId, hint.customerId, hint.metadataUserId, client);
+  // not ours yet: checkout.session.completed links it when it arrives
+  if (!userId) return;
+  await lockUser(userId, client);
+  const subscription = hint.deleted ? { ...hint.deleted, status: "canceled" } : await currentSubscription(subscriptionId);
+  await saveSubscription(subscription, userId, client);
+}
+
 async function handleSubscriptionEvent(event: StripeEvent, client: PoolClient) {
   const sent = event.data?.object as StripeSubscription | undefined;
   if (!sent?.id) return;
-  await lockSubscription(sent.id, client);
+  await resync(sent.id, {
+    customerId: stripeId(sent.customer),
+    metadataUserId: sent.metadata?.user_id,
+    deleted: event.type === "customer.subscription.deleted" ? sent : undefined,
+  }, client);
+}
 
-  // the reader comes from what we set at checkout (metadata) or the customer we already know
-  const customerId = stripeId(sent.customer);
-  const metadataUser = parseUserId(sent.metadata?.user_id);
-  const userId = metadataUser && (await userExists(metadataUser, client))
-    ? metadataUser
-    : customerId
-      ? await findUserIdForStripeCustomer(customerId, sent.id, client)
-      : null;
-  // not ours yet: checkout.session.completed links it when it arrives
+/** invoice.paid / invoice.payment_failed: re-read the invoice's subscription (it says active, past_due…). */
+async function handleInvoiceEvent(invoice: Record<string, unknown> & StripeInvoiceRef, client: PoolClient) {
+  const subscriptionId = subscriptionOfInvoice(invoice);
+  if (!subscriptionId) return; // a one-off invoice
+  await resync(subscriptionId, {
+    customerId: stripeId(invoice.customer),
+    metadataUserId: invoice.parent?.subscription_details?.metadata?.user_id,
+  }, client);
+}
+
+/** A full refund of a subscription payment ends that subscription at once (see /refund). */
+async function handleChargeRefunded(charge: Record<string, unknown>, client: PoolClient) {
+  if (charge.refunded !== true) return; // partial refunds leave the subscription alone
+  const subscriptionId = await subscriptionForCharge(charge as Parameters<typeof subscriptionForCharge>[0]);
+  if (!subscriptionId) return;
+
+  await lockSubscription(subscriptionId, client);
+  const userId = await readerFor(subscriptionId, stripeId(charge.customer), undefined, client);
   if (!userId) return;
-
   await lockUser(userId, client);
-  const subscription = event.type === "customer.subscription.deleted"
-    ? { ...sent, status: "canceled" }
-    : await currentSubscription(sent.id);
-  await saveSubscription(subscription, userId, client);
+  const subscription = await currentSubscription(subscriptionId);
+  // already over, including a duplicate we refunded and cancelled ourselves
+  if (subscription.status === "canceled" || subscription.status === "incomplete_expired") {
+    await writeSubscription(subscription, userId, client);
+    return;
+  }
+  try {
+    await stripeRequest("DELETE", `/subscriptions/${encodeURIComponent(subscriptionId)}`, undefined, { idempotencyKey: `dreamreel-refunded-cancel-${subscriptionId}` });
+  } catch (error) {
+    const now = await retrieveSubscription(subscriptionId).catch(() => null);
+    if (now?.status !== "canceled") {
+      if (isTransient(error)) throw error;
+      console.error("[billing] refunded subscription could not be cancelled", { subscription: subscriptionId, charge: charge.id, stripeCode: (error as StripeApiError).code });
+      await recordNeedsAction(client, `action:cancel:${subscriptionId}`, "manual.cancel", {
+        subscriptionId, chargeId: charge.id, reason: "refunded_cancel_rejected", stripeCode: (error as StripeApiError).code,
+      });
+      return;
+    }
+  }
+  console.warn("[billing] cancelled a fully refunded subscription", { subscription: subscriptionId, charge: charge.id });
+  await writeSubscription({ ...subscription, status: "canceled" }, userId, client);
+}
+
+/** Disputes and early fraud warnings: the owner decides; we keep the ids. */
+async function handleRiskEvent(event: StripeEvent, client: PoolClient) {
+  const object = event.data?.object ?? {};
+  const kind = event.type === "charge.dispute.created" ? "dispute" : "early_fraud_warning";
+  const details = { [`${kind === "dispute" ? "dispute" : "warning"}Id`]: object.id, chargeId: stripeId(object.charge), paymentIntentId: stripeId(object.payment_intent), eventId: event.id };
+  console.warn(`[billing] ${kind} needs the owner`, details);
+  await recordNeedsAction(client, `action:${kind}:${object.id}`, `manual.${kind}`, details);
 }
 
 export async function POST(request: NextRequest) {
@@ -266,7 +331,10 @@ export async function POST(request: NextRequest) {
         if (!object) return;
         try {
           if (event.type === "checkout.session.completed") await handleCheckoutCompleted(object, client);
-          else await handleSubscriptionEvent(event, client);
+          else if (event.type.startsWith("customer.subscription.")) await handleSubscriptionEvent(event, client);
+          else if (event.type.startsWith("invoice.")) await handleInvoiceEvent(object, client);
+          else if (event.type === "charge.refunded") await handleChargeRefunded(object, client);
+          else await handleRiskEvent(event, client);
         } catch (error) {
           if (!(error instanceof SkipEvent)) throw error;
         }

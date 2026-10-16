@@ -56,3 +56,32 @@ describe("invoiceForRefund across API shapes", () => {
     await expect(invoiceForRefund("in_7")).rejects.toMatchObject({ status: 503 });
   });
 });
+
+describe("charge → invoice → subscription", () => {
+  it("reads the subscription from Basil's parent, else the older field", async () => {
+    const { subscriptionOfInvoice } = await import("@/lib/stripe");
+    expect(subscriptionOfInvoice({ parent: { subscription_details: { subscription: "sub_basil" } }, subscription: "sub_old" })).toBe("sub_basil");
+    expect(subscriptionOfInvoice({ subscription: { id: "sub_old" } })).toBe("sub_old");
+    expect(subscriptionOfInvoice({ parent: null })).toBeNull();
+  });
+
+  it("goes PaymentIntent → invoice payments → invoice, with the payment filter Stripe documents", async () => {
+    const { subscriptionForCharge } = await import("@/lib/stripe");
+    fetchMock
+      .mockResolvedValueOnce(json({ data: [{ invoice: "in_9" }] }))
+      .mockResolvedValueOnce(json({ parent: { subscription_details: { subscription: "sub_9" } } }));
+    expect(await subscriptionForCharge({ payment_intent: "pi_9" })).toBe("sub_9");
+    const listUrl = new URL(String(fetchMock.mock.calls[0][0]));
+    expect(listUrl.pathname).toBe("/v1/invoice_payments");
+    expect(listUrl.searchParams.get("payment[type]")).toBe("payment_intent");
+    expect(listUrl.searchParams.get("payment[payment_intent]")).toBe("pi_9");
+    expect(String(fetchMock.mock.calls[1][0])).toBe("https://api.stripe.com/v1/invoices/in_9");
+  });
+
+  it("returns null for a charge without an invoice", async () => {
+    const { subscriptionForCharge } = await import("@/lib/stripe");
+    fetchMock.mockResolvedValueOnce(json({ data: [] }));
+    expect(await subscriptionForCharge({ payment_intent: "pi_oneoff" })).toBeNull();
+    expect(await subscriptionForCharge({})).toBeNull();
+  });
+});

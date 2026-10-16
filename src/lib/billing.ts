@@ -358,6 +358,18 @@ export async function otherPlusSubscriptionIds(userId: number, subscriptionId: s
  * subscription and kind, so retries don't pile up:
  *   SELECT * FROM payment_events WHERE status = 'needs_action';
  */
+/** A payment_events row the owner must look at; the id makes it one row per case. */
+export async function recordNeedsAction(client: PoolClient, id: string, type: string, details: Record<string, unknown>) {
+  await client.query(
+    `
+      INSERT INTO payment_events (id, provider, type, payload, status)
+      VALUES ($1, 'stripe', $2, $3, 'needs_action')
+      ON CONFLICT (id) DO NOTHING
+    `,
+    [id, type, JSON.stringify(details)],
+  );
+}
+
 export async function recordManualAction(client: PoolClient, action: {
   kind: "refund" | "cancel";
   subscriptionId: string;
@@ -366,14 +378,7 @@ export async function recordManualAction(client: PoolClient, action: {
   reason: string;
   stripeCode?: string;
 }) {
-  await client.query(
-    `
-      INSERT INTO payment_events (id, provider, type, payload, status)
-      VALUES ($1, 'stripe', $2, $3, 'needs_action')
-      ON CONFLICT (id) DO NOTHING
-    `,
-    [`action:${action.kind}:${action.subscriptionId}`, `manual.${action.kind}`, JSON.stringify(action)],
-  );
+  await recordNeedsAction(client, `action:${action.kind}:${action.subscriptionId}`, `manual.${action.kind}`, action);
 }
 
 export async function userExists(userId: number, client?: PoolClient): Promise<boolean> {

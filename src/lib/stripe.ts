@@ -79,6 +79,14 @@ export const STRIPE_WEBHOOK_EVENTS: ReadonlySet<string> = new Set([
   "customer.subscription.created",
   "customer.subscription.updated",
   "customer.subscription.deleted",
+  // Stripe's guide: provision / extend access on invoice.paid; a failed payment re-syncs too
+  "invoice.paid",
+  "invoice.payment_failed",
+  // a full refund also ends the subscription (refund policy)
+  "charge.refunded",
+  // money at risk: recorded for the owner
+  "charge.dispute.created",
+  "radar.early_fraud_warning.created",
 ]);
 
 function parseSignatureHeader(header: string) {
@@ -275,4 +283,36 @@ export async function invoiceForRefund(invoiceId: string): Promise<{
     payment = paymentOf(paid(list?.data));
   }
   return { amountPaid, billingReason, payment };
+}
+
+export type StripeInvoiceRef = {
+  subscription?: string | { id: string } | null;
+  parent?: { subscription_details?: { subscription?: string | { id: string } | null; metadata?: Record<string, string> | null } | null } | null;
+};
+
+/** The subscription an invoice belongs to: Basil+ `parent.subscription_details`, else `subscription`. */
+export function subscriptionOfInvoice(invoice: StripeInvoiceRef | null | undefined): string | null {
+  return stripeId(invoice?.parent?.subscription_details?.subscription) ?? stripeId(invoice?.subscription);
+}
+
+const notFound = (error: unknown) => error instanceof StripeApiError && (error.status === 400 || error.status === 404);
+
+/**
+ * Charge → invoice → subscription, per Stripe's guide. Basil+: the PaymentIntent's invoice comes
+ * from the invoice payments list; older versions put `invoice` on the charge. Null for a charge
+ * that isn't a subscription payment.
+ */
+export async function subscriptionForCharge(charge: { invoice?: string | { id: string } | null; payment_intent?: string | { id: string } | null }): Promise<string | null> {
+  let invoiceId = stripeId(charge.invoice);
+  const paymentIntent = stripeId(charge.payment_intent);
+  if (!invoiceId && paymentIntent) {
+    const params = new URLSearchParams({ "payment[type]": "payment_intent", "payment[payment_intent]": paymentIntent, limit: "1" });
+    const list = await stripeRequest<{ data?: { invoice?: string | { id: string } }[] }>("GET", "/invoice_payments", params)
+      .catch((error: unknown) => { if (notFound(error)) return null; throw error; });
+    invoiceId = stripeId(list?.data?.[0]?.invoice);
+  }
+  if (!invoiceId) return null;
+  const invoice = await stripeRequest<StripeInvoiceRef>("GET", `/invoices/${encodeURIComponent(invoiceId)}`)
+    .catch((error: unknown) => { if (notFound(error)) return null; throw error; });
+  return subscriptionOfInvoice(invoice);
 }
