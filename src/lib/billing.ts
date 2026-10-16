@@ -162,10 +162,15 @@ async function getLatestSubscription(userId: number): Promise<SubscriptionRow | 
              current_period_start, current_period_end, cancel_at_period_end
       FROM subscriptions
       WHERE user_id = $1
-      ORDER BY updated_at DESC, id DESC
+      -- a subscription that currently grants Plus wins over a newer, already-ended one
+      ORDER BY (
+        plan = 'plus'
+        AND status = ANY($2::text[])
+        AND (current_period_end IS NULL OR current_period_end > NOW())
+      ) DESC, updated_at DESC, id DESC
       LIMIT 1
     `,
-    [userId],
+    [userId, [...ACTIVE_STATUSES]],
   );
   return result.rows[0] ?? null;
 }
@@ -314,9 +319,26 @@ export async function checkAiRateLimit(
   }
 }
 
+/** The Stripe customer this user already has, so checkout and the portal reuse it. */
 export async function getStripeCustomerId(userId: number): Promise<string | null> {
-  const subscription = await getLatestSubscription(userId);
-  return subscription?.provider_customer_id ?? null;
+  await ensureSchema();
+  const result = await getPool().query<{ provider_customer_id: string }>(
+    `
+      SELECT provider_customer_id
+      FROM subscriptions
+      WHERE user_id = $1 AND provider = 'stripe' AND provider_customer_id IS NOT NULL
+      ORDER BY updated_at DESC, id DESC
+      LIMIT 1
+    `,
+    [userId],
+  );
+  return result.rows[0]?.provider_customer_id ?? null;
+}
+
+export async function userExists(userId: number, client?: PoolClient): Promise<boolean> {
+  await ensureSchema();
+  const result = await (client ?? getPool()).query(`SELECT 1 FROM users WHERE id = $1`, [userId]);
+  return (result.rowCount ?? 0) > 0;
 }
 
 export async function findUserIdForStripeCustomer(
@@ -364,7 +386,12 @@ export async function upsertStripeSubscription(input: {
       DO UPDATE SET
         user_id = EXCLUDED.user_id,
         provider_customer_id = COALESCE(EXCLUDED.provider_customer_id, subscriptions.provider_customer_id),
-        status = EXCLUDED.status,
+        -- an ended Stripe subscription can never start again; a late, out-of-order event
+        -- must not bring it back
+        status = CASE
+          WHEN subscriptions.status IN ('canceled', 'incomplete_expired') THEN subscriptions.status
+          ELSE EXCLUDED.status
+        END,
         plan = EXCLUDED.plan,
         current_period_start = EXCLUDED.current_period_start,
         current_period_end = EXCLUDED.current_period_end,
