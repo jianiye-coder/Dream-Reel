@@ -40,3 +40,10 @@ jobs:
       - run: npm run test:unit
       - run: npm run test:integration
       - run: npm run build
+      # informational: the golden-principles score (docs/golden-principles.md) in the job summary
+      - name: Quality score
+        if: always()
+        continue-on-error: true
+        run: |
+          npm run quality > /dev/null
+          cat quality/REPORT.md >> "$GITHUB_STEP_SUMMARY"

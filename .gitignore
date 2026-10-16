@@ -12,3 +12,7 @@ next-env.d.ts
 # Office/LibreOffice lock files
 .~*
 outputs/**/.~*
+
+# npm run quality output (quality/baseline.json is committed)
+/quality/score.json
+/quality/REPORT.md
