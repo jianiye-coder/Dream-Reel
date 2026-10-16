@@ -399,30 +399,9 @@ function useModalFocus(isOpen: boolean, onClose: () => void, initialFocusRef?: R
   return { dialogRef, onKeyDown };
 }
 
-/* Tally marks the way you'd count on paper: 正 strokes in Chinese, gate-fives in English. */
-function Tally({ count, lang, label }: { count: number; lang: Lang; label: string }) {
-  if (count > 20) {
-    return <span className={s.tally} role="img" aria-label={label}><span className={s.tallyNum} aria-hidden>{count}</span></span>;
-  }
-  if (lang === "zh") {
-    const strokes = "一丅下止正";
-    const text = "正".repeat(Math.floor(count / 5)) + (count % 5 ? strokes[(count % 5) - 1] : "");
-    return <span className={s.tally} role="img" aria-label={label}><span aria-hidden>{text}</span></span>;
-  }
-  const groups: number[] = [];
-  for (let left = count; left > 0; left -= 5) groups.push(Math.min(5, left));
-  return (
-    <span className={s.tally} role="img" aria-label={label}>
-      {groups.map((n, g) => (
-        <svg key={g} viewBox="0 0 24 16" width="22" height="15" aria-hidden>
-          {Array.from({ length: Math.min(n, 4) }, (_, i) => (
-            <path key={i} d={`M${4 + i * 5} ${2 + (i % 2) * 0.6} L${4.4 + i * 5} 14.2`} />
-          ))}
-          {n === 5 ? <path d="M1.5 11.5 L22.5 4" /> : null}
-        </svg>
-      ))}
-    </span>
-  );
+/* How often a name or symbol turns up: a numeral in red ink, read out in full ("出现 3 次" / "appears 3 times"). */
+function Count({ count, label }: { count: number; label: string }) {
+  return <span className={s.count}><span aria-hidden>{count}</span><span className="nb-sr-only">{label}</span></span>;
 }
 
 function TagChipInput({
@@ -2059,7 +2038,7 @@ export default function DreamGrid({
               {item.label}
               {rel || genderText ? <small>{[rel, genderText].filter(Boolean).join(" · ")}</small> : null}
             </button>
-            <Tally count={item.count} lang={lang} label={timesLabel(item.count)} />
+            <Count count={item.count} label={timesLabel(item.count)} />
             <div className={s.menuWrap} data-tag-menu>
               <button
                 type="button"
@@ -2216,7 +2195,7 @@ export default function DreamGrid({
         {title ? <p className={s.bigTitle} aria-hidden>{title}</p> : null}
         {addPanel(kind)}
         {items.length > 0
-          ? <ul className={s.tallyList}>{items.map((item) => keywordRow(item, items))}</ul>
+          ? <ul className={s.kwList}>{items.map((item) => keywordRow(item, items))}</ul>
           : <p className={s.emptyNote}>{empty}</p>}
       </section>
     );
@@ -2423,12 +2402,12 @@ export default function DreamGrid({
                     <section className={`${s.kwSection} ${s.symbolsSection}`}>
                       <div className={s.secHead}><h2 className="nb-kicker">{N.symbolsKicker}</h2></div>
                       {symbolCounts.length > 0 ? (
-                        <ul className={s.tallyList}>
+                        <ul className={s.kwList}>
                           {symbolCounts.slice(0, 6).map((item) => (
                             <li key={item.item} className={s.row}>
                               <div className={s.rowMain}>
                                 <span className={s.rowName}>{item.item}</span>
-                                <Tally count={item.count} lang={lang} label={timesLabel(item.count)} />
+                                <Count count={item.count} label={timesLabel(item.count)} />
                               </div>
                             </li>
                           ))}
