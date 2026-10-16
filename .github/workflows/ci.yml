@@ -11,22 +11,6 @@ permissions:
 jobs:
   verify:
     runs-on: ubuntu-latest
-    services:
-      postgres:
-        # Official postgres image via the AWS public mirror; Docker Hub's anonymous pull
-        # limit on shared runners was failing this job before any code ran.
-        image: public.ecr.aws/docker/library/postgres:17
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: dream_reel_test
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U postgres"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 10
     env:
       DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/dream_reel_test
       TEST_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/dream_reel_test
@@ -34,6 +18,14 @@ jobs:
       DREAM_TEXT_ENCRYPTION_KEY: ci-encryption-secret
       OPENAI_API_KEY: deterministic-test-key
     steps:
+      # PostgreSQL ships preinstalled on GitHub's Ubuntu runners. Starting it avoids pulling a
+      # container image, which kept failing on registry rate limits (Docker Hub, then ECR).
+      - name: Start PostgreSQL
+        run: |
+          sudo systemctl start postgresql.service
+          timeout 60 bash -c "until pg_isready -h 127.0.0.1 -p 5432; do sleep 1; done"
+          sudo -u postgres psql -c "ALTER USER postgres PASSWORD 'postgres';"
+          sudo -u postgres createdb dream_reel_test
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
