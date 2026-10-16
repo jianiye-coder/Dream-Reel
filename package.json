@@ -10,6 +10,7 @@
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "knip": "knip && knip --production --include files,dependencies,unlisted,unresolved,binaries",
+    "quality": "node scripts/quality.mjs",
     "test": "vitest run",
     "test:unit": "vitest run tests/unit",
     "test:integration": "vitest run tests/integration --no-file-parallelism",
