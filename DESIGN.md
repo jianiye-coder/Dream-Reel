@@ -60,9 +60,10 @@ All self-hosted at build time, because the CSP only allows same-origin fonts
 
 - **`NotebookShell`** (`src/components/notebook/NotebookShell.tsx`): `.nb-root`
   plus the top bar (brand, running-head nav with the red underline under the
-  current page, language toggle), the phone contents sheet, and the pen-sound
-  switch. `surface="desk"` (default) shows the desk with paper grain and soft
-  window light; `surface="paper"` makes the whole page one sheet.
+  current page, language toggle), the phone contents sheet, and the sound switch
+  (声音 开 / 关, Sound on / off; in the contents sheet on phones).
+  `surface="desk"` (default) shows the desk with paper grain and soft window
+  light; `surface="paper"` makes the whole page one sheet.
   `lean` lays the book out at one fixed size (1021 × 690 book px) and zooms
   the stage to fill the window (`--lean`), so type, photos and turns scale
   together; working pages use it.

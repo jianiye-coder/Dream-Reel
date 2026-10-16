@@ -150,8 +150,8 @@ const zh = {
     contents: "目录",
     closeContents: "合上",
     tagline: "一本放在枕边的梦境笔记本",
-    soundOn: "笔声 开",
-    soundOff: "笔声 关",
+    soundOn: "声音 开",
+    soundOff: "声音 关",
   },
 
   nbLanding: {
@@ -787,8 +787,8 @@ const en: typeof zh = {
     contents: "Contents",
     closeContents: "Close",
     tagline: "A dream notebook for your bedside",
-    soundOn: "Pen sound on",
-    soundOff: "Pen sound off",
+    soundOn: "Sound on",
+    soundOff: "Sound off",
   },
 
   nbLanding: {
