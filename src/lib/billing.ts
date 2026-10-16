@@ -335,6 +335,23 @@ export async function getStripeCustomerId(userId: number): Promise<string | null
   return result.rows[0]?.provider_customer_id ?? null;
 }
 
+/** Other subscriptions of this reader that the database still counts as Plus. */
+export async function otherPlusSubscriptionIds(userId: number, subscriptionId: string, client?: PoolClient): Promise<string[]> {
+  await ensureSchema();
+  const result = await (client ?? getPool()).query<{ provider_subscription_id: string }>(
+    `
+      SELECT provider_subscription_id
+      FROM subscriptions
+      WHERE user_id = $1 AND provider = 'stripe' AND provider_subscription_id <> $2
+        AND plan = 'plus' AND status = ANY($3::text[])
+        AND (current_period_end IS NULL OR current_period_end > NOW())
+      ORDER BY id
+    `,
+    [userId, subscriptionId, [...ACTIVE_STATUSES]],
+  );
+  return result.rows.map((row) => row.provider_subscription_id);
+}
+
 export async function userExists(userId: number, client?: PoolClient): Promise<boolean> {
   await ensureSchema();
   const result = await (client ?? getPool()).query(`SELECT 1 FROM users WHERE id = $1`, [userId]);

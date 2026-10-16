@@ -30,6 +30,10 @@ databaseDescribe("Stripe webhook → Plus in PostgreSQL", () => {
 
   // what GET /v1/subscriptions/:id answers, per subscription id
   const stripeSubscriptions = new Map<string, Record<string, unknown> | { error: number }>();
+  const refundedKeys = new Set<string>();
+  const stripeFailures = { cancel: 0, refundAlreadyDone: false };
+  const callsTo = (method: string, path: string) => fetchMock.mock.calls.filter(([input, init]) =>
+    (init?.method ?? "GET") === method && String(input).split("?")[0] === `https://api.stripe.com/v1${path}`);
   const fetchMock = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
     const url = String(input);
     const match = url.match(/^https:\/\/api\.stripe\.com\/v1\/subscriptions\/([^/?]+)$/);
@@ -38,6 +42,27 @@ databaseDescribe("Stripe webhook → Plus in PostgreSQL", () => {
       if (!found) return new Response(JSON.stringify({ error: { code: "resource_missing" } }), { status: 404 });
       if ("error" in found) return new Response(JSON.stringify({ error: { message: "boom" } }), { status: Number(found.error) });
       return new Response(JSON.stringify(found), { status: 200 });
+    }
+    if (match && init?.method === "DELETE") {
+      if (stripeFailures.cancel) { stripeFailures.cancel -= 1; return new Response(JSON.stringify({ error: { message: "boom" } }), { status: 500 }); }
+      const id = decodeURIComponent(match[1]);
+      const found = stripeSubscriptions.get(id) as Record<string, unknown>;
+      stripeSubscriptions.set(id, { ...found, status: "canceled" });
+      return new Response(JSON.stringify({ ...found, status: "canceled" }), { status: 200 });
+    }
+    const invoice = url.match(/^https:\/\/api\.stripe\.com\/v1\/invoices\/([^/?]+)$/);
+    if (invoice) return new Response(JSON.stringify({ id: invoice[1], object: "invoice", amount_paid: invoice[1].includes("trial") ? 0 : 1299 }), { status: 200 });
+    if (url.startsWith("https://api.stripe.com/v1/invoice_payments?")) {
+      const invoiceId = new URL(url).searchParams.get("invoice")!;
+      return new Response(JSON.stringify({ object: "list", data: [{ object: "invoice_payment", status: "paid", payment: { type: "payment_intent", payment_intent: `pi_for_${invoiceId}` } }] }), { status: 200 });
+    }
+    if (url === "https://api.stripe.com/v1/refunds") {
+      const key = new Headers(init?.headers).get("Idempotency-Key")!;
+      if (refundedKeys.has(key) && stripeFailures.refundAlreadyDone) {
+        return new Response(JSON.stringify({ error: { code: "charge_already_refunded", message: "already refunded" } }), { status: 400 });
+      }
+      refundedKeys.add(key);
+      return new Response(JSON.stringify({ id: "re_1", object: "refund", status: "succeeded" }), { status: 200 });
     }
     if (url === "https://api.stripe.com/v1/checkout/sessions") {
       return new Response(JSON.stringify({ id: "cs_test", url: "https://checkout.stripe.com/c/pay/cs_test" }), { status: 200 });
@@ -60,7 +85,9 @@ databaseDescribe("Stripe webhook → Plus in PostgreSQL", () => {
       cancel_at_period_end: false,
       cancel_at: null,
       metadata: { user_id: String(userId), plan: "plus" },
-      items: { object: "list", data: [{ id: "si_1", current_period_start: period.start, current_period_end: period.end, price: { id: "price_cny" } }] },
+      created: nowSec() - 60,
+      latest_invoice: `in_${current.subscription}`,
+      items: { object: "list", data: [{ id: "si_1", current_period_start: period.start, current_period_end: period.end, price: { id: "price_cny", object: "price" } }] },
       ...extra,
     };
   }
@@ -119,6 +146,8 @@ databaseDescribe("Stripe webhook → Plus in PostgreSQL", () => {
     vi.stubGlobal("fetch", fetchMock);
     fetchMock.mockClear();
     stripeSubscriptions.clear();
+    refundedKeys.clear();
+    Object.assign(stripeFailures, { cancel: 0, refundAlreadyDone: false });
     seq += 1;
     current = ids();
     const { rows } = await getPool().query<{ id: number }>(
@@ -259,6 +288,109 @@ databaseDescribe("Stripe webhook → Plus in PostgreSQL", () => {
     }
     expect(reads).toBe(2);
     expect(await getBillingStatus(userId)).toMatchObject({ plan: "plus", subscriptionStatus: "active" });
+  });
+
+  it("grants nothing for a subscription to some other price", async () => {
+    const other = { items: { data: [{ current_period_start: nowSec(), current_period_end: nowSec() + 30 * DAY, price: { id: "price_something_else" } }] } };
+    stripeSubscriptions.set(current.subscription, subscription("active", other));
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    await deliver(checkoutCompleted());
+    expect(await getBillingStatus(userId)).toMatchObject({ plan: "free", subscriptionStatus: "active" });
+    expect(JSON.stringify(warn.mock.calls)).toContain(current.subscription);
+    expect(JSON.stringify(warn.mock.calls)).not.toContain("example.test");
+    const { rows } = await getPool().query("SELECT plan FROM subscriptions WHERE provider_subscription_id = $1", [current.subscription]);
+    expect(rows[0].plan).toBe("free");
+  });
+
+  describe("two paid checkouts (two tabs)", () => {
+    function second(status = "active", extra: Record<string, unknown> = {}) {
+      return { ...subscription(status), id: `${current.subscription}_b`, created: nowSec(), latest_invoice: `in_${current.subscription}_b`, ...extra };
+    }
+
+    it("keeps the older subscription and refunds and cancels the newer one, once", async () => {
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+      stripeSubscriptions.set(current.subscription, subscription("active"));
+      await deliver(checkoutCompleted());
+      const newer = second();
+      stripeSubscriptions.set(newer.id, newer);
+      expect(await deliver(checkoutCompleted({ id: "cs_b", subscription: newer.id }))).toEqual({ status: 200, body: { received: true } });
+
+      expect(await getBillingStatus(userId)).toMatchObject({ plan: "plus", subscriptionStatus: "active" });
+      const { rows } = await getPool().query(
+        "SELECT provider_subscription_id AS id, status FROM subscriptions WHERE user_id = $1 ORDER BY id", [userId]);
+      expect(rows).toEqual([{ id: current.subscription, status: "active" }, { id: newer.id, status: "canceled" }]);
+
+      const refunds = callsTo("POST", "/refunds");
+      expect(refunds).toHaveLength(1);
+      expect(Object.fromEntries(new URLSearchParams(String(refunds[0][1]!.body)))).toEqual({
+        payment_intent: `pi_for_in_${newer.id}`,
+        reason: "duplicate",
+        "metadata[reason]": "duplicate_plus_subscription",
+        "metadata[subscription]": newer.id,
+      });
+      expect(new Headers(refunds[0][1]!.headers).get("Idempotency-Key")).toBe(`dreamreel-duplicate-refund-${newer.id}`);
+      expect(callsTo("DELETE", `/subscriptions/${newer.id}`)).toHaveLength(1);
+      expect(callsTo("DELETE", `/subscriptions/${current.subscription}`)).toHaveLength(0);
+      expect(JSON.stringify(warn.mock.calls)).toContain("duplicate");
+
+      // Stripe's own deleted/updated events for the cancelled one change nothing more
+      await deliver(event("customer.subscription.updated", second("canceled")));
+      await deliver(event("customer.subscription.deleted", second("canceled")));
+      expect(callsTo("POST", "/refunds")).toHaveLength(1);
+      expect(await plan()).toBe("plus");
+    });
+
+    it("drops the newer one even when the older one's event arrives last", async () => {
+      vi.spyOn(console, "warn").mockImplementation(() => undefined);
+      const older = subscription("active");
+      const newer = second();
+      stripeSubscriptions.set(older.id, older);
+      stripeSubscriptions.set(newer.id, newer);
+      await deliver(checkoutCompleted({ id: "cs_b", subscription: newer.id }));
+      await deliver(checkoutCompleted());
+      expect(callsTo("DELETE", `/subscriptions/${newer.id}`)).toHaveLength(1);
+      expect(callsTo("DELETE", `/subscriptions/${older.id}`)).toHaveLength(0);
+      expect(await getBillingStatus(userId)).toMatchObject({ plan: "plus", subscriptionStatus: "active" });
+    });
+
+    it("finishes after a failed cancel on Stripe's retry without refunding twice", async () => {
+      vi.spyOn(console, "warn").mockImplementation(() => undefined);
+      vi.spyOn(console, "error").mockImplementation(() => undefined);
+      stripeSubscriptions.set(current.subscription, subscription("active"));
+      await deliver(checkoutCompleted());
+      const newer = second();
+      stripeSubscriptions.set(newer.id, newer);
+      stripeFailures.cancel = 1;
+      stripeFailures.refundAlreadyDone = true;
+      const completed = checkoutCompleted({ id: "cs_b", subscription: newer.id });
+      expect((await deliver(completed)).status).toBe(500);
+      expect(refundedKeys.size).toBe(1);
+
+      expect(await deliver(completed)).toEqual({ status: 200, body: { received: true } });
+      expect(refundedKeys.size).toBe(1);
+      expect(stripeSubscriptions.get(newer.id)).toMatchObject({ status: "canceled" });
+      expect(await getBillingStatus(userId)).toMatchObject({ plan: "plus", subscriptionStatus: "active" });
+    });
+
+    it("cancels without a refund when nothing was charged (trial)", async () => {
+      vi.spyOn(console, "warn").mockImplementation(() => undefined);
+      stripeSubscriptions.set(current.subscription, subscription("active"));
+      await deliver(checkoutCompleted());
+      const newer = second("trialing", { latest_invoice: "in_trial_b" });
+      stripeSubscriptions.set(newer.id, newer);
+      await deliver(checkoutCompleted({ id: "cs_b", subscription: newer.id }));
+      expect(callsTo("POST", "/refunds")).toHaveLength(0);
+      expect(callsTo("DELETE", `/subscriptions/${newer.id}`)).toHaveLength(1);
+    });
+  });
+
+  it("pins the Stripe API version on every call", async () => {
+    stripeSubscriptions.set(current.subscription, subscription("active"));
+    await deliver(checkoutCompleted());
+    expect(fetchMock).toHaveBeenCalled();
+    for (const [, init] of fetchMock.mock.calls) {
+      expect(new Headers(init?.headers).get("Stripe-Version")).toBe("2025-03-31.basil");
+    }
   });
 
   it("never brings an ended subscription back", async () => {
