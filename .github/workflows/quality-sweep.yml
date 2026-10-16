@@ -1,20 +1,22 @@
 name: Quality sweep
 
-# Once a day: score main against docs/golden-principles.md (npm run quality), let Claude make the
-# single most valuable small fix (or draft an issue when the fix needs a protected path), and publish
-# it as one PR labelled quality-sweep. quality-automerge.yml decides whether that PR may merge itself.
+# Once a day: score main against docs/golden-principles.md, let Claude make the single most valuable
+# small fix (or draft an issue when the fix needs a protected path), and publish it as one PR labelled
+# quality-sweep. quality-automerge.yml decides whether that PR may merge itself.
 #
-# Two jobs, so the agent never holds a write token:
-# - sweep (read-only token): Claude edits files in the working tree only. It cannot run git write
-#   commands, gh or the network; it writes its PR or issue text into .quality-sweep/. The workflow
-#   re-runs lint, tsc, knip and the unit tests itself, then hands the diff on as an artifact.
-# - publish (write token, runs no repository code): validates the diff (size, files, protected paths,
-#   tests), commits it as github-actions[bot], pushes quality-sweep/<date>-<slug>, opens the PR and
-#   dispatches CI and the auto-merge gate (GITHUB_TOKEN events don't start pull_request workflows,
-#   but workflow_dispatch ones do). Or it files the drafted issue.
-#
-# Auth for Claude: CLAUDE_CODE_OAUTH_TOKEN (from `claude setup-token`, a Claude Pro/Max subscription;
-# runs draw from its usage limits). Branch protection on main is the backstop: see README.
+# Jobs, so that no code the agent wrote ever runs next to a secret:
+# - sweep: Claude (CLAUDE_CODE_OAUTH_TOKEN; read-only job token) may only read the checkout and edit
+#   files under src/, docs/, tests/unit/ and its drafts in .quality-sweep/. It runs no commands
+#   except `git status` / `git diff`. Nothing executes after it in this job: the diff and the drafts
+#   are size-limited, scanned for secret-like strings and uploaded.
+# - verify: a fresh checkout with the diff applied runs lint, tsc, knip, the unit tests and the score,
+#   with no secrets and a read-only token. This is the only place the agent's code runs.
+# - publish (write token, runs no repository code): validates the diff against an allowlist, commits
+#   it as github-actions[bot], pushes quality-sweep/<date>-<slug>, opens the PR and dispatches CI and
+#   the auto-merge gate with this run's id (PRs opened with GITHUB_TOKEN don't start pull_request
+#   workflows; workflow_dispatch ones do). Or it files the drafted issue.
+# - main-guard: main may only have moved through merged PRs during the run.
+# Branch protection on main is the backstop: see README.
 
 on:
   schedule:
@@ -28,6 +30,16 @@ concurrency:
   group: quality-sweep
   cancel-in-progress: false
 
+env:
+  # keep these identical in quality-automerge.yml (and the list in .github/quality-sweep-prompt.md)
+  ALLOWED: '^(src/|docs/|tests/unit/)'
+  PROTECTED: '^(src/app/api/|src/lib/billing\.ts$|src/lib/stripe\.ts$|src/lib/dreams\.ts$|src/lib/safeServerLog\.ts$|src/lib/email\.ts$|src/lib/session\.ts$|src/lib/authRateLimit\.ts$|src/lib/db\.ts$|src/lib/dreamTextEncryption\.ts$|src/auth|src/middleware|src/proxy|src/instrumentation|src/types/next-auth\.d\.ts$|tests/unit/i18n-keys\.test\.ts$|docs/golden-principles\.md$)|(^|/)route\.[jt]sx?$|(^|/)actions?\.[jt]sx?$|(^|/)\.|migration'
+  # ASCII path characters Next.js routes use (letters, digits, . _ / ( ) + @ [ ] -)
+  SAFE_PATH: '^[]A-Za-z0-9._/()+@[-]+$'
+  SECRET_LIKE: 'sk-ant-|gh[pousr]_[A-Za-z0-9]{20,}|github_pat_|xox[abprs]-|AKIA[0-9A-Z]{16}|-----BEGIN [A-Z ]*PRIVATE KEY|CLAUDE_CODE_OAUTH_TOKEN=|x-access-token:'
+  MAX_CHANGED_LINES: 150
+  MAX_CHANGED_FILES: 10
+
 jobs:
   sweep:
     runs-on: ubuntu-latest
@@ -37,11 +49,13 @@ jobs:
       pull-requests: read
     outputs:
       skip: ${{ steps.gate.outputs.open != '0' }}
-      main_sha: ${{ steps.score.outputs.main_sha }}
+      changed: ${{ steps.package.outputs.changed }}
+      main_sha: ${{ github.sha }}
     steps:
+      # github.sha: main as it was when this run was triggered (the gate checks the PR's parent is it)
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
-          ref: main
+          ref: ${{ github.sha }}
           persist-credentials: false
 
       # one sweep PR at a time: skip the whole run (and the Claude usage) while one is open
@@ -50,6 +64,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          if [ "$GITHUB_REF" != "refs/heads/main" ]; then echo "::error::the sweep only runs on main"; exit 1; fi
           open=$(gh pr list --repo "$GITHUB_REPOSITORY" --label quality-sweep --state open --json number --jq length)
           echo "open=$open" >> "$GITHUB_OUTPUT"
           if [ "$open" != "0" ]; then
@@ -62,17 +77,13 @@ jobs:
           node-version: 22
           cache: npm
 
-      - name: Install
-        if: steps.gate.outputs.open == '0'
-        run: npm ci
-
+      # main's own code, before the agent touches anything
       - name: Score main
         if: steps.gate.outputs.open == '0'
-        id: score
         run: |
+          npm ci
           npm run quality > /dev/null
           cp quality/score.json quality/score-main.json
-          echo "main_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
           cat quality/REPORT.md >> "$GITHUB_STEP_SUMMARY"
 
       - name: Build the prompt
@@ -87,8 +98,7 @@ jobs:
             echo "QUALITY_SWEEP_PROMPT"
           } >> "$GITHUB_OUTPUT"
 
-      # The agent edits the working tree only: file edits are limited to src/, docs/, tests/unit/ and
-      # .quality-sweep/, and the only commands are the checks below. No git writes, no gh, no web.
+      # Read and edit only, inside the checkout; the only commands are `git status` and `git diff`.
       - name: Sweep
         if: steps.gate.outputs.open == '0'
         uses: anthropics/claude-code-action@374f254f5efaf968abfe15d399fd90972e8138b9 # v1.0.251
@@ -99,42 +109,36 @@ jobs:
           prompt: ${{ steps.prompt.outputs.text }}
           claude_args: |
             --max-turns 80
-            --allowedTools "Read,Glob,Grep,Edit(src/**),Edit(docs/**),Edit(tests/unit/**),Edit(.quality-sweep/**),Bash(npm run lint),Bash(npx tsc --noEmit),Bash(npm run test:unit),Bash(npm run quality),Bash(git status),Bash(git diff)"
-            --disallowedTools "WebFetch,WebSearch,Bash(git push:*),Bash(git commit:*),Bash(gh:*),Bash(curl:*),Bash(wget:*)"
+            --allowedTools "Read(./**),Glob,Grep,Edit(src/**),Edit(docs/**),Edit(tests/unit/**),Edit(.quality-sweep/**),Bash(git status),Bash(git diff)"
+            --disallowedTools "Read(.git/**),Read(//proc/**),Read(//sys/**),Read(~/**),Read(//tmp/**),Read(//home/**),WebFetch,WebSearch,Task,Bash(npm:*),Bash(npx:*),Bash(node:*),Bash(git push:*),Bash(git commit:*),Bash(git config:*),Bash(gh:*),Bash(curl:*),Bash(wget:*)"
 
-      # Trust but verify, still without any write token: the change must pass the same gates as CI.
-      - name: Verify the change
-        if: steps.gate.outputs.open == '0'
-        id: verify
-        run: |
-          git add -A -- . ':!.quality-sweep'
-          if git diff --cached --quiet; then
-            echo "changed=false" >> "$GITHUB_OUTPUT"
-            echo "No code change today." >> "$GITHUB_STEP_SUMMARY"
-            exit 0
-          fi
-          echo "changed=true" >> "$GITHUB_OUTPUT"
-          npm run lint
-          npx tsc --noEmit
-          npm run knip
-          npm run test:unit
-          npm run quality > /dev/null
-
+      # No code runs from here on in this job. Package the diff and the drafts, size-limited and
+      # scanned for anything that looks like a secret (artifacts of a public repo are public).
       - name: Package the result
         if: steps.gate.outputs.open == '0'
-        env:
-          CHANGED: ${{ steps.verify.outputs.changed }}
-          MAIN_SHA: ${{ steps.score.outputs.main_sha }}
+        id: package
         run: |
+          set -euo pipefail
           mkdir -p sweep-out
-          if [ "$CHANGED" = "true" ]; then
-            git diff --cached --binary "$MAIN_SHA" > sweep-out/change.patch
-            cp quality/score.json sweep-out/score-after.json
+          git add -A -- . ':!.quality-sweep' ':!quality' ':!sweep-out'
+          if git diff --cached --quiet "$GITHUB_SHA"; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            git diff --cached --binary "$GITHUB_SHA" > sweep-out/change.patch
           fi
           cp quality/score-main.json sweep-out/score-main.json
           for f in slug pr.md issue.md; do
-            if [ -f ".quality-sweep/$f" ]; then cp ".quality-sweep/$f" "sweep-out/$f"; fi
+            if [ -f ".quality-sweep/$f" ]; then head -c 8192 ".quality-sweep/$f" > "sweep-out/$f"; fi
           done
+          if [ -f sweep-out/change.patch ] && [ "$(wc -c < sweep-out/change.patch)" -gt 65536 ]; then
+            echo "::error::the change is larger than 64 KB"; exit 1
+          fi
+          if grep -R -l -E "$SECRET_LIKE" sweep-out; then
+            echo "::error::the sweep's output contains something that looks like a secret; nothing is uploaded"
+            rm -rf sweep-out
+            exit 1
+          fi
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: steps.gate.outputs.open == '0'
@@ -143,9 +147,55 @@ jobs:
           path: sweep-out/
           retention-days: 3
 
-  publish:
+  verify:
     needs: sweep
-    if: needs.sweep.outputs.skip != 'true'
+    if: needs.sweep.outputs.changed == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: ${{ needs.sweep.outputs.main_sha }}
+          persist-credentials: false
+
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: quality-sweep
+          path: ${{ runner.temp }}/sweep-out
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: npm
+
+      # the agent's code runs here only: no secrets, no write token
+      - name: Lint, typecheck, knip, unit tests, score
+        env:
+          SWEEP_OUT: ${{ runner.temp }}/sweep-out
+        run: |
+          git apply --index --binary "$SWEEP_OUT/change.patch"
+          npm ci
+          npm run lint
+          npx tsc --noEmit
+          npm run knip
+          npm run test:unit
+          npm run quality > /dev/null
+          mkdir -p "$RUNNER_TEMP/verified"
+          jq '{overall}' quality/score.json > "$RUNNER_TEMP/verified/score-after.json"
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: quality-sweep-verified
+          path: ${{ runner.temp }}/verified/
+          retention-days: 3
+
+  publish:
+    needs: [sweep, verify]
+    if: >-
+      always() && needs.sweep.result == 'success' && needs.sweep.outputs.skip != 'true' &&
+      (needs.verify.result == 'success' || (needs.verify.result == 'skipped' && needs.sweep.outputs.changed != 'true'))
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -157,10 +207,6 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       REPO: ${{ github.repository }}
       MAIN_SHA: ${{ needs.sweep.outputs.main_sha }}
-      MAX_CHANGED_LINES: 150
-      MAX_CHANGED_FILES: 10
-      # keep in sync with quality-automerge.yml, the prompt and docs/golden-principles.md
-      PROTECTED: '^(src/app/api/|src/lib/billing\.ts$|src/lib/stripe\.ts$|src/lib/dreams\.ts$|src/lib/safeServerLog\.ts$|src/lib/email\.ts$|src/lib/session\.ts$|src/lib/authRateLimit\.ts$|src/lib/db\.ts$|src/lib/dreamTextEncryption\.ts$|src/auth[^/]*\.ts$|src/middleware\.ts$|src/proxy\.ts$|src/instrumentation|src/types/next-auth\.d\.ts$|next\.config\.ts$|\.env|\.gitignore$|\.github/|package\.json$|package-lock\.json$|scripts/|quality/|evals/|public/|playwright\.config\.ts$|knip\.json$|tsconfig\.json$|eslint\.config\.mjs$|vitest\.config\.ts$|tests/unit/i18n-keys\.test\.ts$|docs/golden-principles\.md$)|migration'
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
@@ -170,26 +216,35 @@ jobs:
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: quality-sweep
-          path: sweep-out
+          path: ${{ runner.temp }}/sweep-out
 
-      # validates and publishes; runs only git and gh, never the repository's code
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        if: needs.sweep.outputs.changed == 'true'
+        with:
+          name: quality-sweep-verified
+          path: ${{ runner.temp }}/verified
+
+      # validates and publishes; runs only git, gh and jq, never the repository's code
       - name: Validate and publish
+        env:
+          OUT: ${{ runner.temp }}/sweep-out
+          VERIFIED: ${{ runner.temp }}/verified
+          LC_ALL: C
         run: |
           set -euo pipefail
-          out=sweep-out
-          score() { jq -r "$2" "$out/$1" 2>/dev/null || echo "?"; }
+          if grep -R -l -E "$SECRET_LIKE" "$OUT"; then echo "::error::sweep output looks like it contains a secret"; exit 1; fi
+          title_of() { head -n1 "$1" | sed 's/^#* *//' | tr -cd '[:print:]' | cut -c1-120; }
+          gh label create quality-sweep --repo "$REPO" --color 5319e7 --description "Daily golden-principles sweep" --force
 
-          if [ ! -s "$out/change.patch" ]; then
-            if [ -s "$out/issue.md" ]; then
-              title=$(head -n1 "$out/issue.md" | sed 's/^#* *//' | cut -c1-120)
+          if [ ! -s "$OUT/change.patch" ]; then
+            if [ -s "$OUT/issue.md" ]; then
+              title=$(title_of "$OUT/issue.md")
               [ -n "$title" ] || { echo "::error::issue.md has no title line"; exit 1; }
-              if gh issue list --repo "$REPO" --label quality-sweep --state open --json title --jq '.[].title' | grep -qxF "$title"; then
+              if gh issue list --repo "$REPO" --label quality-sweep --state open --json title --jq '.[].title' | grep -qxF -- "$title"; then
                 echo "An open issue already covers: $title" >> "$GITHUB_STEP_SUMMARY"
               else
-                gh label create quality-sweep --repo "$REPO" --color 5319e7 --description "Daily golden-principles sweep" --force
-                tail -n +2 "$out/issue.md" > issue-body.md
-                printf '\n\n_Drafted by the daily quality sweep (.github/workflows/quality-sweep.yml)._\n' >> issue-body.md
-                gh issue create --repo "$REPO" --title "$title" --body-file issue-body.md --label quality-sweep
+                { tail -n +2 "$OUT/issue.md"; printf '\n\n_Drafted by the daily quality sweep, run %s._\n' "$GITHUB_RUN_ID"; } > "$RUNNER_TEMP/issue-body.md"
+                gh issue create --repo "$REPO" --title "$title" --body-file "$RUNNER_TEMP/issue-body.md" --label quality-sweep
               fi
             else
               echo "Nothing to publish today." >> "$GITHUB_STEP_SUMMARY"
@@ -197,26 +252,44 @@ jobs:
             exit 0
           fi
 
-          slug=$(tr -d '[:space:]' < "$out/slug" 2>/dev/null || true)
+          slug=$(tr -d '[:space:]' < "$OUT/slug" 2>/dev/null || true)
           [[ "$slug" =~ ^[a-z0-9][a-z0-9-]{2,40}$ ]] || { echo "::error::.quality-sweep/slug is missing or not a short kebab-case slug"; exit 1; }
-          [ -s "$out/pr.md" ] || { echo "::error::.quality-sweep/pr.md is missing"; exit 1; }
-          title=$(head -n1 "$out/pr.md" | sed 's/^#* *//' | cut -c1-120)
+          [ -s "$OUT/pr.md" ] || { echo "::error::.quality-sweep/pr.md is missing"; exit 1; }
+          title=$(title_of "$OUT/pr.md")
           [ -n "$title" ] || { echo "::error::pr.md has no title line"; exit 1; }
+          after=$(jq -r '.overall' "$VERIFIED/score-after.json")
+          before=$(jq -r '.overall' "$OUT/score-main.json")
+          [[ "$after" =~ ^[0-9]+$ && "$before" =~ ^[0-9]+$ ]] || { echo "::error::unexpected score values"; exit 1; }
 
-          git apply --index --binary "$out/change.patch"
+          git apply --index --binary "$OUT/change.patch"
           reasons=()
-          numstat=$(git diff --cached -M --numstat HEAD)
-          files=$(grep -c . <<<"$numstat" || true)
+          # --raw -z: modes and NUL-separated paths (no quoting); renames show both paths
+          files=0
+          while IFS= read -r -d '' meta; do
+            read -r src_mode dst_mode _ _ status <<<"${meta#:}"
+            IFS= read -r -d '' path
+            paths=("$path")
+            if [[ "$status" == R* || "$status" == C* ]]; then IFS= read -r -d '' path2; paths+=("$path2"); fi
+            files=$((files + 1))
+            case "$status" in A|M|D|R[0-9]*) ;; *) reasons+=("unsupported change $status: ${paths[*]}") ;; esac
+            for m in "$src_mode" "$dst_mode"; do
+              [[ "$m" == 100644 || "$m" == 000000 ]] || reasons+=("file mode $m (only regular 100644 files): ${paths[*]}")
+            done
+            for p in "${paths[@]}"; do
+              [[ "$p" =~ $SAFE_PATH ]] || { reasons+=("path with unusual characters: $p"); continue; }
+              [[ "$p" =~ $ALLOWED ]] || reasons+=("outside src/, docs/, tests/unit/: $p")
+              grep -qE -- "$PROTECTED" <<<"$p" && reasons+=("protected path: $p")
+            done
+            if [[ "${paths[0]}" == tests/* && "$status" != A ]]; then reasons+=("modifies or removes an existing test: ${paths[0]}"); fi
+            last="${paths[${#paths[@]}-1]}"
+            if [ "$status" != D ] && [ -f "$last" ] && grep -qE "^[[:space:]]*['\"]use server['\"]" "$last"; then reasons+=("server actions file: $last"); fi
+          done < <(git diff --cached -M --raw -z HEAD)
+          # only the counts are used here; binary files show "-"
+          read -r lines binary < <(git diff --cached -M --numstat HEAD | awk -F'\t' '{ if ($1 == "-") b++; else s += $1 + $2 } END { print s + 0, b + 0 }')
+          [ "$binary" -eq 0 ] || reasons+=("changes $binary binary file(s)")
           [ "$files" -le "$MAX_CHANGED_FILES" ] || reasons+=("changes $files files (limit $MAX_CHANGED_FILES)")
-          lines=$(awk '$1 != "-" { s += $1 + $2 } END { print s + 0 }' <<<"$numstat")
           [ "$lines" -le "$MAX_CHANGED_LINES" ] || reasons+=("changes $lines lines (limit $MAX_CHANGED_LINES)")
-          binary=$(awk '$1 == "-" { print $3 }' <<<"$numstat" | paste -sd, - || true)
-          [ -z "$binary" ] || reasons+=("changes binary files: $binary")
-          paths=$(git diff --cached -M --name-status HEAD | cut -f2- | tr '\t' '\n')
-          protected=$(grep -E "$PROTECTED" <<<"$paths" | sort -u | paste -sd, - || true)
-          [ -z "$protected" ] || reasons+=("touches protected paths: $protected")
-          tests=$(git diff --cached -M --name-status HEAD | awk -F'\t' '$1 != "A" && ($2 ~ /^tests\// || $3 ~ /^tests\//) { print $2 }' | paste -sd, - || true)
-          [ -z "$tests" ] || reasons+=("modifies or removes existing tests: $tests")
+          [ "$files" -gt 0 ] || reasons+=("no file changes")
           if [ ${#reasons[@]} -ne 0 ]; then
             { echo "The sweep's change was not published:"; printf -- '- %s\n' "${reasons[@]}"; } >> "$GITHUB_STEP_SUMMARY"
             echo "::error::the sweep's change breaks the publishing rules (see the summary)"
@@ -224,31 +297,29 @@ jobs:
           fi
 
           branch="quality-sweep/$(date -u +%F)-$slug"
-          if gh api "repos/$REPO/git/ref/heads/$branch" > /dev/null 2>&1; then
-            echo "::error::branch $branch already exists"; exit 1
-          fi
+          if gh api "repos/$REPO/git/ref/heads/$branch" > /dev/null 2>&1; then echo "::error::branch $branch already exists"; exit 1; fi
           git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
-            commit -q -m "$title" -m "Opened by the daily quality sweep (.github/workflows/quality-sweep.yml)."
+            commit -q -m "$title" -m "Opened by the daily quality sweep, run $GITHUB_RUN_ID."
           git push "https://x-access-token:${GH_TOKEN}@github.com/$REPO.git" "HEAD:refs/heads/$branch"
-
-          gh label create quality-sweep --repo "$REPO" --color 5319e7 --description "Daily golden-principles sweep" --force
           {
-            tail -n +2 "$out/pr.md"
+            tail -n +2 "$OUT/pr.md"
             echo
-            echo "**Score (recomputed by the workflow):** overall $(score score-main.json .overall) → $(score score-after.json .overall)"
+            echo "**Score (computed by the workflow's verify job):** overall $before → $after"
             echo
-            echo "_Opened by the daily quality sweep. Auto-merge is decided by .github/workflows/quality-automerge.yml._"
-          } > pr-body.md
-          url=$(gh pr create --repo "$REPO" --base main --head "$branch" --title "$title" --body-file pr-body.md --label quality-sweep)
+            echo "_Opened by the daily quality sweep, run [$GITHUB_RUN_ID]($GITHUB_SERVER_URL/$REPO/actions/runs/$GITHUB_RUN_ID). Auto-merge is decided by .github/workflows/quality-automerge.yml._"
+            echo "<!-- quality-sweep-run: $GITHUB_RUN_ID -->"
+          } > "$RUNNER_TEMP/pr-body.md"
+          url=$(gh pr create --repo "$REPO" --base main --head "$branch" --title "$title" --body-file "$RUNNER_TEMP/pr-body.md" --label quality-sweep)
           echo "Opened $url" >> "$GITHUB_STEP_SUMMARY"
           gh workflow run ci.yml --repo "$REPO" --ref "$branch"
-          gh workflow run quality-automerge.yml --repo "$REPO" --ref main -f pr="${url##*/}"
+          gh workflow run quality-automerge.yml --repo "$REPO" --ref main -f pr="${url##*/}" -f run_id="$GITHUB_RUN_ID"
 
-  # Backstop next to branch protection: every commit that reached main during the run must have come
-  # through a merged pull request.
+  # Backstop next to branch protection, for the window of this run (the sweep PR itself merges later,
+  # through auto-merge): main must not have been force-pushed, and every commit that reached it since
+  # the run started must belong to a merged PR.
   main-guard:
-    needs: [sweep, publish]
-    if: always() && needs.sweep.outputs.main_sha != ''
+    needs: [sweep, verify, publish]
+    if: always()
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -258,12 +329,19 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
-          MAIN_SHA: ${{ needs.sweep.outputs.main_sha }}
+          START_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
+          compare=$(gh api "repos/$REPO/compare/$START_SHA...main")
+          status=$(jq -r .status <<<"$compare")
+          case "$status" in
+            identical|ahead) ;;
+            *) echo "::error::main is $status relative to $START_SHA (force-pushed or rewritten?)"; exit 1 ;;
+          esac
           bad=()
-          for sha in $(gh api "repos/$REPO/compare/$MAIN_SHA...main" --jq '.commits[].sha'); do
-            merged=$(gh api "repos/$REPO/commits/$sha/pulls" --jq '[.[] | select(.merged_at != null and .base.ref == "main")] | length')
+          for sha in $(jq -r '.commits[].sha' <<<"$compare"); do
+            pulls=$(gh api "repos/$REPO/commits/$sha/pulls")
+            merged=$(jq '[.[] | select(.merged_at != null and .base.ref == "main")] | length' <<<"$pulls")
             [ "$merged" -gt 0 ] || bad+=("$sha")
           done
           if [ ${#bad[@]} -ne 0 ]; then
