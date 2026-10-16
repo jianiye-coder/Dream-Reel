@@ -68,8 +68,10 @@ All self-hosted at build time, because the CSP only allows same-origin fonts
   the stage to fill the window (`--lean`), so type, photos and turns scale
   together; working pages use it.
 - **`Book` / `BookPage`** (`src/components/notebook/Book.tsx`): an open book
-  seen from above: cloth boards, page edges (canvas texture), spine crease,
-  ribbon, optional fountain pen (`pen`), optional pointer tilt (`tilt`).
+  seen from above: cloth boards, a page block under each page (the top page
+  lies on the stack; the sheets' edges run down the fore-edge, round the
+  corners and along head and tail, drawn on canvases by `edgeTextures`), spine
+  crease, ribbon, optional fountain pen (`pen`), optional pointer tilt (`tilt`).
   `BookPage side="l" | "r"` with `ruled`, `indent`, `folio`, `curl`; pass
   page-module classes through `className` / `padClassName`.
 - **`TurnLink`** (`src/components/notebook/TurnLink.tsx`): a link between book

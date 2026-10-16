@@ -144,16 +144,33 @@ html[lang="en"] .nb-root {
   transform: translateZ(-1px);
 }
 
-/* page blocks: hundreds of page edges, fanned slightly, darker where they turn away from the light.
-   The striation texture is drawn once on a canvas (notebook.js) and set as --edge-l / --edge-r. */
+/* page blocks: the stack of sheets under each top page, one solid block. The top page lies on it;
+   the sheets' edges show down the fore-edge, turn round the corners and run along head and tail
+   as a hair-thin band, fanning slightly and darker where they curve down to the board.
+   The textures are drawn once on canvases (Book.tsx edgeTextures, which holds the geometry:
+   fore-edge 18px left / 26px right, a 2px step at head and tail, page corners 5 × 18px). */
 .nb-edges {
   position: absolute; top: 5px; bottom: 3px; z-index: 1;
-  background-size: 100% 100%;
+  background-repeat: no-repeat;
+  /* the head and tail bands thin out toward the spine, where the sheets are drawn into the gutter */
+  -webkit-mask-image: var(--edge-mask); mask-image: var(--edge-mask);
+  /* the block sits on the board: a soft contact shadow where it meets the cloth */
+  filter: drop-shadow(0 0 .6px rgba(30, 20, 10, .45));
 }
-.nb-edges.nb-l { left: 2px; width: 19px; border-radius: 16px 0 0 16px / 70px 0 0 70px;
-  background-image: var(--edge-l, repeating-linear-gradient(90deg, #efe6d4 0 1px, #cdbfa6 1px 2px)); }
-.nb-edges.nb-r { right: 2px; width: 27px; border-radius: 0 18px 18px 0 / 0 80px 80px 0;
-  background-image: var(--edge-r, repeating-linear-gradient(90deg, #efe6d4 0 1px, #cdbfa6 1px 2px)); }
+.nb-edges.nb-l { left: 2px; right: 50%; border-radius: 23px 0 0 23px / 20px 0 0 20px;
+  --edge-mask: linear-gradient(270deg, transparent, #000 40%);
+  background-image: var(--edge-l-top, none), var(--edge-l-bot, none),
+    var(--edge-l, repeating-linear-gradient(90deg, #efe6d4 0 1px, #cdbfa6 1px 2px)), var(--edge-l-head, none), var(--edge-l-tail, none),
+    linear-gradient(#d6ccb9, #d6ccb9);
+  background-position: left top, left bottom, left top, right top, right bottom, left top;
+  background-size: 23px 20px, 23px 20px, 18px 100%, calc(100% - 23px) 2px, calc(100% - 23px) 2px, 24px 100%; }
+.nb-edges.nb-r { right: 2px; left: 50%; border-radius: 0 31px 31px 0 / 0 20px 20px 0;
+  --edge-mask: linear-gradient(90deg, transparent, #000 40%);
+  background-image: var(--edge-r-top, none), var(--edge-r-bot, none),
+    var(--edge-r, repeating-linear-gradient(90deg, #efe6d4 0 1px, #cdbfa6 1px 2px)), var(--edge-r-head, none), var(--edge-r-tail, none),
+    linear-gradient(#d6ccb9, #d6ccb9);
+  background-position: right top, right bottom, right top, left top, left bottom, right top;
+  background-size: 31px 20px, 31px 20px, 26px 100%, calc(100% - 31px) 2px, calc(100% - 31px) 2px, 32px 100%; }
 
 .nb-page {
   position: absolute; top: 7px; bottom: 5px;
@@ -161,13 +178,13 @@ html[lang="en"] .nb-root {
   overflow: hidden;
   z-index: 2;
 }
-/* pages dip at the spine and curl a little at their outer corners */
+/* pages dip at the spine; their outer corners are the innermost sheet of the stack's rounded corner */
 .nb-page-l {
-  left: 20px; width: calc(50% - 20px); border-radius: 10px 0 0 10px / 26px 0 0 26px;
+  left: 20px; width: calc(50% - 20px); border-radius: 5px 0 0 5px / 18px 0 0 18px;
   clip-path: polygon(0 0, 80% 0, 89% .2%, 94.5% .55%, 98% 1%, 100% 1.5%, 100% 98.5%, 98% 99%, 94.5% 99.45%, 89% 99.8%, 80% 100%, 0 100%);
 }
 .nb-page-r {
-  right: 28px; width: calc(50% - 28px); border-radius: 0 10px 10px 0 / 0 26px 26px 0;
+  right: 28px; width: calc(50% - 28px); border-radius: 0 5px 5px 0 / 0 18px 18px 0;
   clip-path: polygon(0 1.5%, 2% 1%, 5.5% .55%, 11% .2%, 20% 0, 100% 0, 100% 100%, 20% 100%, 11% 99.8%, 5.5% 99.45%, 2% 99%, 0 98.5%);
 }
 /* faint unevenness in the paper itself */
@@ -459,6 +476,7 @@ html[lang="en"] .nb-root {
   .nb-cover .nb-in { transform: rotateY(180deg); border-radius: 7px 3px 3px 7px; overflow: visible; }
   .nb-cover .nb-in > .nb-board.nb-l { width: 100%; }
   .nb-cover .nb-in > .nb-page-l { width: calc(100% - 20px); }
+  .nb-cover .nb-in > .nb-edges.nb-l { right: 0; }
   .nb-cover .nb-out::after, .nb-cover .nb-in::after { content: ""; position: absolute; inset: 0; pointer-events: none; opacity: 0; z-index: 9; }
   .nb-cover .nb-out::after { background: linear-gradient(90deg, rgba(8,10,18,.15), rgba(8,10,18,.55)); }
   .nb-cover .nb-in::after { background: linear-gradient(270deg, rgba(40,26,10,.1), rgba(40,26,10,.5)); border-radius: inherit; }
