@@ -234,11 +234,31 @@ npm run test:e2e
 
 Playwright starts a development server on port 3000 and may reuse an existing one outside CI. Stop any server connected to a real database before running it. Browser tests create users and records. `npm test` runs the Vitest unit and integration suites, not Playwright.
 
-CI uses Node.js 22 and the PostgreSQL preinstalled on the GitHub Ubuntu runner (16 on `ubuntu-latest`) to run lint, type checking, unit tests, integration tests, and a production build. A separate workflow runs a high-severity dependency audit. Browser tests and live AI evaluations are not part of that CI workflow.
+CI uses Node.js 22 and the PostgreSQL preinstalled on the GitHub Ubuntu runner (16 on `ubuntu-latest`) to run lint, type checking (with unused locals and parameters as errors), knip, unit tests (including the i18n parity and dead-key test), integration tests, and a production build. A separate workflow runs a high-severity dependency audit. Browser tests and live AI evaluations are not part of that CI workflow.
 
 `npm run eval:agent` makes real provider calls on synthetic cases and may incur charges. It defaults to OpenAI; set `DREAM_AGENT_EVAL_PROVIDER=groq` to use Groq. Evaluation artifacts default to a temporary directory outside the repository. Additional commands support replay, blind review, and canary checks.
 
 See [Agent Improvement Loop](docs/agent-improvement-loop.md) and [Evaluation Baseline](docs/agent-eval-baseline.md) for the procedures and limitations. As the configured administrator, `/api/admin/agent-feedback?days=14&download=1` exports content-free aggregate metrics for `npm run eval:agent:canary -- snapshot.json`.
+
+### Code quality
+
+[docs/golden-principles.md](docs/golden-principles.md) lists ten rules for this codebase (the notebook design system only, zh/en parity with no dead keys, no dead code, files under ~800 lines, dream text encrypted and never logged, error codes instead of internals, tested payments and auth, small PRs, reduced motion and accessible names, one helper per concern), each with how it is checked.
+
+```bash
+npm run knip      # unused files, exports and dependencies (a CI gate)
+npm run quality   # writes quality/score.json and quality/REPORT.md: a 0–100 score per principle
+```
+
+Every day at 13:00 UTC, `.github/workflows/quality-sweep.yml` scores `main`, and Claude (through `anthropics/claude-code-action`) fixes the single most valuable small drift in one PR labelled `quality-sweep`, or opens an issue when the fix needs a protected path (billing, auth, database, encryption, workflows, dependency versions, the scoring itself). It skips the day while a sweep PR is open. `.github/workflows/quality-automerge.yml` enables squash auto-merge for a sweep PR only if it was opened by `claude[bot]` with only its commits, changes at most 150 lines and touches no protected path; otherwise it comments asking for a human review. Runs can also be started by hand from the Actions tab (workflow_dispatch).
+
+Owner setup (once):
+
+1. Install the Claude GitHub App on the repository: https://github.com/apps/claude.
+2. Run `claude setup-token` locally (Claude Pro or Max) and add the token as the repository secret `CLAUDE_CODE_OAUTH_TOKEN` (Settings → Secrets and variables → Actions). Sweep runs draw from that subscription's usage limits.
+3. Settings → General → enable **Allow auto-merge**.
+4. Settings → Branches (or Rules) → add a rule for `main` that requires the status check **verify** (the CI job) to pass. Auto-merge only waits for required checks.
+
+Merges done by auto-merge are made with the workflow token, so the `push` run of CI on `main` does not start for them; the PR's own CI run is the check.
 
 ---
 
@@ -306,7 +326,7 @@ Next.js 16 App Router、React 19、TypeScript、纯 CSS 笔记本设计系统（
 - `npm run build`、`npm run start`：生产构建与启动。
 - `npm run eval:agent`：合成梦境 Agent 评测，会真实调用模型并可能产生费用；默认 OpenAI，可通过 `DREAM_AGENT_EVAL_PROVIDER=groq` 切换。
 
-CI 当前运行 lint、类型检查、单元测试、数据库集成测试、构建和独立的依赖审计；不自动运行浏览器测试或付费模型评测。Agent 评测、人工评审和灰度流程见 [相关文档](docs/agent-improvement-loop.md)。
+CI 当前运行 lint、类型检查、knip、单元测试（含 i18n 中英一致与无用键检查）、数据库集成测试、构建和独立的依赖审计；不自动运行浏览器测试或付费模型评测。代码原则见 [docs/golden-principles.md](docs/golden-principles.md)，`npm run quality` 给出每条原则的分数；每日质量巡检与自动合并的设置见 [Code quality](#code-quality)。Agent 评测、人工评审和灰度流程见 [相关文档](docs/agent-improvement-loop.md)。
 
 ---
 
