@@ -1,0 +1,190 @@
+name: Quality sweep auto-merge
+
+# The gate for quality-sweep PRs. Fail-safe: every run first switches auto-merge OFF, and only turns it
+# back on (squash, pinned to the head commit it checked) when every check passes:
+# - provenance: the run id the sweep passes in is a run of .github/workflows/quality-sweep.yml on
+#   main (schedule or workflow_dispatch) in this repository; the PR body carries that run id, the PR
+#   was opened after the run started, from a quality-sweep/ branch whose single commit sits directly
+#   on the main commit that run started from; PR author and event sender are github-actions[bot];
+# - every commit is authored and committed by the GitHub-linked github-actions[bot] account;
+# - an allowlist of paths (src/, docs/, tests/unit/ minus the protected ones), regular 100644 files
+#   only, ASCII paths, no "use server" files, no binary or empty changes (pure renames aside), no
+#   existing test modified or removed, at most 150 changed lines in at most 10 files.
+# GitHub merges only after the required checks pass (owner setup in README). Any other event on a
+# sweep PR (a human push, label or reopen, or a manual dispatch) leaves auto-merge off with a comment.
+# Branch protection on main is the backstop either way.
+#
+# pull_request_target / workflow_dispatch: this file always runs from main, so a PR can't loosen its
+# own gate. It never checks out or runs the PR's code; it only reads the PR through the API.
+
+on:
+  workflow_dispatch:
+    inputs:
+      pr:
+        description: Pull request number
+        required: true
+      run_id:
+        description: The quality-sweep run that opened it
+        required: true
+  pull_request_target:
+    types: [opened, reopened, synchronize, edited, labeled, unlabeled]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: quality-automerge-${{ github.event.pull_request.number || inputs.pr }}
+  cancel-in-progress: true
+
+jobs:
+  gate:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      contains(github.event.pull_request.labels.*.name, 'quality-sweep') ||
+      (github.event.action == 'unlabeled' && github.event.label.name == 'quality-sweep')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      actions: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPO: ${{ github.repository }}
+      PR: ${{ github.event.pull_request.number || inputs.pr }}
+      RUN_ID: ${{ inputs.run_id }}
+      EVENT: ${{ github.event_name }}
+      SENDER: ${{ github.event.sender.login }}
+      EXPECTED_BOT: github-actions[bot]
+      SWEEP_WORKFLOW: .github/workflows/quality-sweep.yml
+      LC_ALL: C
+      # keep these identical in quality-sweep.yml (and the list in .github/quality-sweep-prompt.md)
+      ALLOWED: '^(src/|docs/|tests/unit/)'
+      PROTECTED: '^(src/app/api/|src/lib/billing\.ts$|src/lib/stripe\.ts$|src/lib/dreams\.ts$|src/lib/safeServerLog\.ts$|src/lib/email\.ts$|src/lib/session\.ts$|src/lib/authRateLimit\.ts$|src/lib/db\.ts$|src/lib/dreamTextEncryption\.ts$|src/auth|src/middleware|src/proxy|src/instrumentation|src/types/next-auth\.d\.ts$|tests/unit/i18n-keys\.test\.ts$|docs/golden-principles\.md$)|(^|/)route\.[jt]sx?$|(^|/)actions?\.[jt]sx?$|(^|/)\.|(^|/)(CLAUDE|AGENTS)\.md$|(^|/)package(-lock)?\.json$|migration'
+      SAFE_PATH: '^[]A-Za-z0-9._/()+@[-]+$'
+      MAX_CHANGED_LINES: 150
+      MAX_CHANGED_FILES: 10
+    steps:
+      - name: Switch auto-merge off first
+        run: |
+          [[ "$PR" =~ ^[0-9]+$ ]] || { echo "::error::not a PR number: $PR"; exit 1; }
+          gh pr merge "$PR" --repo "$REPO" --disable-auto 2>/dev/null || true
+
+      - name: Check the PR
+        id: check
+        run: |
+          set -euo pipefail
+          reasons=()
+          pr=$(gh api "repos/$REPO/pulls/$PR")
+          field() { jq -r "$1" <<<"$pr"; }
+          head_sha=$(field .head.sha)
+          [[ "$head_sha" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::unexpected head sha"; exit 1; }
+          echo "head_sha=$head_sha" >> "$GITHUB_OUTPUT"
+
+          [ "$(field .state)" = "open" ] || reasons+=("is not open")
+          field '.labels[].name' | grep -qx quality-sweep || reasons+=("is not labelled \`quality-sweep\`")
+          [ "$(field .user.login)" = "$EXPECTED_BOT" ] && [ "$(field .user.type)" = "Bot" ] \
+            || reasons+=("was opened by \`$(field .user.login)\`, not the sweep (\`$EXPECTED_BOT\`)")
+          [[ "$(field .head.ref)" == quality-sweep/* ]] || reasons+=("comes from \`$(field .head.ref)\`, not a quality-sweep/ branch")
+          [ "$(field .head.repo.full_name)" = "$REPO" ] || reasons+=("comes from a fork")
+          [ "$(field .base.ref)" = "main" ] || reasons+=("targets \`$(field .base.ref)\`, not \`main\`")
+
+          # provenance: only the sweep's own dispatch, naming the sweep run that opened this PR
+          if [ "$EVENT" != "workflow_dispatch" ] || [ "$SENDER" != "$EXPECTED_BOT" ]; then
+            reasons+=("got a \`$EVENT\` event from \`$SENDER\`, not the sweep's own dispatch")
+          elif ! [[ "$RUN_ID" =~ ^[0-9]+$ ]]; then
+            reasons+=("names no sweep run")
+          else
+            run=$(gh api "repos/$REPO/actions/runs/$RUN_ID")
+            r() { jq -r "$1" <<<"$run"; }
+            [ "$(r .path)" = "$SWEEP_WORKFLOW" ] || reasons+=("run $RUN_ID is \`$(r .path)\`, not the sweep")
+            [ "$(r .head_branch)" = "main" ] || reasons+=("run $RUN_ID ran on \`$(r .head_branch)\`, not main")
+            [ "$(r .repository.full_name)" = "$REPO" ] || reasons+=("run $RUN_ID belongs to another repository")
+            case "$(r .event)" in schedule|workflow_dispatch) ;; *) reasons+=("run $RUN_ID was started by \`$(r .event)\`") ;; esac
+            field .body | grep -qxF "<!-- quality-sweep-run: $RUN_ID -->" || reasons+=("the PR body doesn't name run $RUN_ID")
+            [[ "$(field .created_at)" > "$(r .run_started_at)" ]] || reasons+=("was opened before run $RUN_ID started")
+            parents=$(gh api "repos/$REPO/commits/$head_sha" --jq '[.parents[].sha] | join(" ")')
+            [ "$parents" = "$(r .head_sha)" ] || reasons+=("its commit doesn't sit directly on the main commit run $RUN_ID started from")
+          fi
+
+          # GitHub-linked accounts, not the free-text git author name
+          others=$(gh api --paginate "repos/$REPO/pulls/$PR/commits" \
+            --jq '.[] | select((.author.login // "") != env.EXPECTED_BOT or (.committer.login // "") != env.EXPECTED_BOT) | .sha[0:7]' | paste -sd, - || true)
+          [ -z "$others" ] || reasons+=("has commits not authored and committed by \`$EXPECTED_BOT\`: $others")
+
+          changed=$(( $(field .additions) + $(field .deletions) ))
+          [ "$changed" -le "$MAX_CHANGED_LINES" ] || reasons+=("changes $changed lines (limit $MAX_CHANGED_LINES)")
+
+          # the head tree, for file modes (fail closed if GitHub truncates it)
+          tree=$(gh api "repos/$REPO/git/trees/$head_sha?recursive=1")
+          [ "$(jq -r .truncated <<<"$tree")" = "false" ] || reasons+=("its file tree is too large to check")
+
+          listing=$(gh api --paginate "repos/$REPO/pulls/$PR/files" \
+            --jq '.[] | [.status, .filename, (.previous_filename // ""), (.changes | tostring), (if .patch then "text" else "nopatch" end)] | join("\u001f")')
+          count=0
+          # unit-separated fields: unlike tabs, an empty field (no previous name) doesn't collapse
+          while IFS=$'\x1f' read -r status file previous changes patch; do
+            [ -n "$status" ] || continue
+            count=$((count + 1))
+            for p in "$file" ${previous:+"$previous"}; do
+              [[ "$p" =~ $SAFE_PATH ]] || { reasons+=("path with unusual characters: $p"); continue; }
+              [[ "$p" =~ $ALLOWED ]] || reasons+=("outside src/, docs/, tests/unit/: $p")
+              grep -qE -- "$PROTECTED" <<<"$p" && reasons+=("protected path: $p")
+            done
+            case "$status" in added|modified|removed|renamed) ;; *) reasons+=("unsupported change $status: $file") ;; esac
+            if [ "$status" != "renamed" ] || [ "$changes" != "0" ]; then
+              [ "$changes" != "0" ] && [ "$patch" = "text" ] || reasons+=("binary or empty change: $file")
+            fi
+            if [[ "$status" != "added" && ( "$file" == tests/* || "$previous" == tests/* ) ]]; then
+              reasons+=("modifies or removes an existing test: $file")
+            fi
+            if [ "$status" != "removed" ]; then
+              mode=$(F="$file" jq -r '.tree[] | select(.path == env.F) | .mode' <<<"$tree")
+              [ "$mode" = "100644" ] || reasons+=("file mode ${mode:-unknown} (only regular 100644 files): $file")
+              if content=$(gh api -H "Accept: application/vnd.github.raw" "repos/$REPO/contents/$file?ref=$head_sha"); then
+                if grep -qE "^[[:space:]]*['\"]use server['\"]" <<<"$content"; then reasons+=("server actions file: $file"); fi
+              else
+                reasons+=("could not read $file at the head commit")
+              fi
+            fi
+          done <<<"$listing"
+          [ "$count" -le "$MAX_CHANGED_FILES" ] || reasons+=("changes $count files (limit $MAX_CHANGED_FILES)")
+          [ "$count" -gt 0 ] || reasons+=("changes no files")
+
+          if [ ${#reasons[@]} -eq 0 ]; then
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+            {
+              echo "reasons<<REASONS"
+              printf -- '- %s\n' "${reasons[@]}"
+              echo "REASONS"
+            } >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Enable auto-merge
+        if: steps.check.outputs.ok == 'true'
+        env:
+          HEAD_SHA: ${{ steps.check.outputs.head_sha }}
+        run: gh pr merge "$PR" --repo "$REPO" --auto --squash --match-head-commit "$HEAD_SHA"
+
+      - name: Ask for human review
+        if: steps.check.outputs.ok == 'false'
+        env:
+          REASONS: ${{ steps.check.outputs.reasons }}
+        run: |
+          marker='<!-- quality-automerge -->'
+          body="$marker
+          This quality-sweep PR needs a human review before it merges; auto-merge is off because it:
+
+          $REASONS"
+          existing=$(gh api --paginate "repos/$REPO/issues/$PR/comments" --jq ".[] | select(.body | startswith(\"$marker\")) | .id" | head -n1)
+          if [ -n "$existing" ]; then
+            gh api --method PATCH "repos/$REPO/issues/comments/$existing" -f body="$body" > /dev/null
+          else
+            gh pr comment "$PR" --repo "$REPO" --body "$body"
+          fi
+
+      - name: Keep auto-merge off after a failure
+        if: failure()
+        run: |
+          if [[ "$PR" =~ ^[0-9]+$ ]]; then gh pr merge "$PR" --repo "$REPO" --disable-auto 2>/dev/null || true; fi

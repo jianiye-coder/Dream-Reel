@@ -4,6 +4,9 @@ on:
   pull_request:
   push:
     branches: [main]
+  # the quality sweep dispatches CI on its PR branch (PRs opened with GITHUB_TOKEN don't start
+  # pull_request runs); the verify check lands on the PR's head commit
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -26,14 +29,24 @@ jobs:
           timeout 60 bash -c "until pg_isready -h 127.0.0.1 -p 5432; do sleep 1; done"
           sudo -u postgres psql -c "ALTER USER postgres PASSWORD 'postgres';"
           sudo -u postgres createdb dream_reel_test
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
           cache: npm
       - run: npm ci
       - run: npm run lint
+      # tsconfig enables noUnusedLocals / noUnusedParameters
       - run: npm run typecheck
+      # unused files, exports and dependencies (knip.json); see docs/golden-principles.md #3
+      - run: npm run knip
       - run: npm run test:unit
       - run: npm run test:integration
       - run: npm run build
+      # informational: the golden-principles score (docs/golden-principles.md) in the job summary
+      - name: Quality score
+        if: always()
+        continue-on-error: true
+        run: |
+          npm run quality > /dev/null
+          cat quality/REPORT.md >> "$GITHUB_STEP_SUMMARY"

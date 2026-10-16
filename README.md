@@ -182,11 +182,35 @@ npm run test:e2e
 
 Playwright starts a development server on port 3000 and may reuse an existing one outside CI. Stop any server connected to a real database before running it. Browser tests create users and records. `npm test` runs the Vitest unit and integration suites, not Playwright.
 
-CI uses Node.js 22 and the PostgreSQL preinstalled on the GitHub Ubuntu runner (16 on `ubuntu-latest`) to run lint, type checking, unit tests, integration tests, and a production build. A separate workflow runs a high-severity dependency audit. Browser tests and live AI evaluations are not part of that CI workflow.
+CI uses Node.js 22 and the PostgreSQL preinstalled on the GitHub Ubuntu runner (16 on `ubuntu-latest`) to run lint, type checking (with unused locals and parameters as errors), knip, unit tests (including the i18n parity and dead-key test), integration tests, and a production build. A separate workflow runs a high-severity dependency audit. Browser tests and live AI evaluations are not part of that CI workflow.
 
 `npm run eval:agent` makes real provider calls on synthetic cases and may incur charges. It defaults to OpenAI; set `DREAM_AGENT_EVAL_PROVIDER=groq` to use Groq. Evaluation artifacts default to a temporary directory outside the repository. Additional commands support replay, blind review, and canary checks.
 
 See [Agent Improvement Loop](docs/agent-improvement-loop.md) and [Evaluation Baseline](docs/agent-eval-baseline.md) for the procedures and limitations. As the configured administrator, `/api/admin/agent-feedback?days=14&download=1` exports content-free aggregate metrics for `npm run eval:agent:canary -- snapshot.json`.
+
+### Code quality
+
+[docs/golden-principles.md](docs/golden-principles.md) lists ten rules for this codebase (the notebook design system only, zh/en parity with no dead keys, no dead code, files under ~800 lines, dream text encrypted and never logged, error codes instead of internals, tested payments and auth, small PRs, reduced motion and accessible names, one helper per concern), each with how it is checked.
+
+```bash
+npm run knip      # unused files, exports and dependencies (a CI gate)
+npm run quality   # writes quality/score.json and quality/REPORT.md: a 0–100 score per principle
+```
+
+Every day at 13:00 UTC (or by hand from the Actions tab), `.github/workflows/quality-sweep.yml` scores `main` and, unless a `quality-sweep` PR is already open, runs Claude through `anthropics/claude-code-action` with a read-only token. Main is scored first in a job without secrets; the sweep job then holds only the checkout, that score and the action, so no repository code runs next to the token. Claude can only read the checkout and edit files under `src/`, `docs/` and `tests/unit/` (plus its PR or issue draft); it has no shell, git, GitHub access or web. Its diff and drafts are size-limited and scanned for secret-like strings before they leave the job. A separate job with no secrets and no npm cache applies the diff and runs lint, tsc, knip, the unit tests and the score; that is the only place the agent's code runs. A third job, which runs no repository code, checks the diff against an allowlist (`src/`, `docs/`, new files in `tests/unit/`, minus API routes, server entry points, billing, auth, data and privacy modules, `package.json` files, `CLAUDE.md` / `AGENTS.md` and the gates; regular ASCII-named text files only; at most 150 lines in 10 files; no edited or deleted tests), commits it as `github-actions[bot]`, pushes `quality-sweep/<date>-<slug>`, opens the PR labelled `quality-sweep` and dispatches CI and the merge gate with the run's id. When the fix needs a protected path it files Claude's drafted issue instead. Full lists: `.github/quality-sweep-prompt.md` and the `ALLOWED` / `PROTECTED` patterns in both workflows.
+
+`.github/workflows/quality-automerge.yml` is the merge gate. It always runs from `main`'s copy, never checks out the PR, switches auto-merge off first on every run, and turns it back on (squash, pinned to the checked head commit) only when the PR provably comes from that sweep run (the run is `quality-sweep.yml` on `main`, named in the PR body, and the PR's single commit sits on the commit the run started from), every commit belongs to the GitHub-linked `github-actions[bot]` account, and the same path, mode and size rules hold. Any human push, label or reopen on a sweep PR leaves auto-merge off with a comment asking for review. A last job fails the run if `main` was force-pushed or gained a commit that did not come through a merged PR while the sweep ran.
+
+**Branch protection on `main` is the backstop for all of this**: nothing above should be able to land code on `main` without a pull request and a green CI run, and nothing (not GitHub Actions, not the Claude GitHub App) may be on the bypass list.
+
+Owner setup (once):
+
+1. Run `claude setup-token` locally (Claude Pro or Max) and add the token as the repository secret `CLAUDE_CODE_OAUTH_TOKEN` (Settings → Secrets and variables → Actions). Sweep runs draw from that subscription's usage limits. Until the secret exists, the sweep skips itself with a notice instead of failing. The Claude GitHub App (https://github.com/apps/claude) is not needed for the sweep, which runs Claude with the workflow's own read-only token; install it only if you also want `@claude` on issues and PRs.
+2. Settings → Actions → General → Workflow permissions: enable **Allow GitHub Actions to create and approve pull requests** (the publish job opens the PR with the workflow token).
+3. Settings → General → enable **Allow auto-merge**.
+4. Settings → Branches (or Rules) → protect `main`: **Require a pull request before merging** and **Require status checks to pass** with the check **verify** (the CI job); no bypass for anyone automated. Auto-merge only waits for required checks. Requiring one approval instead of zero keeps every sweep PR waiting for you, which is a fine stricter setting.
+
+Merges done by auto-merge are made with the workflow token, so the `push` run of CI on `main` does not start for them; the PR's dispatched CI run is the check.
 
 ---
 
@@ -254,7 +278,7 @@ Next.js 16 App Router、React 19、TypeScript、纯 CSS 笔记本设计系统（
 - `npm run build`、`npm run start`：生产构建与启动。
 - `npm run eval:agent`：合成梦境 Agent 评测，会真实调用模型并可能产生费用；默认 OpenAI，可通过 `DREAM_AGENT_EVAL_PROVIDER=groq` 切换。
 
-CI 当前运行 lint、类型检查、单元测试、数据库集成测试、构建和独立的依赖审计；不自动运行浏览器测试或付费模型评测。Agent 评测、人工评审和灰度流程见 [相关文档](docs/agent-improvement-loop.md)。
+CI 当前运行 lint、类型检查、knip、单元测试（含 i18n 中英一致与无用键检查）、数据库集成测试、构建和独立的依赖审计；不自动运行浏览器测试或付费模型评测。代码原则见 [docs/golden-principles.md](docs/golden-principles.md)，`npm run quality` 给出每条原则的分数；每日质量巡检与自动合并的设置见 [Code quality](#code-quality)。Agent 评测、人工评审和灰度流程见 [相关文档](docs/agent-improvement-loop.md)。
 
 ---
 
