@@ -105,6 +105,9 @@ export function requireStripe(): Stripe {
 /** Subscribe the Stripe webhook endpoint to exactly these events. */
 export const STRIPE_WEBHOOK_EVENTS: ReadonlySet<string> = new Set([
   "checkout.session.completed",
+  // delayed payment methods: fulfil on success (gated on payment_status), re-sync on failure
+  "checkout.session.async_payment_succeeded",
+  "checkout.session.async_payment_failed",
   "customer.subscription.created",
   "customer.subscription.updated",
   "customer.subscription.deleted",

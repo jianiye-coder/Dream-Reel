@@ -197,8 +197,15 @@ async function saveSubscription(subscription: StripeSubscription, userId: number
  * Lock order is always: this subscription, then its reader; only then is Stripe read. A handler
  * that waited therefore reads the state after the one before it committed, never a stale one.
  */
-async function handleCheckoutCompleted(object: Record<string, unknown> & { metadata?: Record<string, string> }, client: PoolClient) {
+/**
+ * checkout.session.completed links the new Stripe customer to the reader who opened the session
+ * (client_reference_id; metadata only as a fallback). async_payment_succeeded fulfils a delayed
+ * payment, so only when payment_status says paid; async_payment_failed just re-syncs. Plus itself
+ * always follows the subscription's status as read back from Stripe.
+ */
+async function handleCheckoutSession(type: string, object: Record<string, unknown> & { metadata?: Record<string, string> }, client: PoolClient) {
   if (object.mode !== "subscription") return;
+  if (type === "checkout.session.async_payment_succeeded" && object.payment_status !== "paid") return;
   const userId = parseUserId(object.client_reference_id) ?? parseUserId(object.metadata?.user_id);
   const subscriptionId = stripeId(object.subscription);
   if (!userId || !subscriptionId) return;
@@ -210,11 +217,14 @@ async function handleCheckoutCompleted(object: Record<string, unknown> & { metad
   await saveSubscription(subscription, userId, client, stripeId(object.customer));
 }
 
-/** The reader: the user id we set at checkout (metadata), else the subscription or customer we know. */
+/** The reader: the subscription or customer we already know (metadata only as a fallback). */
 async function readerFor(subscriptionId: string, customerId: string | null, metadataUserId: unknown, client: PoolClient) {
+  // the Stripe subscription / customer we already linked is the owner
+  const known = await findUserIdForStripeCustomer(customerId ?? "", subscriptionId, client);
+  if (known) return known;
+  // explicit fallback for a subscription event that beats checkout.session.completed here
   const fromMetadata = parseUserId(metadataUserId);
-  if (fromMetadata && (await userExists(fromMetadata, client))) return fromMetadata;
-  return customerId ? findUserIdForStripeCustomer(customerId, subscriptionId, client) : null;
+  return fromMetadata && (await userExists(fromMetadata, client)) ? fromMetadata : null;
 }
 
 /** The locked re-sync every subscription-shaped event goes through. */
@@ -326,7 +336,7 @@ export async function POST(request: NextRequest) {
         const object = event.data?.object;
         if (!object) return;
         try {
-          if (event.type === "checkout.session.completed") await handleCheckoutCompleted(object, client);
+          if (event.type.startsWith("checkout.session.")) await handleCheckoutSession(event.type, object, client);
           else if (event.type.startsWith("customer.subscription.")) await handleSubscriptionEvent(event, client);
           else if (event.type.startsWith("invoice.")) await handleInvoiceEvent(object, client);
           else if (event.type === "charge.refunded") await handleChargeRefunded(object, client);

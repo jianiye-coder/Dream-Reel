@@ -257,6 +257,47 @@ databaseDescribe("Stripe webhook → Plus in PostgreSQL", () => {
     expect(await plan()).toBe("plus");
   });
 
+  describe("delayed payment methods (checkout.session.async_payment_*)", () => {
+    it("turns Plus on at async_payment_succeeded, gated on payment_status", async () => {
+      stripeSubscriptions.set(current.subscription, subscription("incomplete"));
+      await deliver(checkoutCompleted({ payment_status: "unpaid" }));
+      expect(await getBillingStatus(userId)).toMatchObject({ plan: "free", subscriptionStatus: "incomplete" });
+
+      // not paid yet: nothing is read or granted
+      const reads = callsTo("GET", `/subscriptions/${current.subscription}`).length;
+      await deliver(event("checkout.session.async_payment_succeeded", checkoutCompleted({ payment_status: "unpaid" }).data.object));
+      expect(callsTo("GET", `/subscriptions/${current.subscription}`)).toHaveLength(reads);
+
+      stripeSubscriptions.set(current.subscription, subscription("active"));
+      expect(await deliver(event("checkout.session.async_payment_succeeded", checkoutCompleted({ payment_status: "paid" }).data.object)))
+        .toEqual({ status: 200, body: { received: true } });
+      expect(await plan()).toBe("plus");
+    });
+
+    it("re-syncs on async_payment_failed", async () => {
+      stripeSubscriptions.set(current.subscription, subscription("incomplete"));
+      await deliver(checkoutCompleted({ payment_status: "unpaid" }));
+      stripeSubscriptions.set(current.subscription, subscription("incomplete_expired"));
+      await deliver(event("checkout.session.async_payment_failed", checkoutCompleted({ payment_status: "unpaid" }).data.object));
+      expect(await getBillingStatus(userId)).toMatchObject({ plan: "free", subscriptionStatus: "incomplete_expired" });
+    });
+  });
+
+  it("maps subscription events to the reader through the linked customer, not metadata", async () => {
+    stripeSubscriptions.set(current.subscription, subscription("active"));
+    await deliver(checkoutCompleted());
+    const { rows } = await getPool().query<{ id: number }>(
+      "INSERT INTO users (email, name) VALUES ($1, 'Other') RETURNING id", [`billing-${run}-${seq}-other@example.test`]);
+    users.push(rows[0].id);
+    // metadata (wrongly) names someone else; the subscription we linked decides
+    const misleading = subscription("past_due", { metadata: { user_id: String(rows[0].id) } });
+    stripeSubscriptions.set(current.subscription, misleading);
+    await deliver(event("customer.subscription.updated", misleading));
+    expect(await getBillingStatus(userId)).toMatchObject({ plan: "free", subscriptionStatus: "past_due" });
+    const other = await getPool().query("SELECT 1 FROM subscriptions WHERE user_id = $1", [rows[0].id]);
+    expect(other.rows).toHaveLength(0);
+  });
+
   it.each(["past_due", "unpaid", "incomplete_expired", "paused"])("treats %s as not Plus", async (status) => {
     stripeSubscriptions.set(current.subscription, subscription("active"));
     await deliver(checkoutCompleted());
