@@ -182,7 +182,7 @@ npm run test:e2e
 
 Playwright starts a development server on port 3000 and may reuse an existing one outside CI. Stop any server connected to a real database before running it. Browser tests create users and records. `npm test` runs the Vitest unit and integration suites, not Playwright.
 
-CI uses Node.js 22 and PostgreSQL 17 to run lint, type checking, unit tests, integration tests, and a production build. A separate workflow runs a high-severity dependency audit. Browser tests and live AI evaluations are not part of that CI workflow.
+CI uses Node.js 22 and the PostgreSQL preinstalled on the GitHub Ubuntu runner (16 on `ubuntu-latest`) to run lint, type checking, unit tests, integration tests, and a production build. A separate workflow runs a high-severity dependency audit. Browser tests and live AI evaluations are not part of that CI workflow.
 
 `npm run eval:agent` makes real provider calls on synthetic cases and may incur charges. It defaults to OpenAI; set `DREAM_AGENT_EVAL_PROVIDER=groq` to use Groq. Evaluation artifacts default to a temporary directory outside the repository. Additional commands support replay, blind review, and canary checks.
 
