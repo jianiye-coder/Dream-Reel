@@ -162,10 +162,15 @@ async function getLatestSubscription(userId: number): Promise<SubscriptionRow | 
              current_period_start, current_period_end, cancel_at_period_end
       FROM subscriptions
       WHERE user_id = $1
-      ORDER BY updated_at DESC, id DESC
+      -- a subscription that currently grants Plus wins over a newer, already-ended one
+      ORDER BY (
+        plan = 'plus'
+        AND status = ANY($2::text[])
+        AND (current_period_end IS NULL OR current_period_end > NOW())
+      ) DESC, updated_at DESC, id DESC
       LIMIT 1
     `,
-    [userId],
+    [userId, [...ACTIVE_STATUSES]],
   );
   return result.rows[0] ?? null;
 }
@@ -314,32 +319,97 @@ export async function checkAiRateLimit(
   }
 }
 
+/** The Stripe customer this user already has, so checkout and the portal reuse it. */
 export async function getStripeCustomerId(userId: number): Promise<string | null> {
-  const subscription = await getLatestSubscription(userId);
-  return subscription?.provider_customer_id ?? null;
-}
-
-export async function findUserIdForStripeCustomer(
-  customerId: string,
-  subscriptionId?: string | null,
-  client?: PoolClient,
-): Promise<number | null> {
   await ensureSchema();
-  const result = await (client ?? getPool()).query<{ user_id: number }>(
+  const result = await getPool().query<{ provider_customer_id: string }>(
     `
-      SELECT user_id
+      SELECT provider_customer_id
       FROM subscriptions
-      WHERE provider = 'stripe'
-        AND (
-          provider_customer_id = $1
-          OR ($2::text IS NOT NULL AND provider_subscription_id = $2)
-        )
+      WHERE user_id = $1 AND provider = 'stripe' AND provider_customer_id IS NOT NULL
       ORDER BY updated_at DESC, id DESC
       LIMIT 1
     `,
-    [customerId, subscriptionId ?? null],
+    [userId],
   );
-  return result.rows[0]?.user_id ?? null;
+  return result.rows[0]?.provider_customer_id ?? null;
+}
+
+/** Other subscriptions of this reader that the database still counts as Plus. */
+export async function otherPlusSubscriptionIds(userId: number, subscriptionId: string, client?: PoolClient): Promise<string[]> {
+  await ensureSchema();
+  const result = await (client ?? getPool()).query<{ provider_subscription_id: string }>(
+    `
+      SELECT provider_subscription_id
+      FROM subscriptions
+      WHERE user_id = $1 AND provider = 'stripe' AND provider_subscription_id <> $2
+        AND plan = 'plus' AND status = ANY($3::text[])
+        AND (current_period_end IS NULL OR current_period_end > NOW())
+      ORDER BY id
+    `,
+    [userId, subscriptionId, [...ACTIVE_STATUSES]],
+  );
+  return result.rows.map((row) => row.provider_subscription_id);
+}
+
+/**
+ * Something the code must not decide alone (a refund Stripe refused, a duplicate found after a
+ * renewal, a dispute, a customer shared by two readers). Kept in payment_events with status
+ * 'needs_action'; the id makes it one row per case, so retries don't pile up:
+ *   SELECT * FROM payment_events WHERE status = 'needs_action';
+ */
+export async function recordNeedsAction(client: PoolClient, id: string, type: string, details: Record<string, unknown>) {
+  await client.query(
+    `
+      INSERT INTO payment_events (id, provider, type, payload, status)
+      VALUES ($1, 'stripe', $2, $3, 'needs_action')
+      ON CONFLICT (id) DO NOTHING
+    `,
+    [id, type, JSON.stringify(details)],
+  );
+}
+
+/** A duplicate-subscription case: one row per subscription and kind. */
+export async function recordManualAction(client: PoolClient, action: {
+  kind: "refund" | "cancel";
+  subscriptionId: string;
+  keptSubscriptionId: string;
+  invoiceId?: string | null;
+  reason: string;
+  stripeCode?: string;
+}) {
+  await recordNeedsAction(client, `action:${action.kind}:${action.subscriptionId}`, `manual.${action.kind}`, action);
+}
+
+export async function userExists(userId: number, client?: PoolClient): Promise<boolean> {
+  await ensureSchema();
+  const result = await (client ?? getPool()).query(`SELECT 1 FROM users WHERE id = $1`, [userId]);
+  return (result.rowCount ?? 0) > 0;
+}
+
+/**
+ * Who owns this Stripe subscription: the reader it is linked to, else the one reader its customer
+ * is linked to. A customer linked to several readers is not guessed at.
+ */
+export async function findOwnerOfStripeSubscription(
+  subscriptionId: string,
+  customerId: string | null,
+  client?: PoolClient,
+): Promise<{ userId: number } | { ambiguous: number[] } | null> {
+  await ensureSchema();
+  const db = client ?? getPool();
+  const bySubscription = await db.query<{ user_id: number }>(
+    `SELECT user_id FROM subscriptions WHERE provider = 'stripe' AND provider_subscription_id = $1 LIMIT 1`,
+    [subscriptionId],
+  );
+  if (bySubscription.rows[0]) return { userId: bySubscription.rows[0].user_id };
+  if (!customerId) return null;
+  const byCustomer = await db.query<{ user_id: number }>(
+    `SELECT DISTINCT user_id FROM subscriptions WHERE provider = 'stripe' AND provider_customer_id = $1 ORDER BY user_id LIMIT 5`,
+    [customerId],
+  );
+  if (byCustomer.rows.length > 1) return { ambiguous: byCustomer.rows.map((row) => row.user_id) };
+  return byCustomer.rows[0] ? { userId: byCustomer.rows[0].user_id } : null;
 }
 
 export async function upsertStripeSubscription(input: {
@@ -362,9 +432,14 @@ export async function upsertStripeSubscription(input: {
       VALUES ($1, 'stripe', $2, $3, $4, $5, $6, $7, $8)
       ON CONFLICT (provider, provider_subscription_id)
       DO UPDATE SET
-        user_id = EXCLUDED.user_id,
+        -- a subscription never changes hands (see the webhook's ownership checks)
         provider_customer_id = COALESCE(EXCLUDED.provider_customer_id, subscriptions.provider_customer_id),
-        status = EXCLUDED.status,
+        -- an ended Stripe subscription can never start again; a late, out-of-order event
+        -- must not bring it back
+        status = CASE
+          WHEN subscriptions.status IN ('canceled', 'incomplete_expired') THEN subscriptions.status
+          ELSE EXCLUDED.status
+        END,
         plan = EXCLUDED.plan,
         current_period_start = EXCLUDED.current_period_start,
         current_period_end = EXCLUDED.current_period_end,

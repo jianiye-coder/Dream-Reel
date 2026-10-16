@@ -289,6 +289,103 @@ const zh = {
     imagesLeft: "还剩 {count} 次图片显影",
     checkoutError: "暂时无法打开付款页面，请稍后再试。",
     portalError: "暂时无法打开订阅管理页面。",
+    opening: "正在打开…",
+    comingSoon: "Plus 即将开放",
+    comingSoonNote: "付款通道还在准备中。现在可以先免费使用全部功能。",
+    upgradePending: "付款已完成，Plus 正在开启，稍等片刻就好。",
+    upgradeSlow: "付款已收到，Plus 还在开启中。过一会儿刷新页面看看；如果一直没有开启，请写信联系我们。",
+    checkoutCancelled: "没有扣款。想升级的时候，随时回来。",
+    pastDue: "上一次扣款没有成功，可以在“管理订阅”里更新付款方式。",
+    endsOn: "Plus 会保留到 {date}，之后回到免费版。",
+  },
+
+  legal: {
+    label: "条款与政策",
+    updated: "最后更新：2026 年 10 月 15 日",
+    pricingNote: "Plus 按月自动续费，随时可以取消。",
+    contactLabel: "联系",
+    nav: [
+      { href: "/terms", label: "服务条款" },
+      { href: "/privacy", label: "隐私政策" },
+      { href: "/refund", label: "退款政策" },
+    ] as { href: string; label: string }[],
+    terms: {
+      kicker: "服务条款",
+      title: "使用 Dream Reel 之前",
+      intro: "一份简短、直白的条款。使用 Dream Reel，即表示你同意下面这些内容。",
+      sections: [
+        { h: "Dream Reel 是什么", p: [
+          "Dream Reel 是一本私人的梦境笔记本：你可以记下梦境和晨间书写，让 AI 帮你整理、分析，或把一个梦显影成一张图片。",
+          "AI 的解读只用于自我反思，可能不准确，也不是医疗、心理或任何专业建议。如果你正经历困扰，请联系专业人士或当地的求助热线。",
+        ] },
+        { h: "你的账号", p: [
+          "请使用你能收到邮件的邮箱，并保管好密码。一个账号只供一个人使用。",
+          "请不要用 Dream Reel 存放违法内容，也不要用自动化的方式大量调用 AI 功能。滥用可能导致账号被暂停。",
+        ] },
+        { h: "你写下的内容", p: [
+          "你写下的梦、文字和显影出的图片都属于你。我们只为提供服务而处理它们（见隐私政策），你可以随时导出全部内容。",
+        ] },
+        { h: "Plus 订阅", p: [
+          "Dream Reel Plus 每月 ¥12.99（中文页面，人民币计价）或每月 US$1.99（英文页面，美元计价），以付款页面显示的金额为准。付款由 Stripe 处理。",
+          "订阅按月自动续费：每个计费周期开始时，会从你保存的付款方式自动扣款，直到你取消为止。",
+          "免费版和 Plus 的每月额度以订阅页面为准，当期没用完的额度不会累积到下个月。如果价格调整，我们会在下一次扣款之前告诉你。",
+        ] },
+        { h: "随时取消", p: [
+          "你可以随时在“我的 → 管理订阅”（Stripe 客户门户）里取消。取消后不会再扣款，Plus 会一直保留到当前计费周期结束，之后回到免费版；已经写下的内容都还在。",
+          "退款规则见退款政策。",
+        ] },
+        { h: "服务的变化", p: [
+          "我们会尽力让 Dream Reel 稳定可用，但不能保证永不中断。功能可能会调整；如果决定停止服务，我们会提前通知，并留出导出内容的时间。",
+          "在法律允许的范围内，我们因 Dream Reel 承担的责任，以你在此前 12 个月内为 Dream Reel 支付的金额为限。",
+        ] },
+        { h: "联系我们", p: ["有任何问题，写信到 {email}。"] },
+      ] as { h: string; p: string[] }[],
+    },
+    privacy: {
+      kicker: "隐私政策",
+      title: "梦是写给自己的",
+      intro: "这里说明 Dream Reel 保存什么、为什么保存，以及交给了谁处理。",
+      sections: [
+        { h: "我们保存什么", p: [
+          "账号：邮箱、名字，以及经过哈希处理的密码（我们看不到原密码）。",
+          "你写下的内容：梦境记录、晨间书写和画布、睡眠信息、AI 的分析结果和显影出的图片。",
+          "用量与订阅：每月用了多少次分析和显影，以及订阅状态。付款信息由 Stripe 保存；我们只保存 Stripe 的客户编号和订阅编号，看不到你的卡号。",
+        ] },
+        { h: "怎么保护", p: [
+          "梦境正文和晨间书写在数据库里加密保存，只在你查看、分析或显影时临时解密。原文不会写进任何日志。",
+          "显影出的图片存放在 Vercel Blob 中，拿到图片链接的人就能打开它，所以请只把链接分享给你信任的人。",
+        ] },
+        { h: "交给谁处理", p: [
+          "AI 服务商：当你使用分析、对话、标题或显影时，相关文字会发送给 AI 服务商（Groq、OpenAI，图片也可能经由 Flatkey）处理，只用于完成这一次请求。",
+          "Stripe 处理订阅付款，Vercel 托管网站和图片。除此之外，我们不会把你的内容交给任何人。",
+        ] },
+        { h: "我们不做的事", p: ["不出售你的数据，不拿它做广告，也不在网站上放广告追踪器。"] },
+        { h: "Cookie 与本地存储", p: ["只用一个登录会话 Cookie。语言、声音开关等偏好保存在你自己的浏览器里。"] },
+        { h: "导出与删除", p: [
+          "你可以随时在档案页导出全部梦境（Markdown 或 JSON）。",
+          "想删除账号和全部内容，写信到 {email}，我们会尽快删除，最迟不超过 30 天。",
+        ] },
+        { h: "联系我们", p: ["关于隐私的任何问题，写信到 {email}。"] },
+      ] as { h: string; p: string[] }[],
+    },
+    // TODO(owner): confirm the refund policy (7-day window, full refund) before activating Stripe.
+    refund: {
+      kicker: "退款政策",
+      title: "后悔了，也可以退",
+      intro: "订阅随时可以取消；如果刚扣的一笔让你后悔了，也可以退款。",
+      sections: [
+        { h: "7 天内全额退款", p: [
+          "任何一次 Plus 扣款后的 7 天内，写信到 {email} 并附上注册邮箱，我们会全额退还这一笔，不需要说明理由。",
+        ] },
+        { h: "超过 7 天", p: [
+          "超过 7 天的扣款一般不退，但你可以随时取消，避免下一次续费；Plus 会保留到当前计费周期结束。",
+        ] },
+        { h: "退款怎么到账", p: [
+          "退款会通过 Stripe 原路退回你的付款方式，通常 5–10 个工作日到账，具体取决于你的银行。退款的同时，这份订阅会被取消。",
+        ] },
+        { h: "法律另有规定时", p: ["如果你所在地区的法律给了你更多权利（例如更长的撤回期），以法律为准。"] },
+      ] as { h: string; p: string[] }[],
+    },
   },
 
   journal: {
@@ -928,6 +1025,102 @@ const en: typeof zh = {
     imagesLeft: "{count} image developments left",
     checkoutError: "Unable to open checkout right now. Please try again.",
     portalError: "Unable to open subscription management right now.",
+    opening: "Opening…",
+    comingSoon: "Plus is coming soon",
+    comingSoonNote: "Payments aren’t open yet. Everything in Free works in the meantime.",
+    upgradePending: "Payment received. Plus is switching on; it takes a moment.",
+    upgradeSlow: "Payment received; Plus is still switching on. Refresh in a little while, and write to us if it doesn’t appear.",
+    checkoutCancelled: "Nothing was charged. Come back whenever you like.",
+    pastDue: "The last payment didn’t go through. You can update your card under Manage Subscription.",
+    endsOn: "Plus stays on until {date}, then you’re back on Free.",
+  },
+
+  legal: {
+    label: "Terms and policies",
+    updated: "Last updated: October 15, 2026",
+    pricingNote: "Plus renews monthly. Cancel any time.",
+    contactLabel: "Contact",
+    nav: [
+      { href: "/terms", label: "Terms" },
+      { href: "/privacy", label: "Privacy" },
+      { href: "/refund", label: "Refunds" },
+    ],
+    terms: {
+      kicker: "Terms of service",
+      title: "Before you use Dream Reel",
+      intro: "Short, plain terms. By using Dream Reel you agree to what follows.",
+      sections: [
+        { h: "What Dream Reel is", p: [
+          "Dream Reel is a private dream notebook: you write down dreams and morning pages, and AI helps you sort them, read them, or develop a dream into a picture.",
+          "AI readings are for your own reflection. They can be wrong and are not medical, psychological or any other professional advice. If you are struggling, please reach out to a professional or a local helpline.",
+        ] },
+        { h: "Your account", p: [
+          "Use an email address you can receive mail at and keep your password safe. One account is for one person.",
+          "Don’t use Dream Reel to store illegal content or to call the AI features in bulk with automation. Abuse can get an account suspended.",
+        ] },
+        { h: "What you write", p: [
+          "Your dreams, writing and developed pictures belong to you. We only process them to run the service (see the privacy policy), and you can export everything at any time.",
+        ] },
+        { h: "Dream Reel Plus", p: [
+          "Plus costs US$1.99 a month (English pages, charged in US dollars) or ¥12.99 a month (Chinese pages, charged in yuan); the amount shown on the payment page is what you pay. Payments are handled by Stripe.",
+          "The subscription renews automatically every month: at the start of each billing period your saved payment method is charged until you cancel.",
+          "The monthly allowances for Free and Plus are the ones on the plans page; unused allowance doesn’t carry over. If the price changes, we’ll tell you before your next charge.",
+        ] },
+        { h: "Cancel any time", p: [
+          "Cancel whenever you like from Account → Manage Subscription (the Stripe customer portal). Nothing more is charged, Plus stays on until the end of the current billing period, and then you’re back on Free; everything you wrote stays.",
+          "Refunds are covered by the refund policy.",
+        ] },
+        { h: "Changes to the service", p: [
+          "We try to keep Dream Reel running but can’t promise it never goes down. Features may change; if we ever shut it down, we’ll tell you in advance and leave time to export.",
+          "As far as the law allows, our liability for Dream Reel is limited to what you paid for Dream Reel in the previous 12 months.",
+        ] },
+        { h: "Contact", p: ["Questions? Write to {email}."] },
+      ],
+    },
+    privacy: {
+      kicker: "Privacy policy",
+      title: "Dreams are written for yourself",
+      intro: "What Dream Reel keeps, why, and who processes it.",
+      sections: [
+        { h: "What we keep", p: [
+          "Account: email, name, and a hashed password (we never see the password itself).",
+          "What you write: dream entries, morning pages and drawings, sleep details, AI readings and developed pictures.",
+          "Usage and subscription: how many analyses and pictures you used this month, and your subscription status. Stripe keeps your payment details; we only store Stripe’s customer and subscription IDs and never see your card number.",
+        ] },
+        { h: "How it’s protected", p: [
+          "Dream text and morning pages are encrypted at rest in the database and only decrypted briefly when you view, analyse or develop them. The text never goes into logs.",
+          "Developed pictures are stored in Vercel Blob. Anyone with a picture’s link can open it, so only share links with people you trust.",
+        ] },
+        { h: "Who processes it", p: [
+          "AI providers: when you use analysis, conversation, titles or picture development, the relevant text is sent to an AI provider (Groq, OpenAI, and for pictures possibly Flatkey) to complete that request.",
+          "Stripe handles subscription payments and Vercel hosts the site and pictures. Beyond that, we don’t hand your content to anyone.",
+        ] },
+        { h: "What we don’t do", p: ["We don’t sell your data, use it for advertising, or put ad trackers on the site."] },
+        { h: "Cookies and local storage", p: ["One sign-in session cookie. Preferences such as language and pen sound stay in your own browser."] },
+        { h: "Export and deletion", p: [
+          "Export all your dreams any time from the archive, as Markdown or JSON.",
+          "To delete your account and everything in it, write to {email}. We’ll delete it promptly, within 30 days at most.",
+        ] },
+        { h: "Contact", p: ["Any privacy question: {email}."] },
+      ],
+    },
+    refund: {
+      kicker: "Refund policy",
+      title: "Changed your mind? That’s fine",
+      intro: "You can cancel any time, and if a charge you just paid feels wrong, you can have it back.",
+      sections: [
+        { h: "Full refund within 7 days", p: [
+          "Within 7 days of any Plus charge, write to {email} from (or mentioning) your account email and we’ll refund that charge in full. No reason needed.",
+        ] },
+        { h: "After 7 days", p: [
+          "Charges older than 7 days generally aren’t refunded, but you can cancel any time to stop the next renewal; Plus stays on until the end of the current billing period.",
+        ] },
+        { h: "How refunds arrive", p: [
+          "Refunds go back through Stripe to the original payment method, usually within 5–10 business days depending on your bank. The subscription is cancelled when the refund is made.",
+        ] },
+        { h: "When the law says more", p: ["If the law where you live gives you more rights (a longer withdrawal period, say), the law wins."] },
+      ],
+    },
   },
 
   journal: {

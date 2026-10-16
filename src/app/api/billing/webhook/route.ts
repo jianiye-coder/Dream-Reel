@@ -1,143 +1,379 @@
-import { createHmac, timingSafeEqual } from "crypto";
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
+import type Stripe from "stripe";
 import type { PoolClient } from "pg";
+import { API_ERROR_CODES } from "@/lib/apiErrors";
 import {
-  findUserIdForStripeCustomer,
+  findOwnerOfStripeSubscription,
+  otherPlusSubscriptionIds,
   processStripeEvent,
+  recordManualAction,
+  recordNeedsAction,
   upsertStripeSubscription,
+  userExists,
 } from "@/lib/billing";
+import { errorJson, parseUserId, privateJson } from "@/lib/billingHttp";
+import { safeErrorMetadata } from "@/lib/safeServerLog";
+import {
+  billsPlusPrice,
+  CHECKOUT_INTEGRATION_IDENTIFIER,
+  invoiceForRefund,
+  isTransientStripeError,
+  requireStripe,
+  retrieveSubscription,
+  stripeErrorInfo,
+  stripeId,
+  stripeSecretKey,
+  STRIPE_WEBHOOK_EVENTS,
+  subscriptionForCharge,
+  subscriptionOfInvoice,
+  subscriptionPeriod,
+  verifiedEvent,
+  type StripeInvoiceRef,
+  type StripeSubscription,
+} from "@/lib/stripe";
 
 export const runtime = "nodejs";
 
-type StripeObject = Record<string, unknown> & {
-  id?: string;
-  customer?: string;
-  subscription?: string;
-  status?: string;
-  current_period_start?: number;
-  current_period_end?: number;
-  cancel_at_period_end?: boolean;
-  client_reference_id?: string;
-  metadata?: Record<string, string>;
-};
+/** An event's data.object, read loosely: handlers take ids from it and read the rest back. */
+type EventObject = Record<string, unknown> & { id?: string; metadata?: Record<string, string> };
 
-type StripeEvent = {
-  id: string;
-  type: string;
-  data?: { object?: StripeObject };
-};
+class SkipEvent extends Error {}
 
-function parseSignatureHeader(header: string) {
-  return header.split(",").reduce<Record<string, string[]>>((acc, part) => {
-    const [key, value] = part.split("=");
-    if (!key || !value) return acc;
-    acc[key] = [...(acc[key] ?? []), value];
-    return acc;
-  }, {});
+/**
+ * Stripe does not deliver events in order, so the event only says *which* subscription changed;
+ * its current state is read back from the API. `deleted` is final and is taken as sent.
+ */
+async function currentSubscription(id: string): Promise<StripeSubscription> {
+  try {
+    return await retrieveSubscription(id);
+  } catch (error) {
+    // a subscription this account can't see (wrong mode, another account) will never appear
+    if (stripeErrorInfo(error).status === 404) throw new SkipEvent("subscription not found");
+    throw error;
+  }
 }
 
-function verifyStripeSignature(payload: string, header: string | null, secret: string) {
-  if (!header) return false;
-  const parsed = parseSignatureHeader(header);
-  const timestamp = parsed.t?.[0];
-  const signatures = parsed.v1 ?? [];
-  if (!timestamp || signatures.length === 0) return false;
+/** One handler per subscription at a time: the next one reads Stripe only after this one commits. */
+async function lockSubscription(id: string, client: PoolClient) {
+  await client.query("SELECT pg_advisory_xact_lock(hashtext('stripe-subscription'), hashtext($1))", [id]);
+}
 
-  const ageSeconds = Math.abs(Date.now() / 1000 - Number(timestamp));
-  if (!Number.isFinite(ageSeconds) || ageSeconds > 300) return false;
+/** One reader at a time, so two subscriptions completing together still see each other. */
+async function lockUser(userId: number, client: PoolClient) {
+  await client.query("SELECT pg_advisory_xact_lock(hashtext('stripe-user'), $1)", [userId]);
+}
 
-  const expected = createHmac("sha256", secret)
-    .update(`${timestamp}.${payload}`)
-    .digest("hex");
-  const expectedBuffer = Buffer.from(expected, "hex");
+const GRANTING_STATUSES = new Set(["active", "trialing"]);
+const grantsPlus = (subscription: StripeSubscription) =>
+  GRANTING_STATUSES.has(subscription.status) && billsPlusPrice(subscription);
 
-  return signatures.some((signature) => {
-    const actualBuffer = Buffer.from(signature, "hex");
-    return actualBuffer.length === expectedBuffer.length && timingSafeEqual(actualBuffer, expectedBuffer);
+async function writeSubscription(subscription: StripeSubscription, userId: number, client: PoolClient, customerId?: string | null) {
+  const period = subscriptionPeriod(subscription);
+  // only a subscription to one of the configured Plus prices is Plus; anything else is
+  // recorded (so the customer stays linked) but grants nothing
+  const plus = billsPlusPrice(subscription);
+  if (!plus && GRANTING_STATUSES.has(subscription.status)) {
+    console.warn("[billing] subscription without a Plus price", { subscription: subscription.id });
+  }
+  await upsertStripeSubscription({
+    userId,
+    customerId: customerId ?? stripeId(subscription.customer),
+    subscriptionId: subscription.id,
+    status: subscription.status || "incomplete",
+    plan: plus ? "plus" : "free",
+    currentPeriodStart: period.start,
+    currentPeriodEnd: period.end,
+    cancelAtPeriodEnd: Boolean(subscription.cancel_at_period_end || subscription.cancel_at),
+  }, client);
+}
+
+/**
+ * Which of two Plus subscriptions the reader keeps: one that is paid and staying (active, no
+ * cancellation scheduled) beats one that is ending or still in trial; then the older one.
+ */
+function keepRank(subscription: StripeSubscription) {
+  if (subscription.status !== "active") return 0;
+  return subscription.cancel_at_period_end || subscription.cancel_at ? 1 : 2;
+}
+function keepFirst(a: StripeSubscription, b: StripeSubscription) {
+  if (keepRank(a) !== keepRank(b)) return keepRank(a) > keepRank(b);
+  if (a.created !== undefined && b.created !== undefined && a.created !== b.created) return a.created < b.created;
+  return a.id < b.id;
+}
+
+async function needsOwner(client: PoolClient, action: Parameters<typeof recordManualAction>[1]) {
+  console.error("[billing] duplicate subscription needs the owner", {
+    subscription: action.subscriptionId, kept: action.keptSubscriptionId, invoice: action.invoiceId, reason: action.reason, stripeCode: action.stripeCode,
   });
+  await recordManualAction(client, action);
 }
 
-function parseUserId(value: unknown): number | null {
-  if (typeof value !== "string" && typeof value !== "number") return null;
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : null;
+/**
+ * Two Checkout pages left open (two tabs, sessions last 24 h) can both be paid. The reader keeps
+ * one subscription; the other is cancelled at once and, if this is its first invoice, refunded.
+ * Refund before cancel with idempotency keys, so a transient failure part-way is finished by
+ * Stripe's retry without refunding twice. A refund or cancel Stripe will never accept is not
+ * retried (that would hold up every later event for this reader): it is recorded in
+ * payment_events with status 'needs_action' for the owner to settle by hand.
+ * Returns whether the duplicate is now cancelled in Stripe.
+ */
+async function dropDuplicate(drop: StripeSubscription, keep: StripeSubscription, client: PoolClient): Promise<boolean> {
+  const base = { subscriptionId: drop.id, keptSubscriptionId: keep.id };
+  const invoiceId = stripeId(drop.latest_invoice);
+  let refunded = false;
+  try {
+    const invoice = invoiceId ? await invoiceForRefund(invoiceId) : null;
+    if (invoice && invoice.amountPaid > 0) {
+      if (invoice.billingReason !== "subscription_create") {
+        // found late, after a renewal: cancel, but a person decides about money already taken
+        await needsOwner(client, { ...base, kind: "refund", invoiceId, reason: "not_first_invoice" });
+      } else if (!invoice.payment) {
+        await needsOwner(client, { ...base, kind: "refund", invoiceId, reason: "payment_not_found" });
+      } else {
+        const [kind, paymentId] = invoice.payment;
+        try {
+          await requireStripe().refunds.create({
+            ...(kind === "payment_intent" ? { payment_intent: paymentId } : { charge: paymentId }),
+            reason: "duplicate",
+            metadata: { reason: "duplicate_plus_subscription", subscription: drop.id },
+          }, { idempotencyKey: `dreamreel-duplicate-refund-${drop.id}` });
+          refunded = true;
+        } catch (error) {
+          if (stripeErrorInfo(error).code === "charge_already_refunded") refunded = true;
+          else if (isTransientStripeError(error)) throw error;
+          else await needsOwner(client, { ...base, kind: "refund", invoiceId, reason: "refund_rejected", stripeCode: stripeErrorInfo(error).code });
+        }
+      }
+    }
+  } catch (error) {
+    if (isTransientStripeError(error)) throw error;
+    await needsOwner(client, { ...base, kind: "refund", invoiceId, reason: "invoice_unreadable", stripeCode: stripeErrorInfo(error).code });
+  }
+
+  let cancelled = false;
+  try {
+    await requireStripe().subscriptions.cancel(drop.id, undefined, { idempotencyKey: `dreamreel-duplicate-cancel-${drop.id}` });
+    cancelled = true;
+  } catch (error) {
+    const now = await retrieveSubscription(drop.id).catch(() => null);
+    if (now?.status === "canceled") cancelled = true;
+    else if (isTransientStripeError(error)) throw error;
+    else await needsOwner(client, { ...base, kind: "cancel", reason: "cancel_rejected", stripeCode: stripeErrorInfo(error).code });
+  }
+  console.warn("[billing] duplicate Plus subscription", { kept: keep.id, dropped: drop.id, cancelled, refunded });
+  return cancelled;
 }
 
-function unixToDate(value: unknown) {
-  return typeof value === "number" ? new Date(value * 1000) : null;
+/** Records the reader's subscription and, if it grants Plus, settles any second one. */
+async function saveSubscription(subscription: StripeSubscription, userId: number, client: PoolClient, customerId?: string | null) {
+  await writeSubscription(subscription, userId, client, customerId);
+  if (!grantsPlus(subscription)) return;
+
+  for (const otherId of await otherPlusSubscriptionIds(userId, subscription.id, client)) {
+    let other: StripeSubscription;
+    try {
+      other = await currentSubscription(otherId);
+    } catch (error) {
+      if (error instanceof SkipEvent) continue;
+      throw error;
+    }
+    if (!grantsPlus(other)) {
+      // the database was behind; bring it up to date
+      await writeSubscription(other, userId, client);
+      continue;
+    }
+    const [keep, drop] = keepFirst(other, subscription) ? [other, subscription] : [subscription, other];
+    if (await dropDuplicate(drop, keep, client)) await writeSubscription({ ...drop, status: "canceled" }, userId, client);
+    if (drop.id === subscription.id) return;
+  }
 }
 
-async function handleCheckoutCompleted(object: StripeObject, client: PoolClient) {
-  const userId = parseUserId(object.client_reference_id ?? object.metadata?.user_id);
-  const subscriptionId = typeof object.subscription === "string" ? object.subscription : null;
+/*
+ * Lock order is always: this subscription, then its reader; only then is Stripe read. A handler
+ * that waited therefore reads the state after the one before it committed, never a stale one.
+ */
+/**
+ * checkout.session.completed links the new Stripe customer to the reader who opened the session
+ * (client_reference_id; metadata only as a fallback). async_payment_succeeded fulfils a delayed
+ * payment, so only when payment_status says paid; async_payment_failed just re-syncs. Plus itself
+ * always follows the subscription's status as read back from Stripe.
+ */
+async function handleCheckoutSession(type: string, object: EventObject, client: PoolClient) {
+  if (object.mode !== "subscription") return;
+  // client_reference_id is only trusted on sessions this app created
+  const identifier = object.integration_identifier;
+  if (object.metadata?.plan !== "plus" || (identifier != null && identifier !== CHECKOUT_INTEGRATION_IDENTIFIER)) {
+    console.warn("[billing] ignoring a Checkout Session this app didn't create", { session: object.id });
+    return;
+  }
+  if (type === "checkout.session.async_payment_succeeded" && object.payment_status !== "paid") return;
+  const userId = parseUserId(object.client_reference_id) ?? parseUserId(object.metadata?.user_id);
+  const subscriptionId = stripeId(object.subscription);
   if (!userId || !subscriptionId) return;
+  if (!(await userExists(userId, client))) return;
 
-  await upsertStripeSubscription({
-    userId,
-    customerId: typeof object.customer === "string" ? object.customer : null,
-    subscriptionId,
-    status: "active",
-    plan: "plus",
+  await lockSubscription(subscriptionId, client);
+  const owner = await findOwnerOfStripeSubscription(subscriptionId, null, client);
+  if (owner && "userId" in owner && owner.userId !== userId) {
+    // a subscription never changes hands on a checkout event
+    console.error("[billing] checkout names another reader than the subscription's", { session: object.id, subscription: subscriptionId });
+    await recordNeedsAction(client, `action:owner:${subscriptionId}`, "manual.owner", {
+      subscriptionId, sessionId: object.id, linkedUserId: owner.userId, sessionUserId: userId, reason: "checkout_user_mismatch",
+    });
+    return;
+  }
+  await lockUser(userId, client);
+  const subscription = await currentSubscription(subscriptionId);
+  await saveSubscription(subscription, userId, client, stripeId(object.customer));
+}
+
+/** The reader: the subscription or customer we already know (metadata only as a fallback). */
+async function readerFor(subscriptionId: string, customerId: string | null, metadataUserId: unknown, client: PoolClient) {
+  // the Stripe subscription (else customer) we already linked is the owner
+  const owner = await findOwnerOfStripeSubscription(subscriptionId, customerId, client);
+  if (owner && "ambiguous" in owner) {
+    console.error("[billing] a Stripe customer is linked to several readers", { customer: customerId, subscription: subscriptionId });
+    await recordNeedsAction(client, `action:owner:${customerId}`, "manual.owner", {
+      customerId, subscriptionId, userIds: owner.ambiguous, reason: "customer_shared",
+    });
+    return null;
+  }
+  if (owner) return owner.userId;
+  // explicit fallback for a subscription event that beats checkout.session.completed here
+  const fromMetadata = parseUserId(metadataUserId);
+  return fromMetadata && (await userExists(fromMetadata, client)) ? fromMetadata : null;
+}
+
+/** The locked re-sync every subscription-shaped event goes through. */
+async function resync(
+  subscriptionId: string,
+  hint: { customerId: string | null; metadataUserId?: unknown; deleted?: StripeSubscription },
+  client: PoolClient,
+) {
+  await lockSubscription(subscriptionId, client);
+  const userId = await readerFor(subscriptionId, hint.customerId, hint.metadataUserId, client);
+  // not ours yet: checkout.session.completed links it when it arrives
+  if (!userId) return;
+  await lockUser(userId, client);
+  const subscription = hint.deleted ? { ...hint.deleted, status: "canceled" } : await currentSubscription(subscriptionId);
+  await saveSubscription(subscription, userId, client);
+}
+
+async function handleSubscriptionEvent(type: string, object: EventObject, client: PoolClient) {
+  const sent = object as unknown as StripeSubscription;
+  if (!sent.id) return;
+  await resync(sent.id, {
+    customerId: stripeId(sent.customer),
+    metadataUserId: sent.metadata?.user_id,
+    deleted: type === "customer.subscription.deleted" ? sent : undefined,
   }, client);
 }
 
-async function handleSubscriptionChanged(object: StripeObject, client: PoolClient) {
-  const subscriptionId = typeof object.id === "string" ? object.id : null;
-  const customerId = typeof object.customer === "string" ? object.customer : null;
-  if (!subscriptionId || !customerId) return;
-
-  const metadataUserId = parseUserId(object.metadata?.user_id);
-  const userId = metadataUserId
-    ?? (await findUserIdForStripeCustomer(customerId, subscriptionId, client));
-  if (!userId) return;
-
-  await upsertStripeSubscription({
-    userId,
-    customerId,
-    subscriptionId,
-    status: object.status || "incomplete",
-    plan: object.metadata?.plan === "plus" ? "plus" : "plus",
-    currentPeriodStart: unixToDate(object.current_period_start),
-    currentPeriodEnd: unixToDate(object.current_period_end),
-    cancelAtPeriodEnd: Boolean(object.cancel_at_period_end),
+/** invoice.paid / invoice.payment_failed: re-read the invoice's subscription (it says active, past_due…). */
+async function handleInvoiceEvent(invoice: Record<string, unknown> & StripeInvoiceRef, client: PoolClient) {
+  const subscriptionId = subscriptionOfInvoice(invoice);
+  if (!subscriptionId) return; // a one-off invoice
+  await resync(subscriptionId, {
+    customerId: stripeId(invoice.customer),
+    metadataUserId: invoice.parent?.subscription_details?.metadata?.user_id,
   }, client);
+}
+
+/** A full refund of a subscription payment ends that subscription at once (see /refund). */
+async function handleChargeRefunded(charge: Record<string, unknown>, client: PoolClient) {
+  if (charge.refunded !== true) return; // partial refunds leave the subscription alone
+  const subscriptionId = await subscriptionForCharge(charge as Parameters<typeof subscriptionForCharge>[0]);
+  if (!subscriptionId) return;
+
+  await lockSubscription(subscriptionId, client);
+  const userId = await readerFor(subscriptionId, stripeId(charge.customer), undefined, client);
+  if (!userId) return;
+  await lockUser(userId, client);
+  const subscription = await currentSubscription(subscriptionId);
+  // already over, including a duplicate we refunded and cancelled ourselves
+  if (subscription.status === "canceled" || subscription.status === "incomplete_expired") {
+    await writeSubscription(subscription, userId, client);
+    return;
+  }
+  try {
+    await requireStripe().subscriptions.cancel(subscriptionId, undefined, { idempotencyKey: `dreamreel-refunded-cancel-${subscriptionId}` });
+  } catch (error) {
+    const now = await retrieveSubscription(subscriptionId).catch(() => null);
+    if (now?.status !== "canceled") {
+      if (isTransientStripeError(error)) throw error;
+      console.error("[billing] refunded subscription could not be cancelled", { subscription: subscriptionId, charge: charge.id, stripeCode: stripeErrorInfo(error).code });
+      await recordNeedsAction(client, `action:cancel:${subscriptionId}`, "manual.cancel", {
+        subscriptionId, chargeId: charge.id, reason: "refunded_cancel_rejected", stripeCode: stripeErrorInfo(error).code,
+      });
+      return;
+    }
+  }
+  console.warn("[billing] cancelled a fully refunded subscription", { subscription: subscriptionId, charge: charge.id });
+  await writeSubscription({ ...subscription, status: "canceled" }, userId, client);
+}
+
+/** Disputes and early fraud warnings: the owner decides; we keep the ids. */
+async function handleRiskEvent(type: string, eventId: string, object: EventObject, client: PoolClient) {
+  const kind = type === "charge.dispute.created" ? "dispute" : "early_fraud_warning";
+  const details = { [`${kind === "dispute" ? "dispute" : "warning"}Id`]: object.id, chargeId: stripeId(object.charge), paymentIntentId: stripeId(object.payment_intent), eventId };
+  console.warn(`[billing] ${kind} needs the owner`, details);
+  await recordNeedsAction(client, `action:${kind}:${object.id}`, `manual.${kind}`, details);
 }
 
 export async function POST(request: NextRequest) {
-  const secret = process.env.STRIPE_WEBHOOK_SECRET;
-  if (!secret) {
-    return NextResponse.json({ error: "Missing STRIPE_WEBHOOK_SECRET" }, { status: 500 });
+  // fail closed: without both secrets nothing is verified or read back
+  const secret = process.env.STRIPE_WEBHOOK_SECRET?.trim();
+  if (!secret || !stripeSecretKey()) return errorJson(API_ERROR_CODES.configurationError, 503);
+
+  // the signature covers the exact bytes Stripe sent, so read them before any parsing
+  const rawBody = Buffer.from(await request.arrayBuffer());
+  let event: Stripe.Event;
+  try {
+    const verified = verifiedEvent(rawBody, request.headers.get("stripe-signature"), secret);
+    if (!verified) return errorJson(API_ERROR_CODES.invalidRequest, 400);
+    event = verified;
+  } catch {
+    return errorJson(API_ERROR_CODES.invalidRequest, 400); // signed, but not JSON
   }
-
-  const rawBody = await request.text();
-  if (!verifyStripeSignature(rawBody, request.headers.get("stripe-signature"), secret)) {
-    return NextResponse.json({ error: "Invalid Stripe signature" }, { status: 400 });
+  if (typeof event?.id !== "string" || !event.id || typeof event.type !== "string") {
+    return errorJson(API_ERROR_CODES.invalidRequest, 400);
   }
+  if (!STRIPE_WEBHOOK_EVENTS.has(event.type)) return privateJson({ received: true, ignored: true });
+  const object = (event.data?.object ?? null) as unknown as EventObject | null;
 
-  const event = JSON.parse(rawBody) as StripeEvent;
-  const result = await processStripeEvent(
-    { id: event.id, type: event.type, payload: event },
-    async (client) => {
-      const object = event.data?.object;
-      if (!object) return;
-
-      if (event.type === "checkout.session.completed") {
-        await handleCheckoutCompleted(object, client);
-      }
-
-      if (
-        event.type === "customer.subscription.created" ||
-        event.type === "customer.subscription.updated" ||
-        event.type === "customer.subscription.deleted"
-      ) {
-        await handleSubscriptionChanged(object, client);
-      }
-    },
-  );
-
-  if (result === "duplicate") {
-    return NextResponse.json({ received: true, duplicate: true });
+  try {
+    const result = await processStripeEvent(
+      {
+        id: event.id,
+        type: event.type,
+        // keep an audit trail without copying customer names, emails or addresses
+        payload: { id: event.id, type: event.type, created: event.created, livemode: event.livemode, object: object?.id },
+      },
+      async (client) => {
+        if (!object) return;
+        const { type } = event;
+        try {
+          if (type.startsWith("checkout.session.")) await handleCheckoutSession(type, object, client);
+          else if (type.startsWith("customer.subscription.")) await handleSubscriptionEvent(type, object, client);
+          else if (type.startsWith("invoice.")) await handleInvoiceEvent(object, client);
+          else if (type === "charge.refunded") await handleChargeRefunded(object, client);
+          else await handleRiskEvent(type, event.id, object, client);
+        } catch (error) {
+          if (!(error instanceof SkipEvent)) throw error;
+        }
+      },
+    );
+    return privateJson(result === "duplicate" ? { received: true, duplicate: true } : { received: true });
+  } catch (error) {
+    // a non-2xx makes Stripe retry; the event id is only recorded once handling commits
+    const info = stripeErrorInfo(error);
+    console.error("[billing] webhook failed", {
+      type: event.type,
+      ...safeErrorMetadata(error),
+      ...info,
+      // the usual cause: the restricted key lacks a permission for this call
+      ...(info.status === 401 || info.status === 403 ? { hint: "check the Stripe key's permissions" } : {}),
+    });
+    return errorJson(API_ERROR_CODES.internalError, 500);
   }
-
-  return NextResponse.json({ received: true });
 }

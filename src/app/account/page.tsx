@@ -6,10 +6,9 @@ import { useEffect, useState } from "react";
 import { LangToggle } from "@/components/LangToggle";
 import { NotebookShell } from "@/components/notebook/NotebookShell";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { getApiErrorMessage } from "@/lib/apiErrors";
+import { fetchBillingStatus, isUnlimitedQuota, needsPaymentFix, openStripe, useBillingReturn, type ClientBillingStatus } from "@/lib/billingClient";
 
-type Quota = { dreamEntries: number; analysis: number; imageGenerations: number };
-type BillingStatus = { plan: "free" | "plus"; isUnlimited: boolean; periodEnd: string; limits: Quota; usage: Quota; remaining: Quota };
+type Quota = ClientBillingStatus["limits"];
 
 // usage drawn as ten little inked boxes
 function Boxes({ used, total }: { used: number; total: number }) {
@@ -94,32 +93,40 @@ export default function AccountPage() {
   }
 
   // ── Allowance (library card) ──────────────────────────────────────────────
-  const [billing, setBilling] = useState<BillingStatus | null>(null);
+  const [billing, setBilling] = useState<ClientBillingStatus | null>(null);
   const [billingState, setBillingState] = useState<"loading" | "ready" | "error">("loading");
   const [billingErr, setBillingErr] = useState("");
+  const [billingNote, setBillingNote] = useState<"" | "upgradePending" | "upgradeSlow" | "upgraded" | "checkoutCancelled">("");
+  const [opening, setOpening] = useState(false);
+  async function loadBilling() {
+    const s = await fetchBillingStatus();
+    if (!s) throw new Error("status");
+    setBilling(s); setBillingState("ready");
+    return s;
+  }
   useEffect(() => {
     if (!session?.user) return;
-    fetch("/api/billing/status", { cache: "no-store" })
-      .then((r) => (r.ok ? r.json() as Promise<BillingStatus> : Promise.reject(new Error("status"))))
-      .then((s) => { setBilling(s); setBillingState("ready"); })
-      .catch(() => setBillingState("error"));
+    loadBilling().catch(() => setBillingState("error"));
   }, [session?.user]);
+  useBillingReturn({
+    pending: () => setBillingNote("upgradePending"),
+    active: () => setBillingNote("upgraded"),
+    slow: () => setBillingNote("upgradeSlow"),
+    cancelled: () => setBillingNote("checkoutCancelled"),
+    isPlus: async () => (await loadBilling()).plan === "plus",
+  });
 
+  // the portal for a live subscription (also to fix a failed payment), checkout otherwise
+  const managesSubscription = billing?.plan === "plus" || needsPaymentFix(billing);
   async function openBilling() {
     setBillingErr("");
-    const endpoint = billing?.plan === "plus" ? "/api/billing/portal" : "/api/billing/checkout";
-    const fallbackError = billing?.plan === "plus" ? B.portalError : B.checkoutError;
+    setOpening(true);
+    const fallbackError = managesSubscription ? B.portalError : B.checkoutError;
     try {
-      const res = await fetch(endpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ lang, currency: lang === "zh" ? "cny" : "usd" }),
-      });
-      const data = (await res.json()) as { url?: string; error?: string };
-      if (!res.ok || !data.url) throw new Error(getApiErrorMessage(data.error, lang, fallbackError));
-      window.location.href = data.url;
+      await openStripe(managesSubscription ? "portal" : "checkout", lang, "/account", fallbackError);
     } catch (error) {
       setBillingErr(error instanceof Error ? error.message : fallbackError);
+      setOpening(false);
     }
   }
 
@@ -200,8 +207,8 @@ export default function AccountPage() {
                       {rows.map(([label, key]) => (
                         <tr key={key}>
                           <td>{label}</td>
-                          <td>{billing.isUnlimited ? null : <Boxes used={billing.usage[key]} total={billing.limits[key]} />}</td>
-                          <td className="nb-hand">{billing.isUnlimited ? P.cardUnlimited : billing.remaining[key]}</td>
+                          <td>{isUnlimitedQuota(billing, key) ? null : <Boxes used={billing.usage[key]} total={billing.limits[key]} />}</td>
+                          <td className="nb-hand">{isUnlimitedQuota(billing, key) ? P.cardUnlimited : billing.remaining[key]}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -214,13 +221,24 @@ export default function AccountPage() {
             </div>
             {billing && !billing.isUnlimited && (
               <div className="nb-upsell">
-                <p className="nb-body" style={{ maxWidth: "20em" }}>{billing.plan === "plus" ? "" : P.upsell}</p>
+                <p className="nb-body" style={{ maxWidth: "20em" }}>
+                  {needsPaymentFix(billing) ? B.pastDue
+                    : billing.plan === "plus" ? (billing.cancelAtPeriodEnd ? B.endsOn.replace("{date}", resetDate) : "")
+                    : billing.checkoutAvailable ? P.upsell : B.comingSoonNote}
+                </p>
                 <div style={{ display: "grid", gap: 10, justifyItems: "end" }}>
-                  <button type="button" className="nb-act" onClick={() => void openBilling()}>{billing.plan === "plus" ? B.manage : B.upgrade} <span aria-hidden>→</span></button>
-                  {billing.plan !== "plus" && <Link className="nb-act-quiet" href="/pricing">{P.seePlans}</Link>}
+                  {managesSubscription || billing.checkoutAvailable ? (
+                    <button type="button" className="nb-act" onClick={() => void openBilling()} disabled={opening}>
+                      {opening ? B.opening : managesSubscription ? B.manage : B.upgrade} <span aria-hidden>→</span>
+                    </button>
+                  ) : (
+                    <span className="nb-mono" style={{ color: "var(--ink-faint)" }}>{B.comingSoon}</span>
+                  )}
+                  {!managesSubscription && <Link className="nb-act-quiet" href="/pricing">{P.seePlans}</Link>}
                 </div>
               </div>
             )}
+            {billingNote && <p className="nb-msg nb-ok" role="status" style={{ marginTop: 12 }}>{B[billingNote]}</p>}
             {billingErr && <p className="nb-msg" role="alert" style={{ marginTop: 12 }}>{billingErr}</p>}
           </section>
         </div>
