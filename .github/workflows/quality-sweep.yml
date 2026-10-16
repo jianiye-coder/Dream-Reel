@@ -25,9 +25,11 @@ jobs:
   sweep:
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    # The workflow token only reads and manages the label; Claude pushes and opens PRs/issues with the
+    # Claude GitHub App token the action gets through OIDC.
     permissions:
-      contents: write
-      pull-requests: write
+      contents: read
+      pull-requests: read
       issues: write
       id-token: write
     steps:
@@ -35,6 +37,7 @@ jobs:
         with:
           ref: main
           fetch-depth: 0
+          persist-credentials: false
 
       # one sweep PR at a time: skip the whole run (and the Claude usage) while one is open
       - name: Look for an open sweep PR
@@ -63,6 +66,7 @@ jobs:
         run: |
           npm run quality > /dev/null
           cp quality/score.json quality/score-main.json
+          echo "MAIN_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
           cat quality/REPORT.md >> "$GITHUB_STEP_SUMMARY"
 
       - name: Make sure the quality-sweep label exists
@@ -93,3 +97,16 @@ jobs:
           claude_args: |
             --max-turns 80
             --allowedTools "Read,Edit,Write,Glob,Grep,Bash(git status:*),Bash(git diff:*),Bash(git log:*),Bash(git show:*),Bash(git checkout -b quality-sweep/*),Bash(git add:*),Bash(git commit:*),Bash(git push -u origin quality-sweep/*),Bash(npm run lint),Bash(npm run typecheck),Bash(npm run knip),Bash(npm run test:unit),Bash(npm run test:unit -- *),Bash(npm run quality),Bash(npx tsx scripts/i18n-audit.ts),Bash(gh pr list:*),Bash(gh pr view:*),Bash(gh pr create:*),Bash(gh issue list:*),Bash(gh issue create:*),Bash(date:*)"
+
+      # belt and braces next to branch protection: the sweep must never move main itself
+      - name: Check that main did not move under the sweep
+        if: steps.gate.outputs.open == '0'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          now=$(gh api "repos/$GITHUB_REPOSITORY/commits/main" --jq .sha)
+          author=$(gh api "repos/$GITHUB_REPOSITORY/commits/main" --jq '.commit.author.name')
+          if [ "$now" != "$MAIN_SHA" ] && [ "$author" = "claude[bot]" ]; then
+            echo "::error::main moved from $MAIN_SHA to $now with a claude[bot] commit during the sweep"
+            exit 1
+          fi

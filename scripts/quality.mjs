@@ -34,6 +34,21 @@ function callArgs(text, open) {
   }
   return text.slice(open + 1);
 }
+/** css without its @media (prefers-reduced-motion …) blocks (adding one is never design drift) */
+function withoutReducedMotion(css) {
+  let out = css;
+  for (let at = out.search(/@media[^{]*prefers-reduced-motion/); at !== -1; at = out.search(/@media[^{]*prefers-reduced-motion/)) {
+    let depth = 0, end = out.length;
+    for (let i = out.indexOf("{", at); i < out.length; i++) {
+      if (out[i] === "{") depth++;
+      else if (out[i] === "}" && --depth === 0) { end = i + 1; break; }
+    }
+    out = out.slice(0, at) + out.slice(end).replace(/^\n/, "");
+  }
+  return out;
+}
+// an opening JSX tag, brace-aware so `onClick={() => …}` doesn't end it early
+const tag = (name) => new RegExp(`<${name}\\b((?:[^>"'{]|"[^"]*"|'[^']*'|\\{(?:[^{}]|\\{(?:[^{}]|\\{[^{}]*\\})*\\})*\\})*?)(/?)>`, "g");
 const stripStrings = (s) => s.replace(/`(?:\\.|[^`\\])*`|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'/g, '""');
 
 const principles = [];
@@ -50,7 +65,7 @@ function principle(id, title, check) {
 
 // 1 ── notebook design system ───────────────────────────────────────────────────────────────────
 principle(1, "Notebook design system only", ({ add, metrics }) => {
-  const globals = lineCount(read("src/app/globals.css"));
+  const globals = lineCount(withoutReducedMotion(read("src/app/globals.css")));
   metrics.globalsCssLines = globals;
   metrics.globalsCssBaseline = baseline.globalsCssLines;
   if (globals > baseline.globalsCssLines) {
@@ -198,13 +213,17 @@ principle(9, "Reduced motion and accessible names", ({ add }) => {
   }
   for (const f of inSrc(/\.tsx$/)) {
     const text = read(f);
-    for (const m of text.matchAll(/<button\b([^>]*)>([\s\S]*?)<\/button>/g)) {
-      const [, attrs, body] = m;
+    for (const m of text.matchAll(tag("button"))) {
+      const attrs = m[1];
+      const close = text.indexOf("</button>", m.index);
+      const body = m[2] || close === -1 ? "" : text.slice(m.index + m[0].length, close);
       if (/aria-label(ledby)?=|title=/.test(attrs)) continue;
       const visible = body.replace(/<svg[\s\S]*?<\/svg>/g, "").replace(/<[A-Z]\w*[^>]*\/>/g, "").replace(/<[^>]+>/g, "").trim();
       if (!visible) add(f, lineOf(text, m.index), "icon-only <button> without aria-label", 10);
     }
-    for (const m of text.matchAll(/<(img|Image)\b(?![^>]*\balt=)[^>]*>/g)) add(f, lineOf(text, m.index), `<${m[1]}> without alt`, 10);
+    for (const name of ["img", "Image"]) {
+      for (const m of text.matchAll(tag(name))) if (!/\balt=/.test(m[1])) add(f, lineOf(text, m.index), `<${name}> without alt`, 10);
+    }
   }
 });
 

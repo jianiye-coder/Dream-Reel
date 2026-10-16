@@ -1,23 +1,30 @@
 name: Quality sweep auto-merge
 
-# Lets a quality-sweep PR merge itself when it is small and safe: opened by the Claude GitHub App,
-# every commit by claude[bot], at most 150 changed lines, nothing under a protected path. Then it
-# enables auto-merge (squash); GitHub merges only after the required checks pass, so the owner must
-# turn on "Allow auto-merge" and protect main with the CI "verify" check required (see README).
-# Anything else gets a comment asking for human review, and auto-merge is switched off again.
+# Lets a quality-sweep PR merge itself when it is small and safe: opened, pushed and labelled by the
+# Claude GitHub App, every commit by claude[bot], at most 150 changed lines in at most 10 files,
+# nothing under a protected path, no existing test modified or removed. Then it enables auto-merge
+# (squash) pinned to the head commit it checked; GitHub merges only after the required checks pass,
+# so the owner must turn on "Allow auto-merge" and protect main (see README). Anything else gets a
+# comment asking for human review, and auto-merge is switched off again.
 #
-# Never checks out or runs the PR's code: it only reads the PR through the API.
+# pull_request_target, so this gate always runs from main's copy of this file (a PR can't loosen its
+# own gate). That is safe because the job never checks out or runs the PR's code: it only reads the
+# PR through the API.
 
 on:
-  pull_request:
-    types: [opened, reopened, synchronize, labeled]
+  pull_request_target:
+    types: [opened, reopened, synchronize, labeled, unlabeled]
 
 permissions:
   contents: read
 
+concurrency:
+  group: quality-automerge-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
 jobs:
   gate:
-    if: contains(github.event.pull_request.labels.*.name, 'quality-sweep')
+    if: contains(github.event.pull_request.labels.*.name, 'quality-sweep') || (github.event.action == 'unlabeled' && github.event.label.name == 'quality-sweep')
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -26,14 +33,18 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       REPO: ${{ github.repository }}
       PR: ${{ github.event.pull_request.number }}
+      HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+      ACTION: ${{ github.event.action }}
       AUTHOR: ${{ github.event.pull_request.user.login }}
       AUTHOR_TYPE: ${{ github.event.pull_request.user.type }}
+      SENDER: ${{ github.event.sender.login }}
       HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
       BASE_REF: ${{ github.event.pull_request.base.ref }}
       EXPECTED_AUTHOR: claude[bot]
       MAX_CHANGED_LINES: 150
-      # keep in sync with .github/quality-sweep-prompt.md
-      PROTECTED: '^(src/app/api/billing/|src/lib/billing\.ts$|src/lib/stripe\.ts$|src/auth[^/]*\.ts$|src/middleware\.ts$|src/lib/db\.ts$|src/lib/dreamTextEncryption\.ts$|\.github/|package\.json$|package-lock\.json$|scripts/quality\.mjs$|quality/|knip\.json$|tsconfig\.json$|eslint\.config\.mjs$|docs/golden-principles\.md$)|migration'
+      MAX_CHANGED_FILES: 10
+      # keep in sync with the protected paths in .github/quality-sweep-prompt.md
+      PROTECTED: '^(src/app/api/billing/|src/lib/billing\.ts$|src/lib/stripe\.ts$|src/auth[^/]*\.ts$|src/middleware\.ts$|src/lib/session\.ts$|src/lib/authRateLimit\.ts$|src/app/api/auth/|src/app/api/user/|src/types/next-auth\.d\.ts$|src/lib/db\.ts$|src/lib/dreamTextEncryption\.ts$|next\.config\.ts$|\.github/|package\.json$|package-lock\.json$|scripts/|quality/|knip\.json$|tsconfig\.json$|eslint\.config\.mjs$|vitest\.config\.ts$|tests/unit/i18n-keys\.test\.ts$|docs/golden-principles\.md$)|migration'
     steps:
       - name: Check the PR
         id: check
@@ -41,8 +52,13 @@ jobs:
           set -euo pipefail
           reasons=()
 
+          if [ "$ACTION" = "unlabeled" ] && ! gh pr view "$PR" --repo "$REPO" --json labels --jq '.labels[].name' | grep -qx quality-sweep; then
+            reasons+=("is no longer labelled \`quality-sweep\`")
+          fi
           [ "$AUTHOR" = "$EXPECTED_AUTHOR" ] && [ "$AUTHOR_TYPE" = "Bot" ] \
-            || reasons+=("opened by \`$AUTHOR\` ($AUTHOR_TYPE), not \`$EXPECTED_AUTHOR\`")
+            || reasons+=("was opened by \`$AUTHOR\` ($AUTHOR_TYPE), not \`$EXPECTED_AUTHOR\`")
+          # on synchronize the sender is the pusher, on labeled whoever added the label
+          [ "$SENDER" = "$EXPECTED_AUTHOR" ] || reasons+=("got its latest \`$ACTION\` event from \`$SENDER\`, not \`$EXPECTED_AUTHOR\`")
           [ "$HEAD_REPO" = "$REPO" ] || reasons+=("comes from a fork (\`$HEAD_REPO\`)")
           [ "$BASE_REF" = "main" ] || reasons+=("targets \`$BASE_REF\`, not \`main\`")
 
@@ -52,9 +68,17 @@ jobs:
           changed=$(gh pr view "$PR" --repo "$REPO" --json additions,deletions --jq '.additions + .deletions')
           [ "$changed" -le "$MAX_CHANGED_LINES" ] || reasons+=("changes $changed lines (limit $MAX_CHANGED_LINES)")
 
-          files=$(gh api --paginate "repos/$REPO/pulls/$PR/files" --jq '.[] | .filename, (.previous_filename // empty)')
-          protected=$(grep -E "$PROTECTED" <<<"$files" | sort -u | paste -sd, - || true)
+          listing=$(gh api --paginate "repos/$REPO/pulls/$PR/files" --jq '.[] | [.status, .filename, (.previous_filename // "")] | @tsv')
+          count=$(grep -c . <<<"$listing" || true)
+          [ "$count" -le "$MAX_CHANGED_FILES" ] || reasons+=("changes $count files (limit $MAX_CHANGED_FILES)")
+
+          paths=$(cut -f2,3 <<<"$listing" | tr '\t' '\n' | grep . || true)
+          protected=$(grep -E "$PROTECTED" <<<"$paths" | sort -u | paste -sd, - || true)
           [ -z "$protected" ] || reasons+=("touches protected paths: $protected")
+
+          # new test files are welcome; editing or deleting an existing one could make CI pass vacuously
+          tests=$(awk -F'\t' '$1 != "added" && ($2 ~ /^tests\// || $3 ~ /^tests\//) { print $2 }' <<<"$listing" | sort -u | paste -sd, - || true)
+          [ -z "$tests" ] || reasons+=("modifies or removes existing tests: $tests")
 
           if [ ${#reasons[@]} -eq 0 ]; then
             echo "ok=true" >> "$GITHUB_OUTPUT"
@@ -69,7 +93,7 @@ jobs:
 
       - name: Enable auto-merge
         if: steps.check.outputs.ok == 'true'
-        run: gh pr merge "$PR" --repo "$REPO" --auto --squash
+        run: gh pr merge "$PR" --repo "$REPO" --auto --squash --match-head-commit "$HEAD_SHA"
 
       - name: Ask for human review
         if: steps.check.outputs.ok == 'false'
