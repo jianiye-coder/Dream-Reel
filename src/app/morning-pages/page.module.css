@@ -2,18 +2,13 @@
    and a table of contents of earlier mornings; the right page is the empty ruled sheet you write on.
    Notebook tokens (--paper, --hand, --hand-ink, --red-ink, --rule, --margin, --line …) come from .nb-root. */
 
-/* the hand-drawn red-ink underline used across the notebook */
-.book {
-  --red-underline: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 10' preserveAspectRatio='none'><path d='M1 6 C 30 3, 65 8, 99 4' stroke='%23b0432e' stroke-width='1.8' fill='none' stroke-linecap='round'/></svg>");
-  --dotted: #cfc5b2;
-}
+.book { --dotted: #cfc5b2; }
 .book :is(button, a, input, summary):focus-visible {
   outline: 1.5px solid var(--red-ink) !important;
   outline-offset: 3px;
   border-radius: 2px;
 }
 .book button:disabled { cursor: default; opacity: .45; }
-.srOnly { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 
 /* ── left page: date, about, contents ───────────────────────────── */
 .leftPad { overflow: hidden; }
@@ -35,7 +30,7 @@
 .about summary { cursor: pointer; list-style: none; }
 .about summary::-webkit-details-marker { display: none; }
 .aboutToggle { position: relative; display: inline-block; color: var(--red-ink); white-space: nowrap; padding-bottom: 2px; }
-.aboutToggle::before { content: ""; position: absolute; left: -2px; right: 12px; bottom: -3px; height: 6px; background: var(--red-underline) no-repeat center / 100% 100%; opacity: .7; }
+.aboutToggle::before { content: ""; position: absolute; left: -2px; right: 12px; bottom: -3px; height: 6px; background: var(--nb-red-underline) no-repeat center / 100% 100%; opacity: .7; }
 .aboutToggle::after { content: "›"; display: inline-block; margin-left: 5px; transition: transform .25s ease; }
 .about[open] .aboutToggle::after { transform: rotate(90deg); }
 .about summary:hover .aboutToggle::before { opacity: 1; }
@@ -69,7 +64,7 @@
 .tocWeekday { font-family: var(--mono); font-size: 10.5px; letter-spacing: .12em; color: var(--ink-faint); text-transform: uppercase; }
 .toc button:hover:not(:disabled) .tocDay { color: var(--ink); }
 .toc button[aria-current] .tocDay { color: var(--red-ink); }
-.toc button[aria-current] .tocDay::after { content: ""; position: absolute; left: -3px; right: -4px; bottom: -4px; height: 7px; background: var(--red-underline) no-repeat center / 100% 100%; }
+.toc button[aria-current] .tocDay::after { content: ""; position: absolute; left: -3px; right: -4px; bottom: -4px; height: 7px; background: var(--nb-red-underline) no-repeat center / 100% 100%; }
 
 /* ── right page: the ruled writing sheet ─────────────────────────── */
 :global(.nb-page).right { background-image: linear-gradient(90deg, transparent 44px, var(--margin) 44px 45px, transparent 45px); }
@@ -124,7 +119,7 @@
 .book button.finish { font-weight: 600; font-size: 16px; }
 .book button.quiet { font-family: var(--mono); font-size: 11.5px; letter-spacing: .1em; color: var(--ink-soft); }
 .book button.fix { position: relative; font-family: var(--hand); font-size: 16px; color: var(--red-ink) !important; padding-bottom: 2px; }
-.fix::after { content: ""; position: absolute; left: -2px; right: -3px; bottom: -3px; height: 6px; background: var(--red-underline) no-repeat center / 100% 100%; }
+.fix::after { content: ""; position: absolute; left: -2px; right: -3px; bottom: -3px; height: 6px; background: var(--nb-red-underline) no-repeat center / 100% 100%; }
 
 .empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 22px; text-align: center; font-family: var(--hand); font-size: 18px; color: var(--ink-soft); }
 .finished { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; text-align: center; }
@@ -143,7 +138,7 @@
 .tool { position: relative; width: 34px; height: 34px; display: inline-flex; align-items: center; justify-content: center; color: var(--ink-soft); transition: color .2s; }
 .tool:hover:not(:disabled) { color: var(--ink); }
 .tool[aria-pressed="true"] { color: var(--hand-ink); }
-.tool[aria-pressed="true"]::after { content: ""; position: absolute; left: 7px; right: 6px; bottom: 2px; height: 6px; background: var(--red-underline) no-repeat center / 100% 100%; }
+.tool[aria-pressed="true"]::after { content: ""; position: absolute; left: 7px; right: 6px; bottom: 2px; height: 6px; background: var(--nb-red-underline) no-repeat center / 100% 100%; }
 .swatch { width: 24px; height: 34px; display: inline-flex; align-items: center; justify-content: center; }
 .swatch span { width: 11px; height: 11px; border-radius: 50%; transition: transform .2s; }
 .swatch:hover:not(:disabled) span { transform: scale(1.15); }

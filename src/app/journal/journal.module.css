@@ -166,14 +166,9 @@
 :global(.nb-root) .scroll[data-fade-top], :global(.nb-root) .gathered[data-fade-top] { --fade-top: 56px; }
 :global(.nb-root) .scroll[data-fade-bottom], :global(.nb-root) .gathered[data-fade-bottom] { --fade-bottom: 36px; }
 
-/* Dream Reel's voice: a small slip of paper laid on the page */
-:global(.nb-root) .slip {
-  position: relative; flex: none; align-self: flex-start; max-width: 92%;
-  background: #fbf8f1; padding: 13px 18px 14px;
-  box-shadow: 0 1px 1px rgba(60, 40, 20, .1), 0 9px 14px -11px rgba(60, 40, 20, .4);
-}
+/* Dream Reel's voice (.nb-slip), laid down the page; every other slip a hair askew */
+:global(.nb-root) .slip { flex: none; align-self: flex-start; max-width: 92%; }
 :global(.nb-root) .slip:nth-of-type(even) { transform: rotate(.25deg); }
-:global(.nb-root) .slipLabel { display: block; font-family: var(--mono); font-size: 9.5px; letter-spacing: .24em; color: var(--ink-faint); margin-bottom: 5px; }
 :global(.nb-root) .slipText { font-size: 14px; line-height: 1.95; color: var(--ink); white-space: pre-line; }
 :global(.nb-root) .slipHead { font-size: 14px; font-weight: 600; color: var(--ink); }
 :global(.nb-root) .slipError .slipText { color: var(--red-ink); }
@@ -190,15 +185,16 @@
 /* the dreamer's replies, in hand, to the right */
 :global(.nb-root) .said { flex: none; align-self: flex-end; text-align: right; max-width: 88%; font-size: 19px; line-height: 1.65; white-space: pre-line; padding-right: 2px; }
 
-/* actions inside the conversation are red-ink annotations with a hand-drawn underline */
-:global(.nb-root) .redAct {
-  font-family: var(--hand); font-size: 15px; color: var(--red-ink); text-align: left;
-  padding-bottom: 4px;
-  background: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 10' preserveAspectRatio='none'><path d='M1 6 C 30 3, 65 8, 99 4' stroke='%23b0432e' stroke-width='1.4' fill='none' stroke-linecap='round' opacity='.75'/></svg>") no-repeat left bottom / 100% 5px;
+/* red-ink actions (.nb-red-act) inside the conversation: a size smaller, in a finer and paler pen,
+   set flush left like the notes around them, and fading rather than thickening on hover */
+:global(.nb-root) .redAct:global(.nb-red-act) {
+  font-size: 15px; text-align: left; padding: 0 0 4px;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 10' preserveAspectRatio='none'><path d='M1 6 C 30 3, 65 8, 99 4' stroke='%23b0432e' stroke-width='1.4' fill='none' stroke-linecap='round' opacity='.75'/></svg>");
+  background-size: 100% 5px;
   transition: opacity .2s;
 }
-:global(.nb-root) .redAct:hover { opacity: .78; }
-:global(.nb-root) .redAct:disabled { opacity: .4; cursor: default; }
+:global(.nb-root) .redAct:global(.nb-red-act):hover:not(:disabled) { background-size: 100% 5px; opacity: .78; }
+:global(.nb-root) .redAct:global(.nb-red-act):disabled { opacity: .4; }
 :global(.nb-root) .redActs { display: flex; flex-wrap: wrap; gap: 6px 22px; margin-top: 8px; }
 
 :global(.nb-root) .feedback { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; margin-top: 6px; }

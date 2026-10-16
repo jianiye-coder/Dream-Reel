@@ -1150,7 +1150,7 @@ function DreamEditorModal({
             />
             <div className={s.metaRow}>
               <label className={s.dateField}>
-                <span className={s.srOnly}>{M.date}</span>
+                <span className="nb-sr-only">{M.date}</span>
                 <input
                   type="date"
                   name="dreamDate"
@@ -1165,7 +1165,7 @@ function DreamEditorModal({
             </div>
 
             <label className={s.textField}>
-              <span className={s.srOnly}>{M.dreamContent}</span>
+              <span className="nb-sr-only">{M.dreamContent}</span>
               <textarea
                 name="dreamText"
                 autoComplete="off"
@@ -1179,15 +1179,15 @@ function DreamEditorModal({
               type="button"
               onClick={analyzeAndAsk}
               disabled={isAnalyzing || !form.rawText.trim() || saving}
-              className={s.redAct}
+              className={`nb-red-act ${s.redAct}`}
             >
               {isAnalyzing ? M.analyzingBtn : M.analyzeBtn}
             </button>
 
             {followUpQuestions.length > 0 && (
-              <div className={s.slip}>
+              <div className={`nb-slip ${s.slip}`}>
                 <div className={s.slipHead}>
-                  <span className={s.slipLabel}>{M.slipLabel} · {M.followUpTitle}</span>
+                  <span className={`nb-slip-label ${s.slipLabel}`}>{M.slipLabel} · {M.followUpTitle}</span>
                   <button type="button" onClick={() => setFollowUpQuestions([])} className={s.quiet}>
                     {M.followUpClose}
                   </button>
@@ -1208,7 +1208,7 @@ function DreamEditorModal({
                         className="nb-hand"
                       />
                       {followUpAnswers[i]?.trim() && (
-                        <button type="button" onClick={() => appendAnswer(i)} className={s.redAct}>
+                        <button type="button" onClick={() => appendAnswer(i)} className={`nb-red-act ${s.redAct}`}>
                           {M.appendBtn}
                         </button>
                       )}
@@ -1219,7 +1219,7 @@ function DreamEditorModal({
             )}
 
             <fieldset className={s.sleepGrid}>
-              <legend className={s.srOnly}>{M.sleepTitle}</legend>
+              <legend className="nb-sr-only">{M.sleepTitle}</legend>
               <label>
                 <span>{M.sleepStart}</span>
                 <input type="time" name="sleepStart" autoComplete="off" value={form.sleepStart} onChange={(event) => updateForm({ sleepStart: event.target.value })} />
@@ -1319,7 +1319,7 @@ function DreamEditorModal({
                   </button>
                 ) : null}
                 {downloadError && <p role="alert" className={s.err}>{downloadError}</p>}
-                <button type="button" onClick={generateImage} disabled={generatingImage} className={s.redAct}>
+                <button type="button" onClick={generateImage} disabled={generatingImage} className={`nb-red-act ${s.redAct}`}>
                   {generatingImage ? M.generating : form.imageUrl ? M.replaceImage : M.addImage}
                 </button>
                 <details className={s.promptBox}>
@@ -1343,8 +1343,8 @@ function DreamEditorModal({
               </div>
             </div>
 
-            <label className={`${s.slip} ${s.insightSlip}`}>
-              <span className={s.slipLabel}>{M.slipLabel} · {M.insight}</span>
+            <label className={`nb-slip ${s.slip} ${s.insightSlip}`}>
+              <span className={`nb-slip-label ${s.slipLabel}`}>{M.slipLabel} · {M.insight}</span>
               <textarea
                 name="sleepInsight"
                 autoComplete="off"
@@ -2048,7 +2048,7 @@ export default function DreamGrid({
                 if (e.key === "Escape") setEditingTag(null);
               }}
             />
-            <button type="button" className={s.redAct} onClick={() => void handleRenameTag(item.kind, item.label, editingTag.draft)} disabled={tagBusy}>
+            <button type="button" className={`nb-red-act ${s.redAct}`} onClick={() => void handleRenameTag(item.kind, item.label, editingTag.draft)} disabled={tagBusy}>
               {tagBusy ? N.saving : N.save}
             </button>
             <button type="button" className={s.quiet} onClick={() => setEditingTag(null)}>{N.cancel}</button>
@@ -2137,7 +2137,7 @@ export default function DreamGrid({
               ))}
             </div>
             <div className={s.inlineActions}>
-              <button type="button" className={s.redAct} onClick={() => savePersonRelationship(personKey, relDraft)}>{N.done}</button>
+              <button type="button" className={`nb-red-act ${s.redAct}`} onClick={() => savePersonRelationship(personKey, relDraft)}>{N.done}</button>
               <button type="button" className={s.quiet} onClick={() => setEditingRelKey(null)}>{N.cancel}</button>
             </div>
           </div>
@@ -2186,7 +2186,7 @@ export default function DreamGrid({
               })}
             </ul>
             <div className={s.inlineActions}>
-              <button type="button" className={s.redAct} onClick={() => void handleAddTag()} disabled={tagBusy || addingTag.selectedIds.size === 0}>
+              <button type="button" className={`nb-red-act ${s.redAct}`} onClick={() => void handleAddTag()} disabled={tagBusy || addingTag.selectedIds.size === 0}>
                 {tagBusy ? N.saving : fill(N.addTo, { count: addingTag.selectedIds.size })}
               </button>
               <button type="button" className={s.quiet} onClick={() => setAddingTag(null)}>{N.cancel}</button>
@@ -2255,7 +2255,7 @@ export default function DreamGrid({
 
           {/* ═════════ left-hand page ═════════ */}
           <BookPage side="l" folio={folios[0]} padClassName={s.pad} {...pageProps("l")}>
-            <h1 className={s.srOnly}>{A.title}</h1>
+            <h1 className="nb-sr-only">{A.title}</h1>
             {dataNotice}
 
             {activeTab === "calendar" && (
@@ -2470,8 +2470,8 @@ export default function DreamGrid({
                 {!recap.complete ? (
                   <p className={s.recapScope}>{fill(N.recapPartial, { count: localEntries.length })}</p>
                 ) : null}
-                <div className={`${s.slip} ${s.recapSlip}`}>
-                  <span className={s.slipLabel}>{T.modal.slipLabel}</span>
+                <div className={`nb-slip ${s.slip} ${s.recapSlip}`}>
+                  <span className={`nb-slip-label ${s.slipLabel}`}>{T.modal.slipLabel}</span>
                   {recap.slip.map((line) => <p key={line}>{line}</p>)}
                 </div>
                 {exportError}

@@ -366,7 +366,7 @@ export default function MorningPages() {
                 <section><h2>{M.aboutWhatTitle}</h2><p>{M.aboutWhat}</p></section>
                 <section><h2>{M.aboutWhyTitle}</h2><ul>{M.aboutWhy.map((line) => <li key={line}>{line}</li>)}</ul></section>
                 <p className={styles.aboutHere}>{M.aboutHere}{" "}
-                  <a href="https://juliacameronlive.com/" target="_blank" rel="noreferrer">{M.aboutSource}<span aria-hidden> ↗</span><span className={styles.srOnly}>{M.opensNewTab}</span></a>
+                  <a href="https://juliacameronlive.com/" target="_blank" rel="noreferrer">{M.aboutSource}<span aria-hidden> ↗</span><span className="nb-sr-only">{M.opensNewTab}</span></a>
                 </p>
               </div>
             </details>
@@ -401,7 +401,7 @@ export default function MorningPages() {
                   <button type="button" aria-pressed={mode === "text"} onClick={() => { setMode("text"); tap(); }}>{M.modeText}{content ? <i className={styles.dot} aria-hidden /> : null}</button>
                   <button type="button" aria-pressed={mode === "draw"} onClick={() => { setMode("draw"); tap(); }}>{M.modeDraw}{drawing.length ? <i className={styles.dot} aria-hidden /> : null}</button>
                 </div>
-                <span className={`nb-mono ${styles.count}`}>{M.words.replace("{count}", String(words))}<span className={styles.srOnly}> · {progressText}</span></span>
+                <span className={`nb-mono ${styles.count}`}>{M.words.replace("{count}", String(words))}<span className="nb-sr-only"> · {progressText}</span></span>
               </div>
             )}
             {loading ? <p role="status" className={styles.empty}>{M.loading}</p> : loadError ? (

@@ -12,7 +12,7 @@
 .selected { color: var(--ink); font-weight: 600; }
 .selected::after {
   content: ""; position: absolute; left: -3px; right: -4px; bottom: -3px; height: 7px;
-  background: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 10' preserveAspectRatio='none'><path d='M1 6 C 30 3, 65 8, 99 4' stroke='%23b0432e' stroke-width='1.8' fill='none' stroke-linecap='round'/></svg>") no-repeat center / 100% 100%;
+  background: var(--nb-red-underline) no-repeat center / 100% 100%;
 }
 .boundary { margin-top: 12px; padding-left: 10px; border-left: 2px solid var(--margin); font-size: 12.5px; line-height: 1.8; color: var(--ink-soft); }
 .controls .notes { margin-top: 10px; }
@@ -28,6 +28,6 @@
   font-family: var(--mono); font-size: 11.5px; line-height: 1.7; color: var(--ink-soft);
   background: #fbf8f1; box-shadow: inset 0 0 0 1px rgba(31, 28, 23, .12);
 }
-/* a quiet ink frame; outline (not box-shadow) because globals.css strips focus shadows */
+/* a quiet ink frame; outline (not box-shadow) because the journal's focus reset strips focus shadows */
 .controls .notes textarea:focus-visible { outline: 1.5px solid var(--ink-soft) !important; outline-offset: 2px; box-shadow: none !important; }
 .controls .notes button { min-height: 0; padding: 0; border-radius: 0; }
