@@ -18,6 +18,7 @@ import { Book, BookPage } from "@/components/notebook/Book";
 import { PageCorner } from "@/components/notebook/PageCorner";
 import { PhotoLightbox } from "@/components/notebook/PhotoLightbox";
 import { TurnLink } from "@/components/notebook/TurnLink";
+import { localDayKey } from "@/lib/dates";
 import { edgeFade } from "@/lib/edgeFade";
 import { flipPage } from "@/lib/notebookFlip";
 import { pageTurn, tap, unlock } from "@/lib/notebookSound";
@@ -103,10 +104,6 @@ function formatDayKey(date: Date): string {
   const month = String(date.getUTCMonth() + 1).padStart(2, "0");
   const day = String(date.getUTCDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
-}
-
-function localDayKey(date: Date): string {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
 
 /** "10.07" — dates are stored at UTC midnight, so read them in UTC. */

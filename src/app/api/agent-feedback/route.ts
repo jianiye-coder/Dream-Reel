@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/auth";
+import { requireUserId } from "@/lib/session";
 import { agentFeedbackSchema, saveAgentFeedback } from "@/lib/agentFeedback";
 import { API_ERROR_CODES } from "@/lib/apiErrors";
 import { safeErrorMetadata } from "@/lib/safeServerLog";
@@ -8,11 +8,8 @@ import { verifyDreamAgentFeedbackToken } from "@/lib/dreamAgentTelemetry";
 export const runtime = "nodejs";
 
 export async function POST(req: NextRequest) {
-  const session = await auth() as { user?: { id?: string } } | null;
-  const userId = Number(session?.user?.id);
-  if (!Number.isInteger(userId) || userId <= 0) {
-    return NextResponse.json({ error: API_ERROR_CODES.unauthorized }, { status: 401 });
-  }
+  const userId = await requireUserId();
+  if (userId instanceof NextResponse) return userId;
 
   let body: unknown;
   try {

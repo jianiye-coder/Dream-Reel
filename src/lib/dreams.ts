@@ -88,17 +88,6 @@ export type DreamEntry = {
   visualBrief: string | null;
 };
 
-type CountItem = {
-  item: string;
-  count: number;
-};
-
-type StressByMood = {
-  item: string;
-  count: number;
-  avgStress: number;
-};
-
 const ARCHIVE_LIST_SELECT = `
   SELECT
     id,
@@ -132,16 +121,6 @@ const ARCHIVE_LIST_SELECT = `
     NULL AS visual_brief
   FROM dream_entries
 `;
-
-export type WeeklyRecap = {
-  weekStart: string;
-  entryCount: number;
-  topMoods: CountItem[];
-  topPeople: CountItem[];
-  topLocations: CountItem[];
-  topSymbols: CountItem[];
-  stressByMood: StressByMood[];
-};
 
 function isDataImageUrl(value: string | null): boolean {
   return Boolean(value?.startsWith("data:image/"));
@@ -452,87 +431,4 @@ export async function listDreamEntries(userId: number, limit = 50): Promise<Drea
   );
 
   return result.rows.map((row) => mapDreamRow(row as Record<string, unknown>));
-}
-
-async function getTopTextField(
-  field: "mood" | "people" | "locations" | "symbols",
-  weekStart: Date,
-  userId: number,
-): Promise<CountItem[]> {
-  const pool = getPool();
-
-  if (field === "mood") {
-    const result = await pool.query(
-      `
-        SELECT mood AS item, COUNT(*)::int AS count
-        FROM dream_entries
-        WHERE captured_at >= $1 AND mood <> '' AND user_id = $2
-        GROUP BY mood
-        ORDER BY count DESC, item ASC
-        LIMIT 5;
-      `,
-      [weekStart, userId],
-    );
-    return result.rows.map((row) => ({ item: String(row.item), count: Number(row.count) }));
-  }
-
-  const result = await pool.query(
-    `
-      SELECT item, COUNT(*)::int AS count
-      FROM dream_entries, unnest(${field}) AS item
-      WHERE captured_at >= $1 AND item <> '' AND user_id = $2
-      GROUP BY item
-      ORDER BY count DESC, item ASC
-      LIMIT 5;
-    `,
-    [weekStart, userId],
-  );
-  return result.rows.map((row) => ({ item: String(row.item), count: Number(row.count) }));
-}
-
-export async function getWeeklyRecap(userId: number): Promise<WeeklyRecap> {
-  await ensureSchema();
-  const pool = getPool();
-  const weekStartResult = await pool.query("SELECT date_trunc('week', NOW()) AS week_start;");
-  const weekStart = new Date(String(weekStartResult.rows[0].week_start));
-
-  const [countResult, topMoods, topPeople, topLocations, topSymbols, stressByMoodResult] =
-    await Promise.all([
-      pool.query(
-        `SELECT COUNT(*)::int AS entry_count FROM dream_entries WHERE captured_at >= $1 AND user_id = $2;`,
-        [weekStart, userId],
-      ),
-      getTopTextField("mood", weekStart, userId),
-      getTopTextField("people", weekStart, userId),
-      getTopTextField("locations", weekStart, userId),
-      getTopTextField("symbols", weekStart, userId),
-      pool.query(
-        `
-          SELECT
-            mood AS item,
-            COUNT(*)::int AS count,
-            ROUND(AVG(stress_score)::numeric, 2)::float8 AS avg_stress
-          FROM dream_entries
-          WHERE captured_at >= $1 AND mood <> '' AND stress_score IS NOT NULL AND user_id = $2
-          GROUP BY mood
-          ORDER BY count DESC, item ASC
-          LIMIT 5;
-        `,
-        [weekStart, userId],
-      ),
-    ]);
-
-  return {
-    weekStart: weekStart.toISOString(),
-    entryCount: Number(countResult.rows[0].entry_count ?? 0),
-    topMoods,
-    topPeople,
-    topLocations,
-    topSymbols,
-    stressByMood: stressByMoodResult.rows.map((row) => ({
-      item: String(row.item),
-      count: Number(row.count),
-      avgStress: Number(row.avg_stress),
-    })),
-  };
 }

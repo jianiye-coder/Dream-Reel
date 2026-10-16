@@ -15,6 +15,8 @@ import { buildDreamImagePrompt } from "@/lib/imagePrompt";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { getApiErrorMessage } from "@/lib/apiErrors";
 import { shouldFlushLatestSave } from "@/lib/autosave";
+import { edgeFade } from "@/lib/edgeFade";
+import { localDayKey, writtenDate } from "@/lib/dates";
 import { DreamConversationControls } from "@/components/DreamConversationControls";
 import type { DreamConversationGoal } from "@/lib/dreamSupport";
 import css from "./journal.module.css";
@@ -39,63 +41,13 @@ interface SpeechRecognitionEventLike {
   }>;
 }
 
-function getTodayDate() {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
-
-const CN_DIGITS = "〇一二三四五六七八九";
-function cnNum(n: number) {
-  if (n <= 10) return n === 10 ? "十" : CN_DIGITS[n];
-  if (n < 20) return "十" + CN_DIGITS[n % 10];
-  return CN_DIGITS[Math.floor(n / 10)] + "十" + (n % 10 ? CN_DIGITS[n % 10] : "");
-}
-
 /** "2026-10-07" → the date as you'd write it at the top of a page, plus its folio number */
 function pageDate(value: string, lang: "zh" | "en") {
   const [y, m, d] = value.split("-").map(Number);
   const date = y && m && d ? new Date(y, m - 1, d) : new Date();
   const dayOfYear = Math.round((date.getTime() - new Date(date.getFullYear(), 0, 1).getTime()) / 86_400_000) + 1;
   const short = `${String(date.getMonth() + 1).padStart(2, "0")}.${String(date.getDate()).padStart(2, "0")}`;
-  return lang === "zh"
-    ? { day: `${cnNum(date.getMonth() + 1)}月${cnNum(date.getDate())}日`, weekday: "周" + "日一二三四五六"[date.getDay()], short, folio: dayOfYear * 2 }
-    : { day: date.toLocaleDateString("en-US", { month: "long", day: "numeric" }), weekday: date.toLocaleDateString("en-US", { weekday: "long" }), short, folio: dayOfYear * 2 };
-}
-
-/* Scroll panes on the page fade softly into the paper at whichever edge has more writing past it,
-   instead of slicing a slip in half. (React 19 ref callback: returns its own cleanup.) */
-function edgeFade(el: HTMLElement | null) {
-  if (!el) return;
-  const update = () => {
-    const pane = getComputedStyle(el).overflowY !== "visible" && el.scrollHeight - el.clientHeight > 1;
-    el.toggleAttribute("data-fade-top", pane && el.scrollTop > 1);
-    el.toggleAttribute("data-fade-bottom", pane && el.scrollTop + el.clientHeight < el.scrollHeight - 1);
-  };
-  update();
-  el.addEventListener("scroll", update, { passive: true });
-  // the content can grow without the pane resizing or the DOM changing: images arriving, a <details>
-  // opening, a textarea dragged taller, a web font swapping in — watch the pane and its children
-  el.addEventListener("load", update, true);
-  el.addEventListener("toggle", update, true);
-  const resized = new ResizeObserver(update);
-  const watch = () => {
-    resized.disconnect();
-    resized.observe(el);
-    for (const child of Array.from(el.children)) resized.observe(child);
-  };
-  watch();
-  const changed = new MutationObserver(() => { watch(); update(); });
-  changed.observe(el, { childList: true, subtree: true, characterData: true });
-  let live = true;
-  void document.fonts?.ready.then(() => { if (live) update(); });
-  return () => {
-    live = false;
-    el.removeEventListener("scroll", update);
-    el.removeEventListener("load", update, true);
-    el.removeEventListener("toggle", update, true);
-    resized.disconnect();
-    changed.disconnect();
-  };
+  return { ...writtenDate(date, lang), short, folio: dayOfYear * 2 };
 }
 
 const MicIcon = () => (
@@ -305,11 +257,11 @@ export default function JournalPage() {
   }
 
   useEffect(() => {
-    const t = getTodayDate();
+    const t = localDayKey();
     setToday(t);
     setDreamDate((current) => current || t);
     // a page left open past midnight: "today" (the date input's max) moves on when it is looked at again
-    const refresh = () => { if (document.visibilityState === "visible") setToday(getTodayDate()); };
+    const refresh = () => { if (document.visibilityState === "visible") setToday(localDayKey()); };
     document.addEventListener("visibilitychange", refresh);
     return () => document.removeEventListener("visibilitychange", refresh);
   }, []);
@@ -1533,7 +1485,7 @@ export default function JournalPage() {
                 autoComplete="off"
                 value={dreamDate}
                 max={today || undefined}
-                onFocus={() => setToday(getTodayDate())}
+                onFocus={() => setToday(localDayKey())}
                 onChange={(e) => setDreamDate(e.target.value)}
                 className={css.dateInput}
               />
