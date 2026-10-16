@@ -15,6 +15,7 @@ import { buildDreamImagePrompt } from "@/lib/imagePrompt";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { getApiErrorMessage } from "@/lib/apiErrors";
 import { shouldFlushLatestSave } from "@/lib/autosave";
+import { edgeFade } from "@/lib/edgeFade";
 import { DreamConversationControls } from "@/components/DreamConversationControls";
 import type { DreamConversationGoal } from "@/lib/dreamSupport";
 import css from "./journal.module.css";
@@ -60,42 +61,6 @@ function pageDate(value: string, lang: "zh" | "en") {
   return lang === "zh"
     ? { day: `${cnNum(date.getMonth() + 1)}月${cnNum(date.getDate())}日`, weekday: "周" + "日一二三四五六"[date.getDay()], short, folio: dayOfYear * 2 }
     : { day: date.toLocaleDateString("en-US", { month: "long", day: "numeric" }), weekday: date.toLocaleDateString("en-US", { weekday: "long" }), short, folio: dayOfYear * 2 };
-}
-
-/* Scroll panes on the page fade softly into the paper at whichever edge has more writing past it,
-   instead of slicing a slip in half. (React 19 ref callback: returns its own cleanup.) */
-function edgeFade(el: HTMLElement | null) {
-  if (!el) return;
-  const update = () => {
-    const pane = getComputedStyle(el).overflowY !== "visible" && el.scrollHeight - el.clientHeight > 1;
-    el.toggleAttribute("data-fade-top", pane && el.scrollTop > 1);
-    el.toggleAttribute("data-fade-bottom", pane && el.scrollTop + el.clientHeight < el.scrollHeight - 1);
-  };
-  update();
-  el.addEventListener("scroll", update, { passive: true });
-  // the content can grow without the pane resizing or the DOM changing: images arriving, a <details>
-  // opening, a textarea dragged taller, a web font swapping in — watch the pane and its children
-  el.addEventListener("load", update, true);
-  el.addEventListener("toggle", update, true);
-  const resized = new ResizeObserver(update);
-  const watch = () => {
-    resized.disconnect();
-    resized.observe(el);
-    for (const child of Array.from(el.children)) resized.observe(child);
-  };
-  watch();
-  const changed = new MutationObserver(() => { watch(); update(); });
-  changed.observe(el, { childList: true, subtree: true, characterData: true });
-  let live = true;
-  void document.fonts?.ready.then(() => { if (live) update(); });
-  return () => {
-    live = false;
-    el.removeEventListener("scroll", update);
-    el.removeEventListener("load", update, true);
-    el.removeEventListener("toggle", update, true);
-    resized.disconnect();
-    changed.disconnect();
-  };
 }
 
 const MicIcon = () => (
