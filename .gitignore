@@ -17,3 +17,6 @@ outputs/**/.~*
 /quality/score.json
 /quality/REPORT.md
 /quality/score-*.json
+# the quality sweep agent's PR / issue drafts (.github/workflows/quality-sweep.yml)
+/.quality-sweep/
+/sweep-out/

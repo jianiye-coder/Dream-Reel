@@ -1,13 +1,20 @@
 name: Quality sweep
 
-# Once a day: score main against docs/golden-principles.md (npm run quality), then let Claude fix the
-# single most valuable small drift in one PR labelled quality-sweep (or open an issue when the fix
-# needs a protected path). quality-automerge.yml decides whether that PR may merge on its own.
+# Once a day: score main against docs/golden-principles.md (npm run quality), let Claude make the
+# single most valuable small fix (or draft an issue when the fix needs a protected path), and publish
+# it as one PR labelled quality-sweep. quality-automerge.yml decides whether that PR may merge itself.
 #
-# Auth: CLAUDE_CODE_OAUTH_TOKEN (from `claude setup-token`, a Claude Pro/Max subscription; runs draw
-# from its usage limits). The action exchanges this job's OIDC token (id-token: write) for a Claude
-# GitHub App token and uses it for git push and gh, so the PR is authored by claude[bot] and its CI
-# runs (pushes and PRs made with the workflow's GITHUB_TOKEN would not trigger workflows).
+# Two jobs, so the agent never holds a write token:
+# - sweep (read-only token): Claude edits files in the working tree only. It cannot run git write
+#   commands, gh or the network; it writes its PR or issue text into .quality-sweep/. The workflow
+#   re-runs lint, tsc, knip and the unit tests itself, then hands the diff on as an artifact.
+# - publish (write token, runs no repository code): validates the diff (size, files, protected paths,
+#   tests), commits it as github-actions[bot], pushes quality-sweep/<date>-<slug>, opens the PR and
+#   dispatches CI and the auto-merge gate (GITHUB_TOKEN events don't start pull_request workflows,
+#   but workflow_dispatch ones do). Or it files the drafted issue.
+#
+# Auth for Claude: CLAUDE_CODE_OAUTH_TOKEN (from `claude setup-token`, a Claude Pro/Max subscription;
+# runs draw from its usage limits). Branch protection on main is the backstop: see README.
 
 on:
   schedule:
@@ -25,18 +32,16 @@ jobs:
   sweep:
     runs-on: ubuntu-latest
     timeout-minutes: 45
-    # The workflow token only reads and manages the label; Claude pushes and opens PRs/issues with the
-    # Claude GitHub App token the action gets through OIDC.
     permissions:
       contents: read
       pull-requests: read
-      issues: write
-      id-token: write
+    outputs:
+      skip: ${{ steps.gate.outputs.open != '0' }}
+      main_sha: ${{ steps.score.outputs.main_sha }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           ref: main
-          fetch-depth: 0
           persist-credentials: false
 
       # one sweep PR at a time: skip the whole run (and the Claude usage) while one is open
@@ -51,7 +56,7 @@ jobs:
             echo "A quality-sweep PR is already open; skipping today's sweep." >> "$GITHUB_STEP_SUMMARY"
           fi
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         if: steps.gate.outputs.open == '0'
         with:
           node-version: 22
@@ -63,17 +68,12 @@ jobs:
 
       - name: Score main
         if: steps.gate.outputs.open == '0'
+        id: score
         run: |
           npm run quality > /dev/null
           cp quality/score.json quality/score-main.json
-          echo "MAIN_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+          echo "main_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
           cat quality/REPORT.md >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Make sure the quality-sweep label exists
-        if: steps.gate.outputs.open == '0'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh label create quality-sweep --repo "$GITHUB_REPOSITORY" --color 5319e7 --description "Daily golden-principles sweep" --force
 
       - name: Build the prompt
         if: steps.gate.outputs.open == '0'
@@ -87,26 +87,186 @@ jobs:
             echo "QUALITY_SWEEP_PROMPT"
           } >> "$GITHUB_OUTPUT"
 
+      # The agent edits the working tree only: file edits are limited to src/, docs/, tests/unit/ and
+      # .quality-sweep/, and the only commands are the checks below. No git writes, no gh, no web.
       - name: Sweep
         if: steps.gate.outputs.open == '0'
         uses: anthropics/claude-code-action@374f254f5efaf968abfe15d399fd90972e8138b9 # v1.0.251
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          base_branch: main
+          # the job's read-only token, so the agent session never holds a write token
+          github_token: ${{ github.token }}
           prompt: ${{ steps.prompt.outputs.text }}
           claude_args: |
             --max-turns 80
-            --allowedTools "Read,Edit,Write,Glob,Grep,Bash(git status:*),Bash(git diff:*),Bash(git log:*),Bash(git show:*),Bash(git checkout -b quality-sweep/*),Bash(git add:*),Bash(git commit:*),Bash(git push -u origin quality-sweep/*),Bash(npm run lint),Bash(npm run typecheck),Bash(npm run knip),Bash(npm run test:unit),Bash(npm run test:unit -- *),Bash(npm run quality),Bash(npx tsx scripts/i18n-audit.ts),Bash(gh pr list:*),Bash(gh pr view:*),Bash(gh pr create:*),Bash(gh issue list:*),Bash(gh issue create:*),Bash(date:*)"
+            --allowedTools "Read,Glob,Grep,Edit(src/**),Edit(docs/**),Edit(tests/unit/**),Edit(.quality-sweep/**),Bash(npm run lint),Bash(npx tsc --noEmit),Bash(npm run test:unit),Bash(npm run quality),Bash(git status),Bash(git diff)"
+            --disallowedTools "WebFetch,WebSearch,Bash(git push:*),Bash(git commit:*),Bash(gh:*),Bash(curl:*),Bash(wget:*)"
 
-      # belt and braces next to branch protection: the sweep must never move main itself
-      - name: Check that main did not move under the sweep
+      # Trust but verify, still without any write token: the change must pass the same gates as CI.
+      - name: Verify the change
+        if: steps.gate.outputs.open == '0'
+        id: verify
+        run: |
+          git add -A -- . ':!.quality-sweep'
+          if git diff --cached --quiet; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "No code change today." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+          npm run lint
+          npx tsc --noEmit
+          npm run knip
+          npm run test:unit
+          npm run quality > /dev/null
+
+      - name: Package the result
         if: steps.gate.outputs.open == '0'
         env:
-          GH_TOKEN: ${{ github.token }}
+          CHANGED: ${{ steps.verify.outputs.changed }}
+          MAIN_SHA: ${{ steps.score.outputs.main_sha }}
         run: |
-          now=$(gh api "repos/$GITHUB_REPOSITORY/commits/main" --jq .sha)
-          author=$(gh api "repos/$GITHUB_REPOSITORY/commits/main" --jq '.commit.author.name')
-          if [ "$now" != "$MAIN_SHA" ] && [ "$author" = "claude[bot]" ]; then
-            echo "::error::main moved from $MAIN_SHA to $now with a claude[bot] commit during the sweep"
+          mkdir -p sweep-out
+          if [ "$CHANGED" = "true" ]; then
+            git diff --cached --binary "$MAIN_SHA" > sweep-out/change.patch
+            cp quality/score.json sweep-out/score-after.json
+          fi
+          cp quality/score-main.json sweep-out/score-main.json
+          for f in slug pr.md issue.md; do
+            if [ -f ".quality-sweep/$f" ]; then cp ".quality-sweep/$f" "sweep-out/$f"; fi
+          done
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: steps.gate.outputs.open == '0'
+        with:
+          name: quality-sweep
+          path: sweep-out/
+          retention-days: 3
+
+  publish:
+    needs: sweep
+    if: needs.sweep.outputs.skip != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      actions: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPO: ${{ github.repository }}
+      MAIN_SHA: ${{ needs.sweep.outputs.main_sha }}
+      MAX_CHANGED_LINES: 150
+      MAX_CHANGED_FILES: 10
+      # keep in sync with quality-automerge.yml, the prompt and docs/golden-principles.md
+      PROTECTED: '^(src/app/api/|src/lib/billing\.ts$|src/lib/stripe\.ts$|src/lib/dreams\.ts$|src/lib/safeServerLog\.ts$|src/lib/email\.ts$|src/lib/session\.ts$|src/lib/authRateLimit\.ts$|src/lib/db\.ts$|src/lib/dreamTextEncryption\.ts$|src/auth[^/]*\.ts$|src/middleware\.ts$|src/proxy\.ts$|src/instrumentation|src/types/next-auth\.d\.ts$|next\.config\.ts$|\.env|\.gitignore$|\.github/|package\.json$|package-lock\.json$|scripts/|quality/|evals/|public/|playwright\.config\.ts$|knip\.json$|tsconfig\.json$|eslint\.config\.mjs$|vitest\.config\.ts$|tests/unit/i18n-keys\.test\.ts$|docs/golden-principles\.md$)|migration'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: ${{ needs.sweep.outputs.main_sha }}
+          persist-credentials: false
+
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: quality-sweep
+          path: sweep-out
+
+      # validates and publishes; runs only git and gh, never the repository's code
+      - name: Validate and publish
+        run: |
+          set -euo pipefail
+          out=sweep-out
+          score() { jq -r "$2" "$out/$1" 2>/dev/null || echo "?"; }
+
+          if [ ! -s "$out/change.patch" ]; then
+            if [ -s "$out/issue.md" ]; then
+              title=$(head -n1 "$out/issue.md" | sed 's/^#* *//' | cut -c1-120)
+              [ -n "$title" ] || { echo "::error::issue.md has no title line"; exit 1; }
+              if gh issue list --repo "$REPO" --label quality-sweep --state open --json title --jq '.[].title' | grep -qxF "$title"; then
+                echo "An open issue already covers: $title" >> "$GITHUB_STEP_SUMMARY"
+              else
+                gh label create quality-sweep --repo "$REPO" --color 5319e7 --description "Daily golden-principles sweep" --force
+                tail -n +2 "$out/issue.md" > issue-body.md
+                printf '\n\n_Drafted by the daily quality sweep (.github/workflows/quality-sweep.yml)._\n' >> issue-body.md
+                gh issue create --repo "$REPO" --title "$title" --body-file issue-body.md --label quality-sweep
+              fi
+            else
+              echo "Nothing to publish today." >> "$GITHUB_STEP_SUMMARY"
+            fi
+            exit 0
+          fi
+
+          slug=$(tr -d '[:space:]' < "$out/slug" 2>/dev/null || true)
+          [[ "$slug" =~ ^[a-z0-9][a-z0-9-]{2,40}$ ]] || { echo "::error::.quality-sweep/slug is missing or not a short kebab-case slug"; exit 1; }
+          [ -s "$out/pr.md" ] || { echo "::error::.quality-sweep/pr.md is missing"; exit 1; }
+          title=$(head -n1 "$out/pr.md" | sed 's/^#* *//' | cut -c1-120)
+          [ -n "$title" ] || { echo "::error::pr.md has no title line"; exit 1; }
+
+          git apply --index --binary "$out/change.patch"
+          reasons=()
+          numstat=$(git diff --cached -M --numstat HEAD)
+          files=$(grep -c . <<<"$numstat" || true)
+          [ "$files" -le "$MAX_CHANGED_FILES" ] || reasons+=("changes $files files (limit $MAX_CHANGED_FILES)")
+          lines=$(awk '$1 != "-" { s += $1 + $2 } END { print s + 0 }' <<<"$numstat")
+          [ "$lines" -le "$MAX_CHANGED_LINES" ] || reasons+=("changes $lines lines (limit $MAX_CHANGED_LINES)")
+          binary=$(awk '$1 == "-" { print $3 }' <<<"$numstat" | paste -sd, - || true)
+          [ -z "$binary" ] || reasons+=("changes binary files: $binary")
+          paths=$(git diff --cached -M --name-status HEAD | cut -f2- | tr '\t' '\n')
+          protected=$(grep -E "$PROTECTED" <<<"$paths" | sort -u | paste -sd, - || true)
+          [ -z "$protected" ] || reasons+=("touches protected paths: $protected")
+          tests=$(git diff --cached -M --name-status HEAD | awk -F'\t' '$1 != "A" && ($2 ~ /^tests\// || $3 ~ /^tests\//) { print $2 }' | paste -sd, - || true)
+          [ -z "$tests" ] || reasons+=("modifies or removes existing tests: $tests")
+          if [ ${#reasons[@]} -ne 0 ]; then
+            { echo "The sweep's change was not published:"; printf -- '- %s\n' "${reasons[@]}"; } >> "$GITHUB_STEP_SUMMARY"
+            echo "::error::the sweep's change breaks the publishing rules (see the summary)"
+            exit 1
+          fi
+
+          branch="quality-sweep/$(date -u +%F)-$slug"
+          if gh api "repos/$REPO/git/ref/heads/$branch" > /dev/null 2>&1; then
+            echo "::error::branch $branch already exists"; exit 1
+          fi
+          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+            commit -q -m "$title" -m "Opened by the daily quality sweep (.github/workflows/quality-sweep.yml)."
+          git push "https://x-access-token:${GH_TOKEN}@github.com/$REPO.git" "HEAD:refs/heads/$branch"
+
+          gh label create quality-sweep --repo "$REPO" --color 5319e7 --description "Daily golden-principles sweep" --force
+          {
+            tail -n +2 "$out/pr.md"
+            echo
+            echo "**Score (recomputed by the workflow):** overall $(score score-main.json .overall) → $(score score-after.json .overall)"
+            echo
+            echo "_Opened by the daily quality sweep. Auto-merge is decided by .github/workflows/quality-automerge.yml._"
+          } > pr-body.md
+          url=$(gh pr create --repo "$REPO" --base main --head "$branch" --title "$title" --body-file pr-body.md --label quality-sweep)
+          echo "Opened $url" >> "$GITHUB_STEP_SUMMARY"
+          gh workflow run ci.yml --repo "$REPO" --ref "$branch"
+          gh workflow run quality-automerge.yml --repo "$REPO" --ref main -f pr="${url##*/}"
+
+  # Backstop next to branch protection: every commit that reached main during the run must have come
+  # through a merged pull request.
+  main-guard:
+    needs: [sweep, publish]
+    if: always() && needs.sweep.outputs.main_sha != ''
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - name: Check that main only moved through merged PRs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          MAIN_SHA: ${{ needs.sweep.outputs.main_sha }}
+        run: |
+          set -euo pipefail
+          bad=()
+          for sha in $(gh api "repos/$REPO/compare/$MAIN_SHA...main" --jq '.commits[].sha'); do
+            merged=$(gh api "repos/$REPO/commits/$sha/pulls" --jq '[.[] | select(.merged_at != null and .base.ref == "main")] | length')
+            [ "$merged" -gt 0 ] || bad+=("$sha")
+          done
+          if [ ${#bad[@]} -ne 0 ]; then
+            echo "::error::main gained commits that did not come through a merged PR: ${bad[*]}"
             exit 1
           fi

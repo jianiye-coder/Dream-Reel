@@ -1,30 +1,41 @@
 name: Quality sweep auto-merge
 
-# Lets a quality-sweep PR merge itself when it is small and safe: opened, pushed and labelled by the
-# Claude GitHub App, every commit by claude[bot], at most 150 changed lines in at most 10 files,
-# nothing under a protected path, no existing test modified or removed. Then it enables auto-merge
-# (squash) pinned to the head commit it checked; GitHub merges only after the required checks pass,
-# so the owner must turn on "Allow auto-merge" and protect main (see README). Anything else gets a
-# comment asking for human review, and auto-merge is switched off again.
+# The gate for quality-sweep PRs. Fail-safe: every run first switches auto-merge OFF, and only turns it
+# back on (squash, pinned to the head commit it checked) when every check passes:
+# - the sweep's publish job opened it and dispatched this run (github-actions[bot] as PR author and
+#   as the sender of the event), from a quality-sweep/ branch of this repository, into main;
+# - every commit is authored and committed by the GitHub-linked github-actions[bot] account;
+# - at most 150 changed lines in at most 10 files, no binary or empty changes (pure renames aside),
+#   nothing under a protected path, no existing test modified or removed.
+# GitHub merges only after the required checks pass (owner setup in README). Any other event on a
+# sweep PR (a human push, label or reopen) fails the sender check, so it leaves auto-merge off and
+# comments why. Branch protection on main is the backstop either way.
 #
-# pull_request_target, so this gate always runs from main's copy of this file (a PR can't loosen its
-# own gate). That is safe because the job never checks out or runs the PR's code: it only reads the
-# PR through the API.
+# pull_request_target / workflow_dispatch: this file always runs from main, so a PR can't loosen its
+# own gate. It never checks out or runs the PR's code; it only reads the PR through the API.
 
 on:
+  workflow_dispatch:
+    inputs:
+      pr:
+        description: Pull request number
+        required: true
   pull_request_target:
-    types: [opened, reopened, synchronize, labeled, unlabeled]
+    types: [opened, reopened, synchronize, edited, labeled, unlabeled]
 
 permissions:
   contents: read
 
 concurrency:
-  group: quality-automerge-${{ github.event.pull_request.number }}
+  group: quality-automerge-${{ github.event.pull_request.number || inputs.pr }}
   cancel-in-progress: true
 
 jobs:
   gate:
-    if: contains(github.event.pull_request.labels.*.name, 'quality-sweep') || (github.event.action == 'unlabeled' && github.event.label.name == 'quality-sweep')
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      contains(github.event.pull_request.labels.*.name, 'quality-sweep') ||
+      (github.event.action == 'unlabeled' && github.event.label.name == 'quality-sweep')
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -32,49 +43,61 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
       REPO: ${{ github.repository }}
-      PR: ${{ github.event.pull_request.number }}
-      HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-      ACTION: ${{ github.event.action }}
-      AUTHOR: ${{ github.event.pull_request.user.login }}
-      AUTHOR_TYPE: ${{ github.event.pull_request.user.type }}
+      PR: ${{ github.event.pull_request.number || inputs.pr }}
+      EVENT: ${{ github.event_name }}
       SENDER: ${{ github.event.sender.login }}
-      HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
-      BASE_REF: ${{ github.event.pull_request.base.ref }}
-      EXPECTED_AUTHOR: claude[bot]
+      EXPECTED_BOT: github-actions[bot]
       MAX_CHANGED_LINES: 150
       MAX_CHANGED_FILES: 10
-      # keep in sync with the protected paths in .github/quality-sweep-prompt.md
-      PROTECTED: '^(src/app/api/billing/|src/lib/billing\.ts$|src/lib/stripe\.ts$|src/auth[^/]*\.ts$|src/middleware\.ts$|src/lib/session\.ts$|src/lib/authRateLimit\.ts$|src/app/api/auth/|src/app/api/user/|src/types/next-auth\.d\.ts$|src/lib/db\.ts$|src/lib/dreamTextEncryption\.ts$|next\.config\.ts$|\.github/|package\.json$|package-lock\.json$|scripts/|quality/|knip\.json$|tsconfig\.json$|eslint\.config\.mjs$|vitest\.config\.ts$|tests/unit/i18n-keys\.test\.ts$|docs/golden-principles\.md$)|migration'
+      # keep in sync with quality-sweep.yml, the prompt and docs/golden-principles.md
+      PROTECTED: '^(src/app/api/|src/lib/billing\.ts$|src/lib/stripe\.ts$|src/lib/dreams\.ts$|src/lib/safeServerLog\.ts$|src/lib/email\.ts$|src/lib/session\.ts$|src/lib/authRateLimit\.ts$|src/lib/db\.ts$|src/lib/dreamTextEncryption\.ts$|src/auth[^/]*\.ts$|src/middleware\.ts$|src/proxy\.ts$|src/instrumentation|src/types/next-auth\.d\.ts$|next\.config\.ts$|\.env|\.gitignore$|\.github/|package\.json$|package-lock\.json$|scripts/|quality/|evals/|public/|playwright\.config\.ts$|knip\.json$|tsconfig\.json$|eslint\.config\.mjs$|vitest\.config\.ts$|tests/unit/i18n-keys\.test\.ts$|docs/golden-principles\.md$)|migration'
     steps:
+      - name: Switch auto-merge off first
+        run: gh pr merge "$PR" --repo "$REPO" --disable-auto 2>/dev/null || true
+
       - name: Check the PR
         id: check
         run: |
           set -euo pipefail
+          [[ "$PR" =~ ^[0-9]+$ ]] || { echo "::error::not a PR number: $PR"; exit 1; }
           reasons=()
+          pr=$(gh api "repos/$REPO/pulls/$PR")
+          field() { jq -r "$1" <<<"$pr"; }
+          head_sha=$(field .head.sha)
+          echo "head_sha=$head_sha" >> "$GITHUB_OUTPUT"
 
-          if [ "$ACTION" = "unlabeled" ] && ! gh pr view "$PR" --repo "$REPO" --json labels --jq '.labels[].name' | grep -qx quality-sweep; then
-            reasons+=("is no longer labelled \`quality-sweep\`")
-          fi
-          [ "$AUTHOR" = "$EXPECTED_AUTHOR" ] && [ "$AUTHOR_TYPE" = "Bot" ] \
-            || reasons+=("was opened by \`$AUTHOR\` ($AUTHOR_TYPE), not \`$EXPECTED_AUTHOR\`")
-          # on synchronize the sender is the pusher, on labeled whoever added the label
-          [ "$SENDER" = "$EXPECTED_AUTHOR" ] || reasons+=("got its latest \`$ACTION\` event from \`$SENDER\`, not \`$EXPECTED_AUTHOR\`")
-          [ "$HEAD_REPO" = "$REPO" ] || reasons+=("comes from a fork (\`$HEAD_REPO\`)")
-          [ "$BASE_REF" = "main" ] || reasons+=("targets \`$BASE_REF\`, not \`main\`")
+          [ "$(field .state)" = "open" ] || reasons+=("is not open")
+          field '.labels[].name' | grep -qx quality-sweep || reasons+=("is not labelled \`quality-sweep\`")
+          [ "$(field .user.login)" = "$EXPECTED_BOT" ] && [ "$(field .user.type)" = "Bot" ] \
+            || reasons+=("was opened by \`$(field .user.login)\`, not the sweep (\`$EXPECTED_BOT\`)")
+          # the sweep dispatches this run itself; any other sender (a human push, label, reopen or a
+          # manual dispatch) means a person is involved now
+          [ "$EVENT" = "workflow_dispatch" ] && [ "$SENDER" = "$EXPECTED_BOT" ] \
+            || reasons+=("got a \`$EVENT\` event from \`$SENDER\`, not the sweep's own dispatch")
+          [[ "$(field .head.ref)" == quality-sweep/* ]] || reasons+=("comes from \`$(field .head.ref)\`, not a quality-sweep/ branch")
+          [ "$(field .head.repo.full_name)" = "$REPO" ] || reasons+=("comes from a fork")
+          [ "$(field .base.ref)" = "main" ] || reasons+=("targets \`$(field .base.ref)\`, not \`main\`")
 
-          others=$(gh api --paginate "repos/$REPO/pulls/$PR/commits" --jq '.[].commit.author.name' | grep -vxF "$EXPECTED_AUTHOR" | sort -u | paste -sd, - || true)
-          [ -z "$others" ] || reasons+=("has commits by someone else: $others")
+          # GitHub-linked accounts, not the free-text git author name
+          others=$(gh api --paginate "repos/$REPO/pulls/$PR/commits" \
+            --jq '.[] | select((.author.login // "") != env.EXPECTED_BOT or (.committer.login // "") != env.EXPECTED_BOT) | .sha[0:7]' | paste -sd, - || true)
+          [ -z "$others" ] || reasons+=("has commits not authored and committed by \`$EXPECTED_BOT\`: $others")
 
-          changed=$(gh pr view "$PR" --repo "$REPO" --json additions,deletions --jq '.additions + .deletions')
+          changed=$(( $(field .additions) + $(field .deletions) ))
           [ "$changed" -le "$MAX_CHANGED_LINES" ] || reasons+=("changes $changed lines (limit $MAX_CHANGED_LINES)")
 
-          listing=$(gh api --paginate "repos/$REPO/pulls/$PR/files" --jq '.[] | [.status, .filename, (.previous_filename // "")] | @tsv')
+          listing=$(gh api --paginate "repos/$REPO/pulls/$PR/files" \
+            --jq '.[] | [.status, .filename, (.previous_filename // ""), (.changes | tostring), (if .patch then "text" else "nopatch" end)] | @tsv')
           count=$(grep -c . <<<"$listing" || true)
           [ "$count" -le "$MAX_CHANGED_FILES" ] || reasons+=("changes $count files (limit $MAX_CHANGED_FILES)")
 
           paths=$(cut -f2,3 <<<"$listing" | tr '\t' '\n' | grep . || true)
           protected=$(grep -E "$PROTECTED" <<<"$paths" | sort -u | paste -sd, - || true)
           [ -z "$protected" ] || reasons+=("touches protected paths: $protected")
+
+          # binary files have no patch; an empty change is only fine as a pure rename
+          opaque=$(awk -F'\t' '($4 == "0" && $1 != "renamed") || ($5 == "nopatch" && !($1 == "renamed" && $4 == "0")) { print $2 }' <<<"$listing" | sort -u | paste -sd, - || true)
+          [ -z "$opaque" ] || reasons+=("has binary or empty changes: $opaque")
 
           # new test files are welcome; editing or deleting an existing one could make CI pass vacuously
           tests=$(awk -F'\t' '$1 != "added" && ($2 ~ /^tests\// || $3 ~ /^tests\//) { print $2 }' <<<"$listing" | sort -u | paste -sd, - || true)
@@ -93,6 +116,8 @@ jobs:
 
       - name: Enable auto-merge
         if: steps.check.outputs.ok == 'true'
+        env:
+          HEAD_SHA: ${{ steps.check.outputs.head_sha }}
         run: gh pr merge "$PR" --repo "$REPO" --auto --squash --match-head-commit "$HEAD_SHA"
 
       - name: Ask for human review
@@ -100,7 +125,6 @@ jobs:
         env:
           REASONS: ${{ steps.check.outputs.reasons }}
         run: |
-          gh pr merge "$PR" --repo "$REPO" --disable-auto 2>/dev/null || true
           marker='<!-- quality-automerge -->'
           body="$marker
           This quality-sweep PR needs a human review before it merges; auto-merge is off because it:
@@ -112,3 +136,7 @@ jobs:
           else
             gh pr comment "$PR" --repo "$REPO" --body "$body"
           fi
+
+      - name: Keep auto-merge off after a failure
+        if: failure()
+        run: gh pr merge "$PR" --repo "$REPO" --disable-auto 2>/dev/null || true
