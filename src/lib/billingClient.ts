@@ -22,6 +22,11 @@ export type ClientBillingStatus = {
   checkoutAvailable: boolean;
 };
 
+/** Plus dream entries are "unlimited", stored as a 9999 cap (PLAN_LIMITS in billing.ts); never show the number. */
+export const UNLIMITED_QUOTA = 9999;
+export const isUnlimitedQuota = (status: Pick<ClientBillingStatus, "isUnlimited" | "limits">, key: keyof Quota) =>
+  status.isUnlimited || status.limits[key] >= UNLIMITED_QUOTA;
+
 export type BillingFrom = "/pricing" | "/account" | "/journal";
 
 /** A Stripe subscription the reader still has to settle (it's theirs, but Plus is paused). */

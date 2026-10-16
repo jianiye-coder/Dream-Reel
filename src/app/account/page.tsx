@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 import { LangToggle } from "@/components/LangToggle";
 import { NotebookShell } from "@/components/notebook/NotebookShell";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { fetchBillingStatus, needsPaymentFix, openStripe, useBillingReturn, type ClientBillingStatus } from "@/lib/billingClient";
+import { fetchBillingStatus, isUnlimitedQuota, needsPaymentFix, openStripe, useBillingReturn, type ClientBillingStatus } from "@/lib/billingClient";
 
 type Quota = ClientBillingStatus["limits"];
 
@@ -207,8 +207,8 @@ export default function AccountPage() {
                       {rows.map(([label, key]) => (
                         <tr key={key}>
                           <td>{label}</td>
-                          <td>{billing.isUnlimited ? null : <Boxes used={billing.usage[key]} total={billing.limits[key]} />}</td>
-                          <td className="nb-hand">{billing.isUnlimited ? P.cardUnlimited : billing.remaining[key]}</td>
+                          <td>{isUnlimitedQuota(billing, key) ? null : <Boxes used={billing.usage[key]} total={billing.limits[key]} />}</td>
+                          <td className="nb-hand">{isUnlimitedQuota(billing, key) ? P.cardUnlimited : billing.remaining[key]}</td>
                         </tr>
                       ))}
                     </tbody>
