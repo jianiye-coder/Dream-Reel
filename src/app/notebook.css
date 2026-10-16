@@ -1,6 +1,6 @@
 /* Dream Reel · 清晨枕边笔记本 — notebook design system.
-   Every class is prefixed nb- and every surface effect is scoped to .nb-root,
-   so legacy pages styled by globals.css are untouched until they move over. */
+   Every class is prefixed nb- and every surface effect is scoped to .nb-root;
+   every page renders inside it (globals.css only keeps the base, skip link and iOS input size). */
 
 /* ─────────────────────────────────────────────
    Dream Reel · 清晨枕边笔记本

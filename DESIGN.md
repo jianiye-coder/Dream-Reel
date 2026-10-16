@@ -133,8 +133,9 @@ No book, no cards: one continuous sheet of paper with room to breathe. The
 boards, edges, spine, ribbon, pen, folios and page curl disappear, pages stack
 (a small ◆ between them; `nb-r-first` puts the right page first), the nav
 folds into a full-screen contents sheet (`nb-toc`), the sound switch hides,
-`lean` zoom is 1, and page turns become plain navigation. Every page module
-has its own `@media (max-width: 900px)` block for its layout.
+`lean` zoom is 1, and page turns become plain navigation. Page modules that
+lay out a book (journal, morning pages, archive) add their own
+`@media (max-width: 900px)` block.
 
 ## Page map
 
@@ -144,7 +145,7 @@ has its own `@media (max-width: 900px)` block for its layout.
 | `/journal` | desk, lean | book: the dream in hand on the left; what Dream Reel read, or the conversation, on the right; the developing room is a dark `<dialog>` |
 | `/morning-pages` | desk, lean | book: date, about and contents on the left; the ruled sheet (text or drawing) on the right |
 | `/archive` | desk, lean | book with paper bookmarks: calendar, 人物与地点, recent dreams; the editor opens as a second book over the desk |
-| `/login`, `/pricing`, `/account`, `/blog/…` | paper | one sheet, `nb-paper-main` |
+| `/login`, `/pricing`, `/account`, `/blog/…` | paper | one sheet (`nb-auth` on login, `nb-paper-main` on pricing/account, the blog's own module) |
 
 ## Sounds
 

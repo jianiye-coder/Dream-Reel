@@ -6,7 +6,7 @@ import { IBM_Plex_Mono, Instrument_Serif, Noto_Serif, Noto_Serif_SC, Pinyon_Scri
 import { SessionProvider } from "next-auth/react";
 import { LanguageProvider } from "@/contexts/LanguageContext";
 
-// only the skip link (outside the notebook) still uses it
+// the base font outside .nb-root: in practice only the bold skip link, so one weight (700)
 const workSans = Work_Sans({
   subsets: ["latin"],
   weight: ["700"],
