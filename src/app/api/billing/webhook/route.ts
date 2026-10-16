@@ -1,8 +1,9 @@
 import { NextRequest } from "next/server";
+import type Stripe from "stripe";
 import type { PoolClient } from "pg";
 import { API_ERROR_CODES } from "@/lib/apiErrors";
 import {
-  findUserIdForStripeCustomer,
+  findOwnerOfStripeSubscription,
   otherPlusSubscriptionIds,
   processStripeEvent,
   recordManualAction,
@@ -14,6 +15,7 @@ import { errorJson, parseUserId, privateJson } from "@/lib/billingHttp";
 import { safeErrorMetadata } from "@/lib/safeServerLog";
 import {
   billsPlusPrice,
+  CHECKOUT_INTEGRATION_IDENTIFIER,
   invoiceForRefund,
   isTransientStripeError,
   requireStripe,
@@ -32,13 +34,8 @@ import {
 
 export const runtime = "nodejs";
 
-type StripeEvent = {
-  id: string;
-  type: string;
-  created?: number;
-  livemode?: boolean;
-  data?: { object?: Record<string, unknown> & { id?: string; metadata?: Record<string, string> } };
-};
+/** An event's data.object, read loosely: handlers take ids from it and read the rest back. */
+type EventObject = Record<string, unknown> & { id?: string; metadata?: Record<string, string> };
 
 class SkipEvent extends Error {}
 
@@ -104,8 +101,6 @@ function keepFirst(a: StripeSubscription, b: StripeSubscription) {
   return a.id < b.id;
 }
 
-const isTransient = isTransientStripeError;
-
 async function needsOwner(client: PoolClient, action: Parameters<typeof recordManualAction>[1]) {
   console.error("[billing] duplicate subscription needs the owner", {
     subscription: action.subscriptionId, kept: action.keptSubscriptionId, invoice: action.invoiceId, reason: action.reason, stripeCode: action.stripeCode,
@@ -145,13 +140,13 @@ async function dropDuplicate(drop: StripeSubscription, keep: StripeSubscription,
           refunded = true;
         } catch (error) {
           if (stripeErrorInfo(error).code === "charge_already_refunded") refunded = true;
-          else if (isTransient(error)) throw error;
+          else if (isTransientStripeError(error)) throw error;
           else await needsOwner(client, { ...base, kind: "refund", invoiceId, reason: "refund_rejected", stripeCode: stripeErrorInfo(error).code });
         }
       }
     }
   } catch (error) {
-    if (isTransient(error)) throw error;
+    if (isTransientStripeError(error)) throw error;
     await needsOwner(client, { ...base, kind: "refund", invoiceId, reason: "invoice_unreadable", stripeCode: stripeErrorInfo(error).code });
   }
 
@@ -162,7 +157,7 @@ async function dropDuplicate(drop: StripeSubscription, keep: StripeSubscription,
   } catch (error) {
     const now = await retrieveSubscription(drop.id).catch(() => null);
     if (now?.status === "canceled") cancelled = true;
-    else if (isTransient(error)) throw error;
+    else if (isTransientStripeError(error)) throw error;
     else await needsOwner(client, { ...base, kind: "cancel", reason: "cancel_rejected", stripeCode: stripeErrorInfo(error).code });
   }
   console.warn("[billing] duplicate Plus subscription", { kept: keep.id, dropped: drop.id, cancelled, refunded });
@@ -203,8 +198,14 @@ async function saveSubscription(subscription: StripeSubscription, userId: number
  * payment, so only when payment_status says paid; async_payment_failed just re-syncs. Plus itself
  * always follows the subscription's status as read back from Stripe.
  */
-async function handleCheckoutSession(type: string, object: Record<string, unknown> & { metadata?: Record<string, string> }, client: PoolClient) {
+async function handleCheckoutSession(type: string, object: EventObject, client: PoolClient) {
   if (object.mode !== "subscription") return;
+  // client_reference_id is only trusted on sessions this app created
+  const identifier = object.integration_identifier;
+  if (object.metadata?.plan !== "plus" || (identifier != null && identifier !== CHECKOUT_INTEGRATION_IDENTIFIER)) {
+    console.warn("[billing] ignoring a Checkout Session this app didn't create", { session: object.id });
+    return;
+  }
   if (type === "checkout.session.async_payment_succeeded" && object.payment_status !== "paid") return;
   const userId = parseUserId(object.client_reference_id) ?? parseUserId(object.metadata?.user_id);
   const subscriptionId = stripeId(object.subscription);
@@ -212,6 +213,15 @@ async function handleCheckoutSession(type: string, object: Record<string, unknow
   if (!(await userExists(userId, client))) return;
 
   await lockSubscription(subscriptionId, client);
+  const owner = await findOwnerOfStripeSubscription(subscriptionId, null, client);
+  if (owner && "userId" in owner && owner.userId !== userId) {
+    // a subscription never changes hands on a checkout event
+    console.error("[billing] checkout names another reader than the subscription's", { session: object.id, subscription: subscriptionId });
+    await recordNeedsAction(client, `action:owner:${subscriptionId}`, "manual.owner", {
+      subscriptionId, sessionId: object.id, linkedUserId: owner.userId, sessionUserId: userId, reason: "checkout_user_mismatch",
+    });
+    return;
+  }
   await lockUser(userId, client);
   const subscription = await currentSubscription(subscriptionId);
   await saveSubscription(subscription, userId, client, stripeId(object.customer));
@@ -219,9 +229,16 @@ async function handleCheckoutSession(type: string, object: Record<string, unknow
 
 /** The reader: the subscription or customer we already know (metadata only as a fallback). */
 async function readerFor(subscriptionId: string, customerId: string | null, metadataUserId: unknown, client: PoolClient) {
-  // the Stripe subscription / customer we already linked is the owner
-  const known = await findUserIdForStripeCustomer(customerId ?? "", subscriptionId, client);
-  if (known) return known;
+  // the Stripe subscription (else customer) we already linked is the owner
+  const owner = await findOwnerOfStripeSubscription(subscriptionId, customerId, client);
+  if (owner && "ambiguous" in owner) {
+    console.error("[billing] a Stripe customer is linked to several readers", { customer: customerId, subscription: subscriptionId });
+    await recordNeedsAction(client, `action:owner:${customerId}`, "manual.owner", {
+      customerId, subscriptionId, userIds: owner.ambiguous, reason: "customer_shared",
+    });
+    return null;
+  }
+  if (owner) return owner.userId;
   // explicit fallback for a subscription event that beats checkout.session.completed here
   const fromMetadata = parseUserId(metadataUserId);
   return fromMetadata && (await userExists(fromMetadata, client)) ? fromMetadata : null;
@@ -242,13 +259,13 @@ async function resync(
   await saveSubscription(subscription, userId, client);
 }
 
-async function handleSubscriptionEvent(event: StripeEvent, client: PoolClient) {
-  const sent = event.data?.object as StripeSubscription | undefined;
-  if (!sent?.id) return;
+async function handleSubscriptionEvent(type: string, object: EventObject, client: PoolClient) {
+  const sent = object as unknown as StripeSubscription;
+  if (!sent.id) return;
   await resync(sent.id, {
     customerId: stripeId(sent.customer),
     metadataUserId: sent.metadata?.user_id,
-    deleted: event.type === "customer.subscription.deleted" ? sent : undefined,
+    deleted: type === "customer.subscription.deleted" ? sent : undefined,
   }, client);
 }
 
@@ -283,7 +300,7 @@ async function handleChargeRefunded(charge: Record<string, unknown>, client: Poo
   } catch (error) {
     const now = await retrieveSubscription(subscriptionId).catch(() => null);
     if (now?.status !== "canceled") {
-      if (isTransient(error)) throw error;
+      if (isTransientStripeError(error)) throw error;
       console.error("[billing] refunded subscription could not be cancelled", { subscription: subscriptionId, charge: charge.id, stripeCode: stripeErrorInfo(error).code });
       await recordNeedsAction(client, `action:cancel:${subscriptionId}`, "manual.cancel", {
         subscriptionId, chargeId: charge.id, reason: "refunded_cancel_rejected", stripeCode: stripeErrorInfo(error).code,
@@ -296,10 +313,9 @@ async function handleChargeRefunded(charge: Record<string, unknown>, client: Poo
 }
 
 /** Disputes and early fraud warnings: the owner decides; we keep the ids. */
-async function handleRiskEvent(event: StripeEvent, client: PoolClient) {
-  const object = event.data?.object ?? {};
-  const kind = event.type === "charge.dispute.created" ? "dispute" : "early_fraud_warning";
-  const details = { [`${kind === "dispute" ? "dispute" : "warning"}Id`]: object.id, chargeId: stripeId(object.charge), paymentIntentId: stripeId(object.payment_intent), eventId: event.id };
+async function handleRiskEvent(type: string, eventId: string, object: EventObject, client: PoolClient) {
+  const kind = type === "charge.dispute.created" ? "dispute" : "early_fraud_warning";
+  const details = { [`${kind === "dispute" ? "dispute" : "warning"}Id`]: object.id, chargeId: stripeId(object.charge), paymentIntentId: stripeId(object.payment_intent), eventId };
   console.warn(`[billing] ${kind} needs the owner`, details);
   await recordNeedsAction(client, `action:${kind}:${object.id}`, `manual.${kind}`, details);
 }
@@ -311,11 +327,11 @@ export async function POST(request: NextRequest) {
 
   // the signature covers the exact bytes Stripe sent, so read them before any parsing
   const rawBody = Buffer.from(await request.arrayBuffer());
-  let event: StripeEvent;
+  let event: Stripe.Event;
   try {
     const verified = verifiedEvent(rawBody, request.headers.get("stripe-signature"), secret);
     if (!verified) return errorJson(API_ERROR_CODES.invalidRequest, 400);
-    event = verified as unknown as StripeEvent;
+    event = verified;
   } catch {
     return errorJson(API_ERROR_CODES.invalidRequest, 400); // signed, but not JSON
   }
@@ -323,6 +339,7 @@ export async function POST(request: NextRequest) {
     return errorJson(API_ERROR_CODES.invalidRequest, 400);
   }
   if (!STRIPE_WEBHOOK_EVENTS.has(event.type)) return privateJson({ received: true, ignored: true });
+  const object = (event.data?.object ?? null) as unknown as EventObject | null;
 
   try {
     const result = await processStripeEvent(
@@ -330,17 +347,17 @@ export async function POST(request: NextRequest) {
         id: event.id,
         type: event.type,
         // keep an audit trail without copying customer names, emails or addresses
-        payload: { id: event.id, type: event.type, created: event.created, livemode: event.livemode, object: event.data?.object?.id },
+        payload: { id: event.id, type: event.type, created: event.created, livemode: event.livemode, object: object?.id },
       },
       async (client) => {
-        const object = event.data?.object;
         if (!object) return;
+        const { type } = event;
         try {
-          if (event.type.startsWith("checkout.session.")) await handleCheckoutSession(event.type, object, client);
-          else if (event.type.startsWith("customer.subscription.")) await handleSubscriptionEvent(event, client);
-          else if (event.type.startsWith("invoice.")) await handleInvoiceEvent(object, client);
-          else if (event.type === "charge.refunded") await handleChargeRefunded(object, client);
-          else await handleRiskEvent(event, client);
+          if (type.startsWith("checkout.session.")) await handleCheckoutSession(type, object, client);
+          else if (type.startsWith("customer.subscription.")) await handleSubscriptionEvent(type, object, client);
+          else if (type.startsWith("invoice.")) await handleInvoiceEvent(object, client);
+          else if (type === "charge.refunded") await handleChargeRefunded(object, client);
+          else await handleRiskEvent(type, event.id, object, client);
         } catch (error) {
           if (!(error instanceof SkipEvent)) throw error;
         }
@@ -349,10 +366,13 @@ export async function POST(request: NextRequest) {
     return privateJson(result === "duplicate" ? { received: true, duplicate: true } : { received: true });
   } catch (error) {
     // a non-2xx makes Stripe retry; the event id is only recorded once handling commits
+    const info = stripeErrorInfo(error);
     console.error("[billing] webhook failed", {
       type: event.type,
       ...safeErrorMetadata(error),
-      ...stripeErrorInfo(error),
+      ...info,
+      // the usual cause: the restricted key lacks a permission for this call
+      ...(info.status === 401 || info.status === 403 ? { hint: "check the Stripe key's permissions" } : {}),
     });
     return errorJson(API_ERROR_CODES.internalError, 500);
   }

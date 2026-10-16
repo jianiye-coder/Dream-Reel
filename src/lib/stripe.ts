@@ -145,12 +145,19 @@ export function stripeErrorInfo(error: unknown): { status?: number; code?: strin
   return { status: e.statusCode, code: e.code, param: e.param };
 }
 
-/** Network trouble, timeouts, rate limits, Stripe 5xx: worth a retry. Anything else won't change. */
+/**
+ * Worth a retry: network trouble, timeouts, rate limits, Stripe 5xx, and 401/403 (a key or a
+ * restricted key's permission that the owner can fix; failing makes Stripe retry and email about
+ * the failing webhook instead of the code settling for "needs action"). Anything else won't change.
+ */
 export function isTransientStripeError(error: unknown): boolean {
   if (!(error instanceof Stripe.errors.StripeError)) return true;
-  if (error instanceof Stripe.errors.StripeConnectionError || error instanceof Stripe.errors.StripeRateLimitError) return true;
+  if (
+    error instanceof Stripe.errors.StripeConnectionError || error instanceof Stripe.errors.StripeRateLimitError ||
+    error instanceof Stripe.errors.StripeAuthenticationError || error instanceof Stripe.errors.StripePermissionError
+  ) return true;
   const status = (error as AnyStripeError).statusCode ?? 0;
-  return status === 0 || status === 409 || status === 429 || status >= 500;
+  return status === 0 || status === 401 || status === 403 || status === 409 || status === 429 || status >= 500;
 }
 
 const notFoundToNull = (error: unknown) => {
@@ -177,15 +184,14 @@ export function stripeId(value: unknown): string | null {
 
 const unixToDate = (value: unknown) => (typeof value === "number" && Number.isFinite(value) ? new Date(value * 1000) : null);
 
-/** Billing period from the subscription items (top-level fields only in pre-basil webhook payloads). */
+/** Billing period from the subscription items (dahlia keeps it there, not on the subscription). */
 export function subscriptionPeriod(subscription: StripeSubscription) {
-  const legacy = subscription as unknown as { current_period_start?: number; current_period_end?: number };
   const items = subscription.items?.data ?? [];
   const starts = items.map((item) => item.current_period_start).filter((v): v is number => typeof v === "number");
   const ends = items.map((item) => item.current_period_end).filter((v): v is number => typeof v === "number");
   return {
-    start: unixToDate(legacy.current_period_start) ?? (starts.length ? unixToDate(Math.min(...starts)) : null),
-    end: unixToDate(legacy.current_period_end) ?? (ends.length ? unixToDate(Math.max(...ends)) : null),
+    start: starts.length ? unixToDate(Math.min(...starts)) : null,
+    end: ends.length ? unixToDate(Math.max(...ends)) : null,
   };
 }
 
@@ -229,13 +235,12 @@ export async function invoiceForRefund(invoiceId: string): Promise<{
 
 export type StripeInvoiceRef = {
   customer?: unknown;
-  subscription?: string | { id: string } | null;
   parent?: { subscription_details?: { subscription?: string | { id: string } | null; metadata?: Record<string, string> | null } | null } | null;
 };
 
-/** The subscription an invoice belongs to: `parent.subscription_details` (pre-basil payloads: `subscription`). */
+/** The subscription an invoice belongs to (`parent.subscription_details`; the endpoint is on dahlia). */
 export function subscriptionOfInvoice(invoice: StripeInvoiceRef | null | undefined): string | null {
-  return stripeId(invoice?.parent?.subscription_details?.subscription) ?? stripeId(invoice?.subscription);
+  return stripeId(invoice?.parent?.subscription_details?.subscription);
 }
 
 /**

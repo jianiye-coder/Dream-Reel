@@ -128,14 +128,6 @@ describe("subscriptionPeriod", () => {
     expect(period.end?.toISOString()).toBe(new Date(1_762_592_000_000).toISOString());
   });
 
-  it("still reads the top-level fields of pre-basil webhook payloads", () => {
-    const period = subscriptionPeriod(asSubscription({
-      id: "sub_1", customer: "cus_1", status: "active", current_period_start: 10, current_period_end: 20,
-    }));
-    expect(period.start?.getTime()).toBe(10_000);
-    expect(period.end?.getTime()).toBe(20_000);
-  });
-
   it("returns nulls when Stripe sends no period", () => {
     expect(subscriptionPeriod(asSubscription({ id: "sub_1", customer: "cus_1", status: "incomplete" }))).toEqual({ start: null, end: null });
   });

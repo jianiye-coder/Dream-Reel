@@ -54,10 +54,10 @@ describe("invoiceForRefund (dahlia: payments on the invoice, else the invoice pa
 });
 
 describe("charge → invoice → subscription", () => {
-  it("reads the subscription from Basil's parent, else the older field", async () => {
+  it("reads the subscription from parent.subscription_details", async () => {
     const { subscriptionOfInvoice } = await import("@/lib/stripe");
-    expect(subscriptionOfInvoice({ parent: { subscription_details: { subscription: "sub_basil" } }, subscription: "sub_old" })).toBe("sub_basil");
-    expect(subscriptionOfInvoice({ subscription: { id: "sub_old" } })).toBe("sub_old");
+    expect(subscriptionOfInvoice({ parent: { subscription_details: { subscription: "sub_dahlia" } } })).toBe("sub_dahlia");
+    expect(subscriptionOfInvoice({ parent: { subscription_details: { subscription: { id: "sub_x" } } } })).toBe("sub_x");
     expect(subscriptionOfInvoice({ parent: null })).toBeNull();
   });
 

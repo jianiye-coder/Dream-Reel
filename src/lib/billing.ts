@@ -353,12 +353,11 @@ export async function otherPlusSubscriptionIds(userId: number, subscriptionId: s
 }
 
 /**
- * Something about money the code must not decide alone (a refund Stripe refused, a duplicate
- * found after a renewal). Kept in payment_events with status 'needs_action'; one row per
- * subscription and kind, so retries don't pile up:
+ * Something the code must not decide alone (a refund Stripe refused, a duplicate found after a
+ * renewal, a dispute, a customer shared by two readers). Kept in payment_events with status
+ * 'needs_action'; the id makes it one row per case, so retries don't pile up:
  *   SELECT * FROM payment_events WHERE status = 'needs_action';
  */
-/** A payment_events row the owner must look at; the id makes it one row per case. */
 export async function recordNeedsAction(client: PoolClient, id: string, type: string, details: Record<string, unknown>) {
   await client.query(
     `
@@ -370,6 +369,7 @@ export async function recordNeedsAction(client: PoolClient, id: string, type: st
   );
 }
 
+/** A duplicate-subscription case: one row per subscription and kind. */
 export async function recordManualAction(client: PoolClient, action: {
   kind: "refund" | "cancel";
   subscriptionId: string;
@@ -387,27 +387,29 @@ export async function userExists(userId: number, client?: PoolClient): Promise<b
   return (result.rowCount ?? 0) > 0;
 }
 
-export async function findUserIdForStripeCustomer(
-  customerId: string,
-  subscriptionId?: string | null,
+/**
+ * Who owns this Stripe subscription: the reader it is linked to, else the one reader its customer
+ * is linked to. A customer linked to several readers is not guessed at.
+ */
+export async function findOwnerOfStripeSubscription(
+  subscriptionId: string,
+  customerId: string | null,
   client?: PoolClient,
-): Promise<number | null> {
+): Promise<{ userId: number } | { ambiguous: number[] } | null> {
   await ensureSchema();
-  const result = await (client ?? getPool()).query<{ user_id: number }>(
-    `
-      SELECT user_id
-      FROM subscriptions
-      WHERE provider = 'stripe'
-        AND (
-          provider_customer_id = $1
-          OR ($2::text IS NOT NULL AND provider_subscription_id = $2)
-        )
-      ORDER BY updated_at DESC, id DESC
-      LIMIT 1
-    `,
-    [customerId, subscriptionId ?? null],
+  const db = client ?? getPool();
+  const bySubscription = await db.query<{ user_id: number }>(
+    `SELECT user_id FROM subscriptions WHERE provider = 'stripe' AND provider_subscription_id = $1 LIMIT 1`,
+    [subscriptionId],
   );
-  return result.rows[0]?.user_id ?? null;
+  if (bySubscription.rows[0]) return { userId: bySubscription.rows[0].user_id };
+  if (!customerId) return null;
+  const byCustomer = await db.query<{ user_id: number }>(
+    `SELECT DISTINCT user_id FROM subscriptions WHERE provider = 'stripe' AND provider_customer_id = $1 ORDER BY user_id LIMIT 5`,
+    [customerId],
+  );
+  if (byCustomer.rows.length > 1) return { ambiguous: byCustomer.rows.map((row) => row.user_id) };
+  return byCustomer.rows[0] ? { userId: byCustomer.rows[0].user_id } : null;
 }
 
 export async function upsertStripeSubscription(input: {
@@ -430,7 +432,7 @@ export async function upsertStripeSubscription(input: {
       VALUES ($1, 'stripe', $2, $3, $4, $5, $6, $7, $8)
       ON CONFLICT (provider, provider_subscription_id)
       DO UPDATE SET
-        user_id = EXCLUDED.user_id,
+        -- a subscription never changes hands (see the webhook's ownership checks)
         provider_customer_id = COALESCE(EXCLUDED.provider_customer_id, subscriptions.provider_customer_id),
         -- an ended Stripe subscription can never start again; a late, out-of-order event
         -- must not bring it back

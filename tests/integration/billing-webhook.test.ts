@@ -482,6 +482,19 @@ databaseDescribe("Stripe webhook → Plus in PostgreSQL", () => {
       expect(await needsAction()).toHaveLength(1);
     });
 
+    it("retries (doesn't settle) when the restricted key lacks the refund permission", async () => {
+      vi.spyOn(console, "warn").mockImplementation(() => undefined);
+      const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
+      const newer = await twoActive();
+      stripeFailures.refund = { status: 403, error: { type: "invalid_request_error", code: "secret_key_required", message: "The provided key 'rk_test_***' does not have the required permissions for this endpoint" } };
+      expect((await deliver(checkoutCompleted({ id: "cs_b", subscription: newer.id }))).status).toBe(500);
+      expect(await needsAction()).toHaveLength(0);
+      expect(stripeSubscriptions.get(newer.id)).toMatchObject({ status: "active" });
+      const logged = JSON.stringify(log.mock.calls);
+      expect(logged).toContain("check the Stripe key's permissions");
+      expect(logged).not.toContain("rk_test");
+    });
+
     it("retries a transient refund failure instead of recording it", async () => {
       vi.spyOn(console, "warn").mockImplementation(() => undefined);
       vi.spyOn(console, "error").mockImplementation(() => undefined);
@@ -583,15 +596,6 @@ databaseDescribe("Stripe webhook → Plus in PostgreSQL", () => {
       const status = await getBillingStatus(userId);
       expect(status.plan).toBe("plus");
       expect(new Date(status.periodEnd).getTime()).toBe(renewed.end * 1000);
-    });
-
-    it("links an invoice through the older top-level subscription field too", async () => {
-      stripeSubscriptions.set(current.subscription, subscription("incomplete"));
-      await deliver(checkoutCompleted({ payment_status: "unpaid" }));
-      expect(await plan()).toBe("free");
-      stripeSubscriptions.set(current.subscription, subscription("active"));
-      await deliver(event("invoice.paid", { id: "in_old", object: "invoice", customer: current.customer, subscription: current.subscription }));
-      expect(await plan()).toBe("plus");
     });
 
     it("re-syncs on invoice.payment_failed (past_due is not Plus)", async () => {
@@ -730,6 +734,81 @@ databaseDescribe("Stripe webhook → Plus in PostgreSQL", () => {
     expect(rows).toHaveLength(0);
     expect(await plan()).toBe("free");
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("answers 503 with the webhook secret set but no API key (fail closed)", async () => {
+    vi.stubEnv("STRIPE_SECRET_KEY", "");
+    stripeSubscriptions.set(current.subscription, subscription("active"));
+    expect(await deliver(checkoutCompleted())).toEqual({ status: 503, body: { error: "CONFIGURATION_ERROR" } });
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(await plan()).toBe("free");
+  });
+
+  describe("who owns a Checkout Session / subscription", () => {
+    it.each([
+      ["no plan metadata", { metadata: { user_id: "1" } }],
+      ["another integration identifier", { integration_identifier: "someone_elses_flow" }],
+    ])("ignores a Checkout Session this app didn't create (%s)", async (_label, extra) => {
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+      stripeSubscriptions.set(current.subscription, subscription("active"));
+      expect((await deliver(checkoutCompleted(extra))).status).toBe(200);
+      expect(fetchMock).not.toHaveBeenCalled();
+      expect(await plan()).toBe("free");
+      expect(JSON.stringify(warn.mock.calls)).toContain(`cs_${run}_${seq}`);
+    });
+
+    it("accepts our own integration identifier", async () => {
+      stripeSubscriptions.set(current.subscription, subscription("active"));
+      await deliver(checkoutCompleted({ integration_identifier: "dreamreel_plus_lwgclcae" }));
+      expect(await plan()).toBe("plus");
+    });
+
+    async function otherUser() {
+      const { rows } = await getPool().query<{ id: number }>(
+        "INSERT INTO users (email, name) VALUES ($1, 'Other') RETURNING id", [`billing-${run}-${seq}-b@example.test`]);
+      users.push(rows[0].id);
+      return rows[0].id;
+    }
+
+    it("never moves a linked subscription to the reader a later checkout event names", async () => {
+      vi.spyOn(console, "error").mockImplementation(() => undefined);
+      stripeSubscriptions.set(current.subscription, subscription("active"));
+      await deliver(checkoutCompleted());
+      const other = await otherUser();
+      expect((await deliver(checkoutCompleted({ id: "cs_other", client_reference_id: String(other) }))).status).toBe(200);
+      const owners = await getPool().query("SELECT user_id FROM subscriptions WHERE provider_subscription_id = $1", [current.subscription]);
+      expect(owners.rows).toEqual([{ user_id: userId }]);
+      const action = await getPool().query("SELECT payload FROM payment_events WHERE id = $1", [`action:owner:${current.subscription}`]);
+      expect(action.rows[0].payload).toMatchObject({ reason: "checkout_user_mismatch", linkedUserId: userId, sessionUserId: other });
+      await getPool().query("DELETE FROM payment_events WHERE id = $1", [`action:owner:${current.subscription}`]);
+    });
+
+    it("prefers the exact subscription link, and doesn't guess when a customer has two readers", async () => {
+      vi.spyOn(console, "error").mockImplementation(() => undefined);
+      const other = await otherUser();
+      await getPool().query(
+        `INSERT INTO subscriptions (user_id, provider, provider_customer_id, provider_subscription_id, status, plan)
+         VALUES ($1, 'stripe', $3, $4, 'past_due', 'plus'), ($2, 'stripe', $3, $5, 'past_due', 'plus')`,
+        [userId, other, current.customer, `${current.subscription}_a`, `${current.subscription}_b`],
+      );
+      // a subscription we know: its own link decides, even though the customer is shared
+      const known = { ...subscription("active"), id: `${current.subscription}_b`, metadata: {} };
+      stripeSubscriptions.set(known.id, known);
+      await deliver(event("customer.subscription.updated", known));
+      const b = await getPool().query("SELECT user_id, status FROM subscriptions WHERE provider_subscription_id = $1", [known.id]);
+      expect(b.rows).toEqual([{ user_id: other, status: "active" }]);
+
+      // a new subscription on that shared customer, without metadata: recorded, not guessed
+      const unknown = { ...subscription("active"), id: `${current.subscription}_c`, metadata: {} };
+      stripeSubscriptions.set(unknown.id, unknown);
+      expect((await deliver(event("customer.subscription.updated", unknown))).status).toBe(200);
+      const c = await getPool().query("SELECT 1 FROM subscriptions WHERE provider_subscription_id = $1", [unknown.id]);
+      expect(c.rows).toHaveLength(0);
+      const action = await getPool().query("SELECT payload FROM payment_events WHERE id = $1", [`action:owner:${current.customer}`]);
+      expect(action.rows[0].payload).toMatchObject({ reason: "customer_shared", subscriptionId: unknown.id });
+      expect([...action.rows[0].payload.userIds].sort()).toEqual([userId, other].sort());
+      await getPool().query("DELETE FROM payment_events WHERE id = $1", [`action:owner:${current.customer}`]);
+    });
   });
 
   it("answers 503 without a webhook secret, naming no setting", async () => {
