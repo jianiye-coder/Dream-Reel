@@ -123,11 +123,12 @@ rarely shows up in a click-through.
 `src/app/api/billing/**`), auth (`src/auth*.ts`, `src/middleware.ts`,
 `src/lib/session.ts`, `src/lib/authRateLimit.ts`, `src/app/api/auth/**`,
 `src/app/api/user/**`) or dream-text encryption ships with a unit or
-integration test that exercises it. These paths, and the rest of the protected
-list (all API routes, data and privacy modules, config, workflows,
-dependencies, the scoring itself), are off-limits to the automated sweep: see
-`.github/quality-sweep-prompt.md` and the `PROTECTED` pattern, kept identical,
-in `.github/workflows/quality-sweep.yml` and `quality-automerge.yml`.
+integration test that exercises it. The automated sweep may only touch
+`src/`, `docs/` and new files in `tests/unit/`, and within those never these
+paths, API routes and server entry points, data and privacy modules or the
+gates: see `.github/quality-sweep-prompt.md` and the `ALLOWED` / `PROTECTED`
+patterns, kept identical, in `.github/workflows/quality-sweep.yml` and
+`quality-automerge.yml`.
 
 **How it's checked.** Quality score: the share of those modules imported by a
 test in `tests/unit` or `tests/integration`. Agent judgement: the PR's tests
