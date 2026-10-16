@@ -80,6 +80,7 @@
 :global(.nb-root) .gathered {
   flex: 1; min-height: 0; overflow-y: auto; margin-top: 6px; scrollbar-width: thin; scrollbar-color: rgba(31, 28, 23, .18) transparent;
   --fade-top: 0px; --fade-bottom: 0px;
+  -webkit-mask-image: linear-gradient(180deg, transparent calc(var(--fade-top) * .35), #000 var(--fade-top), #000 calc(100% - var(--fade-bottom)), transparent calc(100% - var(--fade-bottom) * .3));
   mask-image: linear-gradient(180deg, transparent calc(var(--fade-top) * .35), #000 var(--fade-top), #000 calc(100% - var(--fade-bottom)), transparent calc(100% - var(--fade-bottom) * .3));
 }
 :global(.nb-root) .gathered :global(.nb-kicker) { display: block; margin-bottom: 8px; }
@@ -161,6 +162,7 @@
   scrollbar-width: thin; scrollbar-color: rgba(31, 28, 23, .18) transparent;
   /* fade into the paper only at an edge with more past it (data-fade-* set by edgeFade, src/lib/edgeFade.ts) */
   --fade-top: 0px; --fade-bottom: 0px;
+  -webkit-mask-image: linear-gradient(180deg, transparent calc(var(--fade-top) * .35), #000 var(--fade-top), #000 calc(100% - var(--fade-bottom)), transparent calc(100% - var(--fade-bottom) * .3));
   mask-image: linear-gradient(180deg, transparent calc(var(--fade-top) * .35), #000 var(--fade-top), #000 calc(100% - var(--fade-bottom)), transparent calc(100% - var(--fade-bottom) * .3));
 }
 :global(.nb-root) .scroll[data-fade-top], :global(.nb-root) .gathered[data-fade-top] { --fade-top: 56px; }

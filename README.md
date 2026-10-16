@@ -31,7 +31,7 @@ Voice input uses the browser's `SpeechRecognition` / `webkitSpeechRecognition` A
 | Layer | Implementation |
 | --- | --- |
 | Application | Next.js 16 App Router, React 19, TypeScript |
-| Styling | Plain CSS notebook design system (`notebook.css` + per-page CSS modules, see [DESIGN.md](DESIGN.md)); Tailwind CSS 3 for the base reset |
+| Styling | Plain CSS notebook design system (`notebook.css` + per-page CSS modules, see [DESIGN.md](DESIGN.md)); a small base reset in `globals.css`; no CSS framework |
 | Server | Next.js Route Handlers on the Node.js runtime; Zod validation |
 | Database | PostgreSQL through `pg`, parameterized SQL, no ORM |
 | Authentication | Auth.js v5 beta, PostgreSQL adapter, JWT sessions, bcrypt password hashes |
@@ -214,7 +214,7 @@ Dream Reel 起源于我自己记录梦境的习惯。过去散落在备忘录里
 
 ### 技术栈与后端
 
-Next.js 16 App Router、React 19、TypeScript、Tailwind CSS 3；后端是运行于 Node.js 的 Next.js Route Handlers。数据库通过 `pg` 直接连接 PostgreSQL，无 ORM，使用 Zod 校验输入。认证采用 Auth.js v5 beta、PostgreSQL Adapter、JWT Session 和 bcrypt 密码哈希。
+Next.js 16 App Router、React 19、TypeScript、纯 CSS 笔记本设计系统（不用 CSS 框架）；后端是运行于 Node.js 的 Next.js Route Handlers。数据库通过 `pg` 直接连接 PostgreSQL，无 ORM，使用 Zod 校验输入。认证采用 Auth.js v5 beta、PostgreSQL Adapter、JWT Session 和 bcrypt 密码哈希。
 
 文本 AI 接入 Groq / OpenAI，图片接入 Flatkey / OpenAI；原图与 Sharp 生成的缩略图存入 Vercel Blob。Stripe 通过 REST API 接入，订阅、额度扣减/退回与 webhook 去重由 PostgreSQL 管理。具体目录与接口见上方 [Architecture](#architecture)。
 
