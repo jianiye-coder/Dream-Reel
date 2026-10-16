@@ -10,6 +10,8 @@
 .ar button:disabled { cursor: default; opacity: .5; }
 .ar .inlineEdit input:focus-visible, .ar .field > input:focus-visible, .ar .sleepGrid input:focus-visible,
 .ar .titleInput:focus-visible, .ar .questions textarea:focus-visible { outline: none !important; box-shadow: 0 2px 0 var(--red-ink) !important; border-radius: 0; }
+/* the page corner shows focus by lifting a hair and writing what it does beside it (notebook.css) */
+.ar :global(.nb-corner):focus-visible { outline: none !important; }
 /* chips: the underline belongs to the whole row, so the row shows the focus */
 .ar .chips input:focus-visible { outline: none !important; }
 .ar .chips:focus-within { box-shadow: 0 2px 0 var(--red-ink); }
@@ -107,7 +109,24 @@
 .ar .dayPicker button { font-family: var(--hand); font-size: 15px; color: var(--ink-faint); padding-bottom: 3px; }
 .ar .dayPicker button[aria-pressed="true"] { color: var(--ink); background: var(--nb-red-underline-fine) no-repeat left bottom / 100% 5px; }
 .ar .dreamTitle { font-weight: 600; font-size: 30px; line-height: 1.3; letter-spacing: .02em; margin: 12px 0 12px; }
-.ar .excerpt { font-size: 19px; display: -webkit-box; -webkit-line-clamp: 6; -webkit-box-orient: vertical; overflow: hidden; }
+/* the whole dream, as written. A long one scrolls inside its own lines, so the title, clues, photo and
+   foot stay put; it fades into the paper only at an edge with more past it (data-fade-*, edgeFade). */
+.ar .excerpt { font-size: 19px; white-space: pre-line; overflow-wrap: anywhere; }
+.ar .pad > .excerpt { flex: 0 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain;
+  margin: 0 -14px 0 -10px; padding: 0 14px 0 10px; scrollbar-width: thin; scrollbar-color: #d6cbb6 transparent;
+  --fade-top: 0px; --fade-bottom: 0px;
+  -webkit-mask-image: linear-gradient(180deg, transparent calc(var(--fade-top) * .3), #000 var(--fade-top), #000 calc(100% - var(--fade-bottom)), transparent calc(100% - var(--fade-bottom) * .3));
+  mask-image: linear-gradient(180deg, transparent calc(var(--fade-top) * .3), #000 var(--fade-top), #000 calc(100% - var(--fade-bottom)), transparent calc(100% - var(--fade-bottom) * .3)); }
+/* a short dream is as short as it is; one that scrolls keeps at least three lines in view */
+.ar .pad > .excerpt[data-scrolls] { min-height: calc(var(--line) * 3); }
+.ar .pad > .excerpt[data-fade-top] { --fade-top: 40px; }
+.ar .pad > .excerpt[data-fade-bottom] { --fade-bottom: 44px; }
+/* focused to scroll with the keys: a red margin line beside the text, like the writing areas */
+.ar .pad > .excerpt:focus-visible { outline: none !important; box-shadow: inset 2px 0 0 var(--red-ink) !important; border-radius: 0; }
+/* the night's foot keeps the bottom corner clear: that corner turns the page (PageCorner) */
+.ar .footClear { justify-content: flex-start; }
+/* the page turning over to open a dream: beneath it, a fresh sheet */
+.ar .turningAway :global(.nb-pad), .ar .turningAway :global(.nb-corner) { opacity: 0; pointer-events: none; }
 .ar .clues { display: flex; flex-wrap: wrap; gap: 4px 20px; margin-top: 14px; font-size: 15.5px; }
 .ar .dayPhoto { width: 184px; margin: 22px 6px 0 auto; transform: rotate(2.6deg); padding: 8px 8px 30px; }
 .ar .dayPhoto img { height: auto; aspect-ratio: 4 / 3; }
@@ -290,6 +309,7 @@
   .ar .calGrid { flex: none; grid-auto-rows: minmax(64px, auto); }
   .ar .pageFoot { margin-top: 30px; }
   .ar .dayPhoto { width: min(220px, 70%); }
+  .ar .pad > .excerpt { flex: none; min-height: 0; overflow: visible; margin: 0; padding: 0; -webkit-mask-image: none; mask-image: none; }
   .ar .monthTitle { font-size: 38px; }
   .ar .menuBtn { opacity: 1; width: 36px; height: 40px; }
   .ar .rowMain { grid-template-columns: minmax(0, 1fr) auto 36px; min-height: 44px; }

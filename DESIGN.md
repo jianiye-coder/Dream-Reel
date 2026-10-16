@@ -58,17 +58,37 @@ All self-hosted at build time, because the CSP only allows same-origin fonts
 
 - **`NotebookShell`** (`src/components/notebook/NotebookShell.tsx`): `.nb-root`
   plus the top bar (brand, running-head nav with the red underline under the
-  current page, language toggle), the phone contents sheet, and the pen-sound
-  switch. `surface="desk"` (default) shows the desk with paper grain and soft
-  window light; `surface="paper"` makes the whole page one sheet.
+  current page, language toggle), the phone contents sheet, and the sound switch
+  (声音 开 / 关, Sound on / off; in the contents sheet on phones).
+  `surface="desk"` (default) shows the desk with paper grain and soft window
+  light; `surface="paper"` makes the whole page one sheet.
   `lean` lays the book out at one fixed size (1021 × 690 book px) and zooms
   the stage to fill the window (`--lean`), so type, photos and turns scale
   together; working pages use it.
 - **`Book` / `BookPage`** (`src/components/notebook/Book.tsx`): an open book
-  seen from above: cloth boards, page edges (canvas texture), spine crease,
-  ribbon, optional fountain pen (`pen`), optional pointer tilt (`tilt`).
-  `BookPage side="l" | "r"` with `ruled`, `indent`, `folio`, `curl`; pass
-  page-module classes through `className` / `padClassName`.
+  seen from above: cloth boards, a page block under each page (the top page
+  lies on the stack; the sheets' edges run down the fore-edge, round the
+  corners and along head and tail, drawn on canvases by `edgeTextures`), spine
+  crease, ribbon, optional fountain pen (`pen`), optional pointer tilt (`tilt`).
+  `BookPage side="l" | "r"` with `ruled`, `indent`, `folio`, `curl` (the
+  bottom corner peels up a little on hover), `corner` (a `PageCorner` instead);
+  pass page-module classes through `className` / `padClassName`.
+- **`PageCorner`** (`src/components/notebook/PageCorner.tsx`): the right page's
+  bottom corner as the way to turn it (the archive's open night). A small
+  dog-ear at rest; hovering or keyboard focus peels it up (the paper's back over
+  a soft shadow, `.nb-curl`), moving away lets it fall back. One click, tap or
+  Enter/Space turns the page; a tap plays the lift quickly first. Focus also
+  writes what it does above it in red ink. On phones it stays as a small folded
+  corner at the bottom of that sheet and opens without a turn.
+- **`PhotoLightbox`** (`src/components/notebook/PhotoLightbox.tsx`): wraps a
+  dream photo's image in a zoom-in button; opens the photo enlarged as a print
+  on the softly blurred desk (warm, never a black overlay) with date and title.
+  A native modal `<dialog>` portalled to `.nb-root`; ×, Escape or a click on the
+  desk put it down and focus returns to the print.
+- **`edgeFade`** (`src/lib/edgeFade.ts`): ref callback for a scroll pane on a
+  page: `data-fade-top` / `data-fade-bottom` for a mask that fades into the paper
+  only where there is more to read (`focusable` adds a tab stop while it
+  scrolls).
 - **`TurnLink`** (`src/components/notebook/TurnLink.tsx`): a link between book
   pages (`/`, `/journal`, `/morning-pages`, `/archive`) turns the right-hand
   page instead of navigating flat; off-book links and phones navigate normally.

@@ -15,7 +15,10 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { formatDateTime, formatMonthLabel, type Lang } from "@/lib/i18n";
 import { getApiErrorMessage } from "@/lib/apiErrors";
 import { Book, BookPage } from "@/components/notebook/Book";
+import { PageCorner } from "@/components/notebook/PageCorner";
+import { PhotoLightbox } from "@/components/notebook/PhotoLightbox";
 import { TurnLink } from "@/components/notebook/TurnLink";
+import { edgeFade } from "@/lib/edgeFade";
 import { flipPage } from "@/lib/notebookFlip";
 import { pageTurn, tap, unlock } from "@/lib/notebookSound";
 import s from "./archive.module.css";
@@ -68,6 +71,8 @@ type KeywordArchiveItem = {
 };
 
 const PHONE = "(max-width: 900px)";
+// the open night's dream scrolls inside the page; it can take keyboard focus while it does
+const dreamScroll = (el: HTMLElement | null) => edgeFade(el, { focusable: true });
 
 function ordinal(n: number): string {
   const tens = n % 100;
@@ -140,6 +145,11 @@ function dreamDisplayTitle(entry: Pick<DreamEntry, "title" | "cleanText" | "rawT
 
 function dreamText(entry: Pick<DreamEntry, "cleanText" | "rawText">): string {
   return (entry.cleanText || entry.rawText).replace(/\s+/g, " ").trim();
+}
+
+/** The whole dream as written, for reading it on its page: its paragraphs kept, stray spaces tidied. */
+function dreamFullText(entry: Pick<DreamEntry, "cleanText" | "rawText">): string {
+  return (entry.cleanText || entry.rawText).replace(/[^\S\n]+/g, " ").replace(/ *\n */g, "\n").replace(/\n{3,}/g, "\n\n").trim();
 }
 
 function downloadDreamFile(content: string, filename: string, format: DreamExportFormat) {
@@ -358,6 +368,8 @@ function useModalFocus(isOpen: boolean, onClose: () => void, initialFocusRef?: R
     const onDocumentKey = (event: KeyboardEvent) => {
       const dialog = dialogRef.current;
       if (!dialog || dialog.contains(document.activeElement)) return;
+      // a photo held up over the editor (PhotoLightbox, a modal <dialog>) takes its own keys
+      if (document.querySelector("dialog[open]")) return;
       if (event.key === "Escape") {
         event.preventDefault();
         onCloseRef.current();
@@ -1280,7 +1292,9 @@ function DreamEditorModal({
                 <figure className={`nb-print ${s.polaroid} ${form.imageUrl ? "" : s.polaroidEmpty}`}>
                   <span className="nb-tape" aria-hidden />
                   {form.imageUrl ? (
-                    <Image src={form.imageUrl} alt={M.imageAlt} width={1024} height={1024} unoptimized />
+                    <PhotoLightbox src={form.imageUrl} alt={form.title ? `${M.imageAlt} · ${form.title}` : M.imageAlt} date={`${dateLabel(dateIso, thisYear)} · ${weekdayLabel(dateIso, lang)}`} title={form.title}>
+                      <Image src={form.imageUrl} alt={M.imageAlt} width={1024} height={1024} unoptimized />
+                    </PhotoLightbox>
                   ) : (
                     <div className={s.noPhoto}>{M.noImage}</div>
                   )}
@@ -1425,6 +1439,8 @@ export default function DreamGrid({
   const openSeq = useRef(0);
   const openerRef = useRef<HTMLElement | null>(null);
   const turning = useRef(false);
+  // while the right-hand page turns over to open a dream, the page beneath reads as a fresh sheet
+  const [turningAway, setTurningAway] = useState(false);
   const [readyId, setReadyId] = useState<number | null>(null);
   const [openError, setOpenError] = useState("");
   const [notice, setNotice] = useState("");
@@ -1550,6 +1566,7 @@ export default function DreamGrid({
   const selectableMonths = Array.from(new Set([...monthKeys, visibleMonth])).sort().reverse();
 
   function changeMonth(offset: number) {
+    if (turning.current) return; // the page is in the air
     tap();
     setActiveMonth((current) => {
       const [year, month] = current.split("-").map(Number);
@@ -1682,9 +1699,23 @@ export default function DreamGrid({
     if (!res.ok) throw new Error("Update failed");
   }
 
-  async function openEntry(entry: DreamEntry, retry = false) {
+  // one request per dream at a time: a turn's prefetch and the open that follows it share it
+  const inflight = useRef(new Map<number, Promise<{ ok: boolean; entry?: DreamEntry; error?: string }>>());
+  function fetchFull(id: number) {
+    let pending = inflight.current.get(id);
+    if (!pending) {
+      pending = fetch(`/api/dreams?id=${id}`, { cache: "no-store" })
+        .then(async (response) => ({ ok: response.ok, ...((await response.json()) as { entry?: DreamEntry; error?: string }) }))
+        .finally(() => inflight.current.delete(id));
+      inflight.current.set(id, pending);
+    }
+    return pending;
+  }
+
+  /** Opens the editor. "turned": the page already turned over (and made its sound) on the way here. */
+  async function openEntry(entry: DreamEntry, mode: "open" | "retry" | "turned" = "open") {
     const seq = ++openSeq.current;
-    if (!retry) {
+    if (mode === "open") {
       // remember who opened it before the button disables itself while loading
       openerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
       unlock();
@@ -1704,10 +1735,9 @@ export default function DreamGrid({
     setReadyId(null);
     setOpeningEntryId(entry.id);
     try {
-      const response = await fetch(`/api/dreams?id=${entry.id}`, { cache: "no-store" });
-      const payload = (await response.json()) as { entry?: DreamEntry; error?: string };
+      const payload = await fetchFull(entry.id);
       if (seq !== openSeq.current) return; // closed, or another dream was opened meanwhile
-      if (!response.ok || !payload.entry) throw new Error(getApiErrorMessage(payload.error, lang, N.openFailed));
+      if (!payload.ok || !payload.entry) throw new Error(getApiErrorMessage(payload.error, lang, N.openFailed));
       const full = payload.entry;
       rememberFull(full);
       setSelected(full);
@@ -1884,6 +1914,29 @@ export default function DreamGrid({
     flipPage(book, { dur: 720, onStart: () => onTabChange(tab), onEnd: () => { turning.current = false; } });
   }
 
+  // ── turning to a dream's own spread: the right-hand page turns over on desktop, then the editor opens ──
+  function turnToEntry(entry: DreamEntry) {
+    if (turning.current) return;
+    const book = bookRef.current;
+    if (!book || matchMedia(`${PHONE}, (prefers-reduced-motion: reduce)`).matches) { void openEntry(entry); return; }
+    openerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    unlock();
+    turning.current = true;
+    prefetchFull(entry); // fetched while the sheet is in the air, so the spread opens ready
+    flipPage(book, {
+      dur: 760,
+      onStart: () => setTurningAway(true),
+      onEnd: () => { turning.current = false; void openEntry(entry, "turned"); setTurningAway(false); },
+    });
+  }
+
+  function prefetchFull(entry: DreamEntry) {
+    if (fullCopies.current.has(entry.id)) return;
+    fetchFull(entry.id)
+      .then((payload) => { if (payload.ok && payload.entry && !fullCopies.current.has(entry.id)) rememberFull(payload.entry); })
+      .catch(() => {}); // openEntry tries again and shows the error
+  }
+
   function onTabKeyDown(event: React.KeyboardEvent<HTMLButtonElement>, tab: ArchiveTab) {
     const order: ArchiveTab[] = ["calendar", "tags", "recent"];
     const at = order.indexOf(tab);
@@ -1901,9 +1954,9 @@ export default function DreamGrid({
 
   function selectDay(cell: CalendarCell) {
     const lead = cell.entries[0];
-    if (!lead) return;
+    if (!lead || turning.current) return;
     // a second tap on the open night turns to its page
-    if (cell.key === dayKey) { void openEntry(shownEntry ?? lead); return; }
+    if (cell.key === dayKey) { turnToEntry(shownEntry ?? lead); return; }
     tap();
     setSelectedDayKey(cell.key);
     setSelectedDayEntryId(null);
@@ -2242,7 +2295,7 @@ export default function DreamGrid({
                 <div className={s.monthHead}>
                   <label className={s.monthPick}>
                     <span className={s.monthTitle} aria-hidden>{monthDisplay}</span>
-                    <select value={visibleMonth} onChange={(event) => { tap(); setActiveMonth(event.target.value); }} aria-label={G.monthFilter}>
+                    <select value={visibleMonth} onChange={(event) => { if (turning.current) return; tap(); setActiveMonth(event.target.value); }} aria-label={G.monthFilter}>
                       {selectableMonths.map((monthKey) => (
                         <option key={monthKey} value={monthKey}>{formatMonthLabel(monthKey, lang)}</option>
                       ))}
@@ -2319,7 +2372,24 @@ export default function DreamGrid({
           </BookPage>
 
           {/* ═════════ right-hand page ═════════ */}
-          <BookPage side="r" folio={folios[1]} curl padClassName={`${s.pad} ${s.padScroll}`} {...pageProps("r")}>
+          <BookPage
+            side="r"
+            folio={folios[1]}
+            curl
+            className={turningAway ? s.turningAway : undefined}
+            padInert={turningAway}
+            padClassName={`${s.pad} ${s.padScroll}`}
+            {...pageProps("r")}
+            corner={activeTab === "calendar" && shownEntry ? (
+              <PageCorner
+                key={shownEntry.id}
+                label={`${N.openPage} · ${dreamDisplayTitle(shownEntry)}`}
+                hint={N.openPage}
+                busy={openingEntryId === shownEntry.id}
+                onTurn={() => turnToEntry(shownEntry)}
+              />
+            ) : null}
+          >
             {activeTab === "calendar" && (
               shownEntry ? (
                 <>
@@ -2334,7 +2404,7 @@ export default function DreamGrid({
                     </div>
                   ) : null}
                   <h2 className={s.dreamTitle}>{dreamDisplayTitle(shownEntry)}</h2>
-                  <p className={`nb-hand ${s.excerpt}`}>{dreamText(shownEntry) || N.noText}</p>
+                  <p key={shownEntry.id} ref={dreamScroll} className={`nb-hand ${s.excerpt}`}>{dreamFullText(shownEntry) || N.noText}</p>
                   {shownEntry.people.length || shownEntry.locations.length || shownEntry.symbols.length ? (
                     <p className={`nb-note ${s.clues}`}>
                       {shownEntry.people.length ? <span>{N.cluePeople} · {shownEntry.people.join(N.listSep)}</span> : null}
@@ -2350,15 +2420,20 @@ export default function DreamGrid({
                   {shownImage ? (
                     <figure className={`nb-print ${s.dayPhoto}`}>
                       <span className="nb-tape" aria-hidden />
-                      <Image src={shownImage} alt={T.modal.imageAlt} width={320} height={240} unoptimized />
+                      <PhotoLightbox
+                        src={shownEntry.imageUrl || shownImage}
+                        alt={`${T.modal.imageAlt} · ${dreamDisplayTitle(shownEntry)}`}
+                        date={`${dateLabel(shownEntry.capturedAt, thisYear)} · ${weekdayLabel(shownEntry.capturedAt, lang)}`}
+                        title={dreamDisplayTitle(shownEntry)}
+                      >
+                        <Image src={shownImage} alt={T.modal.imageAlt} width={320} height={240} unoptimized />
+                      </PhotoLightbox>
                       <figcaption className="nb-cap">{dateLabel(shownEntry.capturedAt, thisYear)}</figcaption>
                     </figure>
                   ) : null}
                   {exportError}
-                  <div className={s.pageFoot}>
-                    <button type="button" className="nb-act" onClick={() => void openEntry(shownEntry)} disabled={openingEntryId === shownEntry.id}>
-                      {openingEntryId === shownEntry.id ? N.opening : N.openPage} <span aria-hidden>→</span>
-                    </button>
+                  {/* the way on is the page's corner (PageCorner); the foot keeps clear of it */}
+                  <div className={`${s.pageFoot} ${s.footClear}`}>
                     <div className={s.quietRow}>{exportLinks(false)}</div>
                   </div>
                 </>
@@ -2478,7 +2553,7 @@ export default function DreamGrid({
         entry={selected}
         ready={selected != null && readyId === selected.id && !selected.imageUrlOmitted}
         loadError={openError}
-        onRetry={() => { if (selected) void openEntry(selected, true); }}
+        onRetry={() => { if (selected) void openEntry(selected, "retry"); }}
         thisYear={thisYear}
         restoreFocus={restoreFocus}
         onNotice={setNotice}

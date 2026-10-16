@@ -144,16 +144,33 @@ html[lang="en"] .nb-root {
   transform: translateZ(-1px);
 }
 
-/* page blocks: hundreds of page edges, fanned slightly, darker where they turn away from the light.
-   The striation texture is drawn once on a canvas (notebook.js) and set as --edge-l / --edge-r. */
+/* page blocks: the stack of sheets under each top page, one solid block. The top page lies on it;
+   the sheets' edges show down the fore-edge, turn round the corners and run along head and tail
+   as a hair-thin band, fanning slightly and darker where they curve down to the board.
+   The textures are drawn once on canvases (Book.tsx edgeTextures, which holds the geometry:
+   fore-edge 18px left / 26px right, a 2px step at head and tail, page corners 5 × 18px). */
 .nb-edges {
   position: absolute; top: 5px; bottom: 3px; z-index: 1;
-  background-size: 100% 100%;
+  background-repeat: no-repeat;
+  /* the head and tail bands thin out toward the spine, where the sheets are drawn into the gutter */
+  -webkit-mask-image: var(--edge-mask); mask-image: var(--edge-mask);
+  /* the block sits on the board: a soft contact shadow where it meets the cloth */
+  filter: drop-shadow(0 0 .6px rgba(30, 20, 10, .45));
 }
-.nb-edges.nb-l { left: 2px; width: 19px; border-radius: 16px 0 0 16px / 70px 0 0 70px;
-  background-image: var(--edge-l, repeating-linear-gradient(90deg, #efe6d4 0 1px, #cdbfa6 1px 2px)); }
-.nb-edges.nb-r { right: 2px; width: 27px; border-radius: 0 18px 18px 0 / 0 80px 80px 0;
-  background-image: var(--edge-r, repeating-linear-gradient(90deg, #efe6d4 0 1px, #cdbfa6 1px 2px)); }
+.nb-edges.nb-l { left: 2px; right: 50%; border-radius: 23px 0 0 23px / 20px 0 0 20px;
+  --edge-mask: linear-gradient(270deg, transparent, #000 40%);
+  background-image: var(--edge-l-top, none), var(--edge-l-bot, none),
+    var(--edge-l, repeating-linear-gradient(90deg, #efe6d4 0 1px, #cdbfa6 1px 2px)), var(--edge-l-head, none), var(--edge-l-tail, none),
+    linear-gradient(#d6ccb9, #d6ccb9);
+  background-position: left top, left bottom, left top, right top, right bottom, left top;
+  background-size: 23px 20px, 23px 20px, 18px 100%, calc(100% - 23px) 2px, calc(100% - 23px) 2px, 24px 100%; }
+.nb-edges.nb-r { right: 2px; left: 50%; border-radius: 0 31px 31px 0 / 0 20px 20px 0;
+  --edge-mask: linear-gradient(90deg, transparent, #000 40%);
+  background-image: var(--edge-r-top, none), var(--edge-r-bot, none),
+    var(--edge-r, repeating-linear-gradient(90deg, #efe6d4 0 1px, #cdbfa6 1px 2px)), var(--edge-r-head, none), var(--edge-r-tail, none),
+    linear-gradient(#d6ccb9, #d6ccb9);
+  background-position: right top, right bottom, right top, left top, left bottom, right top;
+  background-size: 31px 20px, 31px 20px, 26px 100%, calc(100% - 31px) 2px, calc(100% - 31px) 2px, 32px 100%; }
 
 .nb-page {
   position: absolute; top: 7px; bottom: 5px;
@@ -161,13 +178,13 @@ html[lang="en"] .nb-root {
   overflow: hidden;
   z-index: 2;
 }
-/* pages dip at the spine and curl a little at their outer corners */
+/* pages dip at the spine; their outer corners are the innermost sheet of the stack's rounded corner */
 .nb-page-l {
-  left: 20px; width: calc(50% - 20px); border-radius: 10px 0 0 10px / 26px 0 0 26px;
+  left: 20px; width: calc(50% - 20px); border-radius: 5px 0 0 5px / 18px 0 0 18px;
   clip-path: polygon(0 0, 80% 0, 89% .2%, 94.5% .55%, 98% 1%, 100% 1.5%, 100% 98.5%, 98% 99%, 94.5% 99.45%, 89% 99.8%, 80% 100%, 0 100%);
 }
 .nb-page-r {
-  right: 28px; width: calc(50% - 28px); border-radius: 0 10px 10px 0 / 0 26px 26px 0;
+  right: 28px; width: calc(50% - 28px); border-radius: 0 5px 5px 0 / 0 18px 18px 0;
   clip-path: polygon(0 1.5%, 2% 1%, 5.5% .55%, 11% .2%, 20% 0, 100% 0, 100% 100%, 20% 100%, 11% 99.8%, 5.5% 99.45%, 2% 99%, 0 98.5%);
 }
 /* faint unevenness in the paper itself */
@@ -217,15 +234,45 @@ html[lang="en"] .nb-root {
 .nb-folio { position: absolute; bottom: 15px; font-family: var(--latin); font-style: italic; font-size: 13px; color: var(--ink-faint); z-index: 3; }
 .nb-page-l .nb-folio { left: 52px; } .nb-page-r .nb-folio { right: 50px; }
 
-/* corner lift on the right page — an invitation to turn */
+/* the right page's bottom corner, peeled up: where it was, the next sheet shows, shaded by the flap;
+   the flap (the paper's back) curls over the page along the fold, its edges and tip a little rounded,
+   with a soft shadow beneath. `curl` on a BookPage shows it on hover, an invitation to turn;
+   .nb-corner makes the corner the control that turns the page (PageCorner). */
 .nb-curl {
-  position: absolute; right: 0; bottom: 0; width: 0; height: 0; z-index: 6;
-  background: linear-gradient(315deg, transparent 50%, #e9dfcc 50%, #fbf7ef 64%, #e2d6c1 100%);
-  box-shadow: -3px -3px 8px rgba(60, 40, 20, .16);
-  border-top-left-radius: 5px;
-  transition: width .35s cubic-bezier(.2, .7, .2, 1), height .35s cubic-bezier(.2, .7, .2, 1);
+  position: absolute; right: 0; bottom: 0; width: 0; height: 0; z-index: 6; pointer-events: none;
+  filter: drop-shadow(-2px -2px 3px rgba(60, 40, 20, .2));
+  transition: width .25s cubic-bezier(.3, .7, .3, 1), height .25s cubic-bezier(.3, .7, .3, 1), filter .25s ease;
 }
-.nb-page-r:hover .nb-curl { width: 40px; height: 40px; }
+.nb-curl::before, .nb-curl::after { content: ""; position: absolute; inset: 0; }
+/* the next sheet, in the corner the flap has left; darker toward the fold, under the flap */
+.nb-curl::before {
+  clip-path: polygon(100% 0, 100% 100%, 0 100%);
+  background: linear-gradient(to top left, #e8dfcd 0%, #e0d6c3 30%, #d3c7b0 44%, #bfb197 50%);
+}
+.nb-curl::after {
+  background: linear-gradient(to top left, #cbbea6 50%, #e7dece 53.5%, #f8f3e9 64%, #fbf8f1 78%, #efe7d8 94%, #e2d8c5 100%);
+  -webkit-mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100' preserveAspectRatio='none'><path d='M100 0 C 66 1.5, 31 2.5, 12 6.5 Q 5.5 8, 6.5 14 C 2.8 33, 1.6 67, 0 100 Z'/></svg>") 0 0 / 100% 100% no-repeat;
+  mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100' preserveAspectRatio='none'><path d='M100 0 C 66 1.5, 31 2.5, 12 6.5 Q 5.5 8, 6.5 14 C 2.8 33, 1.6 67, 0 100 Z'/></svg>") 0 0 / 100% 100% no-repeat;
+}
+.nb-page-r:hover > .nb-curl { width: 40px; height: 40px; }
+
+/* the corner as the page's control: a small dog-ear at rest, peeled up while the pointer is on it
+   or it has keyboard focus (and for a moment after a tap); a click turns the page (PageCorner) */
+.nb-root .nb-corner { position: absolute; right: 0; bottom: 0; z-index: 7; width: 48px; height: 48px; cursor: pointer;
+  -webkit-tap-highlight-color: transparent; transition: width .25s cubic-bezier(.3, .7, .3, 1), height .25s cubic-bezier(.3, .7, .3, 1); }
+.nb-root .nb-corner:focus-visible { outline: none; }
+.nb-corner .nb-curl { width: 20px; height: 20px; }
+@media (hover: hover) {
+  .nb-root .nb-corner:hover { width: 100px; height: 100px; }
+  .nb-corner:hover .nb-curl { width: 94px; height: 94px; filter: drop-shadow(-5px -5px 7px rgba(60, 40, 20, .26)); }
+}
+.nb-root .nb-corner.nb-lifted, .nb-root .nb-corner:focus-visible { width: 100px; height: 100px; }
+.nb-corner.nb-lifted .nb-curl, .nb-corner:focus-visible .nb-curl { width: 94px; height: 94px; filter: drop-shadow(-5px -5px 7px rgba(60, 40, 20, .26)); }
+/* keyboard focus says what the corner does, in red ink just above it */
+.nb-corner-hint { position: absolute; right: 10px; bottom: calc(100% + 2px); white-space: nowrap; pointer-events: none;
+  font-family: var(--hand); font-size: 14px; color: var(--red-ink); opacity: 0; transition: opacity .2s; }
+.nb-corner:focus-visible .nb-corner-hint { opacity: 1; }
+@media (prefers-reduced-motion: reduce) { .nb-curl, .nb-root .nb-corner { transition: none; } }
 
 /* ribbon marker: tucked into a later page, only its tail hangs out below the book */
 .nb-ribbon {
@@ -292,6 +339,35 @@ html[lang="en"] .nb-root {
 .nb-print img { display: block; width: 100%; object-fit: cover; filter: grayscale(.75) sepia(.28) contrast(1.04) brightness(1.03); }
 .nb-print .nb-cap { position: absolute; left: 12px; bottom: 9px; font-family: var(--hand); font-size: 14px; color: var(--ink-soft); }
 .nb-tape { position: absolute; width: 86px; height: 24px; top: -11px; left: 50%; margin-left: -43px; background: rgba(233, 222, 196, .78); transform: rotate(-3deg); box-shadow: 0 1px 1px rgba(0,0,0,.06); }
+
+/* a print picked up off the page (PhotoLightbox): the photo enlarged, lying on the softly blurred desk */
+.nb-zoom { display: block; width: 100%; cursor: zoom-in; }
+.nb-lightbox:not([open]) { display: none; }
+.nb-lightbox { position: fixed; inset: 0; width: 100%; height: 100%; max-width: none; max-height: none; margin: 0; padding: 24px; border: 0;
+  display: grid; place-items: center; overflow: hidden; color: var(--ink); cursor: zoom-out;
+  /* the desk, a little out of focus and dimmed toward the edges: warm paper light, never black */
+  background: radial-gradient(ellipse 70% 62% at 50% 46%, rgba(245, 239, 227, .52), rgba(196, 183, 158, .82));
+  -webkit-backdrop-filter: blur(9px) saturate(.88); backdrop-filter: blur(9px) saturate(.88);
+  animation: nb-lightbox-in .22s ease both; }
+.nb-lightbox::backdrop { background: transparent; }
+.nb-lightbox:focus { outline: none; }
+.nb-lightbox-print { padding: 14px 14px 0; transform: rotate(-.7deg); cursor: default; max-width: 100%;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, .12), 0 12px 20px -12px rgba(60, 40, 20, .38), 0 34px 56px -28px rgba(60, 40, 20, .55);
+  animation: nb-print-in .32s cubic-bezier(.2, .7, .2, 1) both; }
+.nb-lightbox-print img { width: auto; height: auto; max-width: min(860px, calc(100vw - 96px)); max-height: calc(100vh - 156px); max-height: calc(100dvh - 156px); object-fit: contain; }
+.nb-print.nb-lightbox-print .nb-cap { position: static; display: block; padding: 12px 2px 16px; font-size: 18px; line-height: 1.4; color: var(--ink-soft); }
+.nb-root .nb-lightbox-close { position: fixed; top: 18px; right: 24px; font-family: var(--mono); font-size: 12px; letter-spacing: .16em; color: var(--ink-soft); padding: 6px 4px; transition: color .2s; }
+.nb-root .nb-lightbox-close:hover { color: var(--ink); }
+@keyframes nb-lightbox-in { from { opacity: 0; } }
+@keyframes nb-print-in { from { opacity: 0; transform: translateY(12px) rotate(-1.8deg) scale(.96); } }
+@media (prefers-reduced-motion: reduce) { .nb-lightbox, .nb-lightbox-print { animation: none; } }
+@media (max-width: 900px) {
+  .nb-lightbox { padding: 56px 16px 24px; }
+  .nb-lightbox-print { padding: 9px 9px 0; }
+  .nb-lightbox-print img { max-width: calc(100vw - 50px); max-height: calc(100vh - 170px); max-height: calc(100dvh - 170px); }
+  .nb-print.nb-lightbox-print .nb-cap { font-size: 15.5px; padding: 9px 2px 12px; }
+  .nb-root .nb-lightbox-close { top: 12px; right: 16px; }
+}
 
 /* Dream Reel's voice: a small slip of paper laid on the page, signed in mono */
 .nb-slip { position: relative; display: block; background: #fbf8f1; padding: 13px 18px 14px;
@@ -363,7 +439,16 @@ html[lang="en"] .nb-root {
     background: none; opacity: 1; mix-blend-mode: normal; letter-spacing: 0; padding-top: 8px; }
   .nb-pad, .nb-page-l .nb-pad, .nb-page-r .nb-pad { position: relative; padding: 30px 26px 44px; }
   .nb-page-l .nb-pad.nb-indent { padding-left: 62px; }
-  .nb-folio, .nb-curl, .nb-margin-note { display: none !important; }
+  .nb-folio, .nb-page > .nb-curl, .nb-margin-note { display: none !important; }
+  /* a corner that turns the page stays: a small folded corner at the bottom of that sheet */
+  .nb-root .nb-corner { width: 44px; height: 44px; }
+  .nb-corner .nb-curl { width: 24px; height: 24px; }
+  .nb-root .nb-corner.nb-lifted, .nb-root .nb-corner:focus-visible { width: 76px; height: 76px; }
+  .nb-corner.nb-lifted .nb-curl, .nb-corner:focus-visible .nb-curl { width: 68px; height: 68px; }
+  @media (hover: hover) {
+    .nb-root .nb-corner:hover { width: 76px; height: 76px; }
+    .nb-corner:hover .nb-curl { width: 68px; height: 68px; }
+  }
   .nb-ruled { --rule-offset: 82px;
     background-image:
       linear-gradient(90deg, transparent 44px, var(--margin) 44px 45px, transparent 45px),
@@ -459,6 +544,7 @@ html[lang="en"] .nb-root {
   .nb-cover .nb-in { transform: rotateY(180deg); border-radius: 7px 3px 3px 7px; overflow: visible; }
   .nb-cover .nb-in > .nb-board.nb-l { width: 100%; }
   .nb-cover .nb-in > .nb-page-l { width: calc(100% - 20px); }
+  .nb-cover .nb-in > .nb-edges.nb-l { right: 0; }
   .nb-cover .nb-out::after, .nb-cover .nb-in::after { content: ""; position: absolute; inset: 0; pointer-events: none; opacity: 0; z-index: 9; }
   .nb-cover .nb-out::after { background: linear-gradient(90deg, rgba(8,10,18,.15), rgba(8,10,18,.55)); }
   .nb-cover .nb-in::after { background: linear-gradient(270deg, rgba(40,26,10,.1), rgba(40,26,10,.5)); border-radius: inherit; }
