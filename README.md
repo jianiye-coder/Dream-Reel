@@ -108,11 +108,34 @@ Image prompts are assembled from dream content and structured fields in `src/lib
 | `DREAM_AGENT_GUARDED_PERCENT` | Guarded recall-policy canary allocation; defaults to `0` |
 | `ADMIN_EMAIL` | Access to administrator credit and agent-feedback endpoints |
 | `ADMIN_UNLIMITED_EMAILS` | Comma-separated accounts exempt from quotas; set explicitly rather than relying on the creator-account default in `billing.ts` |
-| `STRIPE_SECRET_KEY` | Stripe checkout and customer portal |
-| `STRIPE_PLUS_PRICE_ID_USD`, `STRIPE_PLUS_PRICE_ID_CNY` | Plus subscription price IDs; checkout falls back to the other configured currency price if one is absent |
-| `STRIPE_WEBHOOK_SECRET` | Signature verification for `/api/billing/webhook` |
+| `STRIPE_SECRET_KEY`, `STRIPE_PLUS_PRICE_ID_USD`, `STRIPE_PLUS_PRICE_ID_CNY`, `STRIPE_WEBHOOK_SECRET` | Plus subscriptions; see [Payments (Stripe)](#payments-stripe). All four or none |
 
-Subscription handling supports `checkout.session.completed` and `customer.subscription.created`, `.updated`, and `.deleted`. Webhook processing is transactional and deduplicates committed events. Plan limits and usage periods are defined in `src/lib/billing.ts`.
+### Payments (Stripe)
+
+Stripe is called over its REST API with `fetch` (`src/lib/stripe.ts`); there is no SDK. Until **all four** of these are set, `/api/billing/status` reports `checkoutAvailable: false`, every upgrade button shows "Plus 即将开放 / Plus is coming soon", and checkout answers `503 BILLING_UNAVAILABLE`. No setting name ever reaches the browser.
+
+| Variable | Value |
+| --- | --- |
+| `STRIPE_SECRET_KEY` | Secret key (`sk_live_…`, or `sk_test_…` for test mode). A restricted key needs write access to Checkout Sessions and Customer portal, and read access to Subscriptions |
+| `STRIPE_PLUS_PRICE_ID_CNY` | Price for Chinese pages: recurring, monthly, CNY 12.99 |
+| `STRIPE_PLUS_PRICE_ID_USD` | Price for English pages: recurring, monthly, USD 1.99 |
+| `STRIPE_WEBHOOK_SECRET` | Signing secret (`whsec_…`) of the webhook endpoint below |
+| `NEXT_PUBLIC_APP_URL` | Public origin for Stripe's return URLs, e.g. `https://dream-reel.vercel.app`. Falls back to the request origin |
+
+Readers pay in the language they read in: `zh` gets the CNY price, `en` the USD price. A reader who already has a Stripe customer (from an earlier subscription) checks out on that customer.
+
+Webhook endpoint: `https://<your domain>/api/billing/webhook`, subscribed to exactly
+
+- `checkout.session.completed`
+- `customer.subscription.created`
+- `customer.subscription.updated`
+- `customer.subscription.deleted`
+
+The handler verifies the signature (raw body, 5-minute tolerance, any of several `v1` signatures), records each event id once in `payment_events` (a failed event is not recorded, so Stripe's retry runs it again), and reads the subscription back from Stripe instead of trusting event order. `active` and `trialing` mean Plus until `current_period_end`; `past_due`, `unpaid`, `incomplete`, `incomplete_expired`, `paused` and `canceled` do not. Both the item-level billing period (API `2025-03-31.basil` and later) and the older top-level fields are understood. Plan limits and usage periods are defined in `src/lib/billing.ts`.
+
+Readers manage and cancel in the Stripe customer portal (Account → Manage Subscription), which needs a saved portal configuration in **both** test and live mode. Stripe also asks for the policy pages at `/terms`, `/privacy` and `/refund` before activation. Their text is a draft the owner must review.
+
+Local check with the Stripe CLI: `stripe listen --forward-to localhost:3000/api/billing/webhook` prints a `whsec_…` for `STRIPE_WEBHOOK_SECRET`.
 
 ### Troubleshooting
 
@@ -232,7 +255,7 @@ Next.js 16 App Router、React 19、TypeScript、Tailwind CSS 3；后端是运行
 | 独立标题接口 | 仍然只使用 OpenAI 的 `gpt-4o-mini`，需要 `OPENAI_API_KEY` |
 | 图片生成 | 配置 `FLATKEY_API_KEY` 时使用 Flatkey，否则使用 OpenAI；代码中的模型为 `gpt-image-2` |
 | 图片存储 | 公共 Vercel Blob Store；本地可配置 `BLOB_READ_WRITE_TOKEN` |
-| 订阅支付 | `STRIPE_SECRET_KEY`、Plus Price ID、`STRIPE_WEBHOOK_SECRET`，以及用于跳转的 `NEXT_PUBLIC_APP_URL` |
+| 订阅支付 | `STRIPE_SECRET_KEY`、`STRIPE_PLUS_PRICE_ID_CNY`（中文页，CNY 12.99/月）、`STRIPE_PLUS_PRICE_ID_USD`（英文页，USD 1.99/月）、`STRIPE_WEBHOOK_SECRET` 四项缺一不可，否则升级按钮显示“Plus 即将开放”；`NEXT_PUBLIC_APP_URL` 用于跳转。webhook 订阅 `checkout.session.completed` 与 `customer.subscription.created/updated/deleted`，详见上方 [Payments (Stripe)](#payments-stripe) |
 
 图片提示词会随梦境字段更新；手动编辑后，自动更新暂停，直到恢复自动填充。另需注意：图片接口收到超过 200 字符的视觉描述时，会优先使用该描述，并附加原始梦境及可选性别信息，而不是直接使用编辑框里的组装提示词。
 

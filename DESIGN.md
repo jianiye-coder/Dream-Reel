@@ -146,6 +146,7 @@ lay out a book (journal, morning pages, archive) add their own
 | `/morning-pages` | desk, lean | book: date, about and contents on the left; the ruled sheet (text or drawing) on the right |
 | `/archive` | desk, lean | book with paper bookmarks: calendar, 人物与地点, recent dreams; the editor opens as a second book over the desk |
 | `/login`, `/pricing`, `/account`, `/blog/…` | paper | one sheet (`nb-auth` on login, `nb-paper-main` on pricing/account, the blog's own module) |
+| `/terms`, `/privacy`, `/refund` | paper | `nb-paper-main` with tabs between the three, numbered clauses (`src/components/legal`) |
 
 ## Sounds
 
@@ -171,3 +172,12 @@ the cover opens at once.
 
 All user-facing strings live in `src/lib/i18n.ts`, in both `zh` and `en`.
 English pages switch `--serif` to the Latin serif first (`html[lang="en"]`).
+
+## Billing states
+
+Upgrade surfaces (account library card, journal header, pricing Plus column)
+read `checkoutAvailable` from `/api/billing/status`. Until Stripe is fully
+configured they show a quiet mono "Plus 即将开放 / Plus is coming soon" (plus a
+pencilled line on pricing and account), never a button that errors. Coming
+back from Stripe, `?upgraded=1` and `?billing=cancelled` become a calm green
+`nb-msg` (a desk slip on the journal) and are removed from the address bar.
