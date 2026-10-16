@@ -152,6 +152,8 @@ const zh = {
     tagline: "一本放在枕边的梦境笔记本",
     soundOn: "声音 开",
     soundOff: "声音 关",
+    photoZoom: "放大照片",
+    photoClose: "放下",
   },
 
   nbLanding: {
@@ -789,6 +791,8 @@ const en: typeof zh = {
     tagline: "A dream notebook for your bedside",
     soundOn: "Sound on",
     soundOff: "Sound off",
+    photoZoom: "Enlarge photo",
+    photoClose: "Put down",
   },
 
   nbLanding: {

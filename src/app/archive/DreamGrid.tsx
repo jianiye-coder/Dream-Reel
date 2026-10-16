@@ -15,7 +15,9 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { formatDateTime, formatMonthLabel, type Lang } from "@/lib/i18n";
 import { getApiErrorMessage } from "@/lib/apiErrors";
 import { Book, BookPage } from "@/components/notebook/Book";
+import { PhotoLightbox } from "@/components/notebook/PhotoLightbox";
 import { TurnLink } from "@/components/notebook/TurnLink";
+import { edgeFade } from "@/lib/edgeFade";
 import { flipPage } from "@/lib/notebookFlip";
 import { pageTurn, tap, unlock } from "@/lib/notebookSound";
 import s from "./archive.module.css";
@@ -68,6 +70,8 @@ type KeywordArchiveItem = {
 };
 
 const PHONE = "(max-width: 900px)";
+// the open night's dream scrolls inside the page; it can take keyboard focus while it does
+const dreamScroll = (el: HTMLElement | null) => edgeFade(el, { focusable: true });
 
 function ordinal(n: number): string {
   const tens = n % 100;
@@ -140,6 +144,11 @@ function dreamDisplayTitle(entry: Pick<DreamEntry, "title" | "cleanText" | "rawT
 
 function dreamText(entry: Pick<DreamEntry, "cleanText" | "rawText">): string {
   return (entry.cleanText || entry.rawText).replace(/\s+/g, " ").trim();
+}
+
+/** The whole dream as written, for reading it on its page: its paragraphs kept, stray spaces tidied. */
+function dreamFullText(entry: Pick<DreamEntry, "cleanText" | "rawText">): string {
+  return (entry.cleanText || entry.rawText).replace(/[^\S\n]+/g, " ").replace(/ *\n */g, "\n").replace(/\n{3,}/g, "\n\n").trim();
 }
 
 function downloadDreamFile(content: string, filename: string, format: DreamExportFormat) {
@@ -1280,7 +1289,9 @@ function DreamEditorModal({
                 <figure className={`nb-print ${s.polaroid} ${form.imageUrl ? "" : s.polaroidEmpty}`}>
                   <span className="nb-tape" aria-hidden />
                   {form.imageUrl ? (
-                    <Image src={form.imageUrl} alt={M.imageAlt} width={1024} height={1024} unoptimized />
+                    <PhotoLightbox src={form.imageUrl} alt={form.title ? `${M.imageAlt} · ${form.title}` : M.imageAlt} date={`${dateLabel(dateIso, thisYear)} · ${weekdayLabel(dateIso, lang)}`} title={form.title}>
+                      <Image src={form.imageUrl} alt={M.imageAlt} width={1024} height={1024} unoptimized />
+                    </PhotoLightbox>
                   ) : (
                     <div className={s.noPhoto}>{M.noImage}</div>
                   )}
@@ -2334,7 +2345,7 @@ export default function DreamGrid({
                     </div>
                   ) : null}
                   <h2 className={s.dreamTitle}>{dreamDisplayTitle(shownEntry)}</h2>
-                  <p className={`nb-hand ${s.excerpt}`}>{dreamText(shownEntry) || N.noText}</p>
+                  <p key={shownEntry.id} ref={dreamScroll} className={`nb-hand ${s.excerpt}`}>{dreamFullText(shownEntry) || N.noText}</p>
                   {shownEntry.people.length || shownEntry.locations.length || shownEntry.symbols.length ? (
                     <p className={`nb-note ${s.clues}`}>
                       {shownEntry.people.length ? <span>{N.cluePeople} · {shownEntry.people.join(N.listSep)}</span> : null}
@@ -2350,7 +2361,14 @@ export default function DreamGrid({
                   {shownImage ? (
                     <figure className={`nb-print ${s.dayPhoto}`}>
                       <span className="nb-tape" aria-hidden />
-                      <Image src={shownImage} alt={T.modal.imageAlt} width={320} height={240} unoptimized />
+                      <PhotoLightbox
+                        src={shownEntry.imageUrl || shownImage}
+                        alt={`${T.modal.imageAlt} · ${dreamDisplayTitle(shownEntry)}`}
+                        date={`${dateLabel(shownEntry.capturedAt, thisYear)} · ${weekdayLabel(shownEntry.capturedAt, lang)}`}
+                        title={dreamDisplayTitle(shownEntry)}
+                      >
+                        <Image src={shownImage} alt={T.modal.imageAlt} width={320} height={240} unoptimized />
+                      </PhotoLightbox>
                       <figcaption className="nb-cap">{dateLabel(shownEntry.capturedAt, thisYear)}</figcaption>
                     </figure>
                   ) : null}
