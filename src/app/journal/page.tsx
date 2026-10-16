@@ -17,7 +17,6 @@ import { getApiErrorMessage } from "@/lib/apiErrors";
 import { shouldFlushLatestSave } from "@/lib/autosave";
 import { DreamConversationControls } from "@/components/DreamConversationControls";
 import type { DreamConversationGoal } from "@/lib/dreamSupport";
-import { usePenSound } from "./usePenSound";
 import css from "./journal.module.css";
 
 type SpeechRecognitionConstructor = new () => SpeechRecognitionLike;
@@ -1131,7 +1130,6 @@ export default function JournalPage() {
 
   // ── notebook spread ─────────────────────────────────────────────────────────
   const N = J.nb;
-  const pen = usePenSound();
   const roomRef = useRef<HTMLDialogElement>(null);
   const roomOpenerRef = useRef<HTMLElement | null>(null);
   const sleepFirstRef = useRef<HTMLInputElement>(null);
@@ -1479,9 +1477,7 @@ export default function JournalPage() {
           aria-label={J.chatInputLabel}
           autoComplete="off"
           value={input}
-          onChange={(e) => { handleInputChange(e); pen.onInput(e); }}
-          onCompositionStart={pen.onCompositionStart}
-          onCompositionEnd={pen.onCompositionEnd}
+          onChange={handleInputChange}
           onKeyDown={handleKeyDown}
           placeholder={conversationGoal === "support" ? N.supportPlaceholder : J.placeholder}
           className={`nb-hand ${css.replyInput}`}
@@ -1564,10 +1560,7 @@ export default function JournalPage() {
                     onChange={(e) => {
                       setQuickText(e.target.value);
                       setInputMode("text");
-                      pen.onInput(e);
                     }}
-                    onCompositionStart={pen.onCompositionStart}
-                    onCompositionEnd={pen.onCompositionEnd}
                     placeholder={J.quickPlaceholder}
                     className={`quick-textarea nb-hand ${css.write}`}
                   />
