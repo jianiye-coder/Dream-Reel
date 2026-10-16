@@ -15,15 +15,17 @@ import { safeErrorMetadata } from "@/lib/safeServerLog";
 import {
   billsPlusPrice,
   invoiceForRefund,
+  isTransientStripeError,
+  requireStripe,
   retrieveSubscription,
-  StripeApiError,
+  stripeErrorInfo,
   stripeId,
+  stripeSecretKey,
   STRIPE_WEBHOOK_EVENTS,
-  stripeRequest,
   subscriptionForCharge,
   subscriptionOfInvoice,
   subscriptionPeriod,
-  verifyStripeSignature,
+  verifiedEvent,
   type StripeInvoiceRef,
   type StripeSubscription,
 } from "@/lib/stripe";
@@ -49,7 +51,7 @@ async function currentSubscription(id: string): Promise<StripeSubscription> {
     return await retrieveSubscription(id);
   } catch (error) {
     // a subscription this account can't see (wrong mode, another account) will never appear
-    if (error instanceof StripeApiError && error.status === 404) throw new SkipEvent("subscription not found");
+    if (stripeErrorInfo(error).status === 404) throw new SkipEvent("subscription not found");
     throw error;
   }
 }
@@ -102,11 +104,7 @@ function keepFirst(a: StripeSubscription, b: StripeSubscription) {
   return a.id < b.id;
 }
 
-/** Network trouble, timeouts, rate limits, Stripe 5xx: worth Stripe's retry. Anything else won't change. */
-function isTransient(error: unknown) {
-  if (!(error instanceof StripeApiError)) return true;
-  return error.status === 0 || error.status === 409 || error.status === 429 || error.status >= 500;
-}
+const isTransient = isTransientStripeError;
 
 async function needsOwner(client: PoolClient, action: Parameters<typeof recordManualAction>[1]) {
   console.error("[billing] duplicate subscription needs the owner", {
@@ -137,36 +135,35 @@ async function dropDuplicate(drop: StripeSubscription, keep: StripeSubscription,
       } else if (!invoice.payment) {
         await needsOwner(client, { ...base, kind: "refund", invoiceId, reason: "payment_not_found" });
       } else {
-        const params = new URLSearchParams({
-          [invoice.payment[0]]: invoice.payment[1],
-          reason: "duplicate",
-          "metadata[reason]": "duplicate_plus_subscription",
-          "metadata[subscription]": drop.id,
-        });
+        const [kind, paymentId] = invoice.payment;
         try {
-          await stripeRequest("POST", "/refunds", params, { idempotencyKey: `dreamreel-duplicate-refund-${drop.id}` });
+          await requireStripe().refunds.create({
+            ...(kind === "payment_intent" ? { payment_intent: paymentId } : { charge: paymentId }),
+            reason: "duplicate",
+            metadata: { reason: "duplicate_plus_subscription", subscription: drop.id },
+          }, { idempotencyKey: `dreamreel-duplicate-refund-${drop.id}` });
           refunded = true;
         } catch (error) {
-          if (error instanceof StripeApiError && error.code === "charge_already_refunded") refunded = true;
+          if (stripeErrorInfo(error).code === "charge_already_refunded") refunded = true;
           else if (isTransient(error)) throw error;
-          else await needsOwner(client, { ...base, kind: "refund", invoiceId, reason: "refund_rejected", stripeCode: (error as StripeApiError).code });
+          else await needsOwner(client, { ...base, kind: "refund", invoiceId, reason: "refund_rejected", stripeCode: stripeErrorInfo(error).code });
         }
       }
     }
   } catch (error) {
     if (isTransient(error)) throw error;
-    await needsOwner(client, { ...base, kind: "refund", invoiceId, reason: "invoice_unreadable", stripeCode: (error as StripeApiError).code });
+    await needsOwner(client, { ...base, kind: "refund", invoiceId, reason: "invoice_unreadable", stripeCode: stripeErrorInfo(error).code });
   }
 
   let cancelled = false;
   try {
-    await stripeRequest("DELETE", `/subscriptions/${encodeURIComponent(drop.id)}`, undefined, { idempotencyKey: `dreamreel-duplicate-cancel-${drop.id}` });
+    await requireStripe().subscriptions.cancel(drop.id, undefined, { idempotencyKey: `dreamreel-duplicate-cancel-${drop.id}` });
     cancelled = true;
   } catch (error) {
     const now = await retrieveSubscription(drop.id).catch(() => null);
     if (now?.status === "canceled") cancelled = true;
     else if (isTransient(error)) throw error;
-    else await needsOwner(client, { ...base, kind: "cancel", reason: "cancel_rejected", stripeCode: (error as StripeApiError).code });
+    else await needsOwner(client, { ...base, kind: "cancel", reason: "cancel_rejected", stripeCode: stripeErrorInfo(error).code });
   }
   console.warn("[billing] duplicate Plus subscription", { kept: keep.id, dropped: drop.id, cancelled, refunded });
   return cancelled;
@@ -272,14 +269,14 @@ async function handleChargeRefunded(charge: Record<string, unknown>, client: Poo
     return;
   }
   try {
-    await stripeRequest("DELETE", `/subscriptions/${encodeURIComponent(subscriptionId)}`, undefined, { idempotencyKey: `dreamreel-refunded-cancel-${subscriptionId}` });
+    await requireStripe().subscriptions.cancel(subscriptionId, undefined, { idempotencyKey: `dreamreel-refunded-cancel-${subscriptionId}` });
   } catch (error) {
     const now = await retrieveSubscription(subscriptionId).catch(() => null);
     if (now?.status !== "canceled") {
       if (isTransient(error)) throw error;
-      console.error("[billing] refunded subscription could not be cancelled", { subscription: subscriptionId, charge: charge.id, stripeCode: (error as StripeApiError).code });
+      console.error("[billing] refunded subscription could not be cancelled", { subscription: subscriptionId, charge: charge.id, stripeCode: stripeErrorInfo(error).code });
       await recordNeedsAction(client, `action:cancel:${subscriptionId}`, "manual.cancel", {
-        subscriptionId, chargeId: charge.id, reason: "refunded_cancel_rejected", stripeCode: (error as StripeApiError).code,
+        subscriptionId, chargeId: charge.id, reason: "refunded_cancel_rejected", stripeCode: stripeErrorInfo(error).code,
       });
       return;
     }
@@ -298,20 +295,19 @@ async function handleRiskEvent(event: StripeEvent, client: PoolClient) {
 }
 
 export async function POST(request: NextRequest) {
+  // fail closed: without both secrets nothing is verified or read back
   const secret = process.env.STRIPE_WEBHOOK_SECRET?.trim();
-  if (!secret) return errorJson(API_ERROR_CODES.configurationError, 503);
+  if (!secret || !stripeSecretKey()) return errorJson(API_ERROR_CODES.configurationError, 503);
 
   // the signature covers the exact bytes Stripe sent, so read them before any parsing
   const rawBody = Buffer.from(await request.arrayBuffer());
-  if (!verifyStripeSignature(rawBody, request.headers.get("stripe-signature"), secret)) {
-    return errorJson(API_ERROR_CODES.invalidRequest, 400);
-  }
-
   let event: StripeEvent;
   try {
-    event = JSON.parse(rawBody.toString("utf8")) as StripeEvent;
+    const verified = verifiedEvent(rawBody, request.headers.get("stripe-signature"), secret);
+    if (!verified) return errorJson(API_ERROR_CODES.invalidRequest, 400);
+    event = verified as unknown as StripeEvent;
   } catch {
-    return errorJson(API_ERROR_CODES.invalidRequest, 400);
+    return errorJson(API_ERROR_CODES.invalidRequest, 400); // signed, but not JSON
   }
   if (typeof event?.id !== "string" || !event.id || typeof event.type !== "string") {
     return errorJson(API_ERROR_CODES.invalidRequest, 400);
@@ -346,7 +342,7 @@ export async function POST(request: NextRequest) {
     console.error("[billing] webhook failed", {
       type: event.type,
       ...safeErrorMetadata(error),
-      ...(error instanceof StripeApiError ? { status: error.status, stripeCode: error.code, stripeParam: error.param } : {}),
+      ...stripeErrorInfo(error),
     });
     return errorJson(API_ERROR_CODES.internalError, 500);
   }

@@ -1,18 +1,17 @@
-import { createHmac, timingSafeEqual } from "crypto";
+import Stripe from "stripe";
 
-/* Stripe over plain fetch: configuration checks, webhook signature verification and the few
-   REST calls billing needs. Server-only; never import from a client component. */
+/* Stripe through the official SDK: one lazily created client, configuration checks, webhook
+   verification and the few lookups billing needs. Server-only; never import from a client. */
 
-const STRIPE_API = "https://api.stripe.com/v1";
 /**
- * Every request pins this API version, so responses keep the shape the code reads (billing
- * period on subscription items, invoice payments as their own list) whatever the account's
- * default is. Webhook payloads follow the endpoint's version; the handler only takes ids from
- * them and reads the objects back through this version.
+ * Pinned on the client, so responses keep the shape the code reads (billing period on
+ * subscription items, invoice ↔ subscription through `parent.subscription_details`, invoice
+ * payments as their own list) whatever the account's default is. Create the webhook endpoint on
+ * the same version; webhook handlers mostly take ids from events and read objects back.
  */
-export const STRIPE_API_VERSION = "2025-03-31.basil";
-const REQUEST_TIMEOUT_MS = 10_000;
-export const SIGNATURE_TOLERANCE_SECONDS = 300;
+export const STRIPE_API_VERSION = "2026-08-26.dahlia";
+/** Tags our Checkout Sessions in the Dashboard. Constant on purpose: keep it when editing. */
+export const CHECKOUT_INTEGRATION_IDENTIFIER = "dreamreel_plus_lwgclcae";
 
 export type BillingLang = "zh" | "en";
 
@@ -71,7 +70,37 @@ export function plusPriceIds(env: Env = process.env): Set<string> {
   return new Set(ids.map((id) => id?.trim()).filter((id): id is string => Boolean(id)));
 }
 
-// ── webhook signatures ────────────────────────────────────────────────────────
+let cached: { key: string; client: Stripe } | null = null;
+
+/** The one Stripe client, created on first use; null while no key is configured. */
+export function stripeClient(): Stripe | null {
+  const key = stripeSecretKey();
+  if (!key) return null;
+  if (cached?.key !== key) {
+    cached = {
+      key,
+      client: new Stripe(key, {
+        apiVersion: STRIPE_API_VERSION,
+        // these calls run inside webhook transactions or behind a button: Stripe's webhook
+        // retries (and the reader) retry; don't stack SDK retries on top
+        maxNetworkRetries: 0,
+        timeout: 10_000,
+        // fetch, looked up per request (works the same on Vercel's Node runtime)
+        httpClient: Stripe.createFetchHttpClient((url, init) => fetch(url, init)),
+        appInfo: { name: "Dream Reel" },
+      }),
+    };
+  }
+  return cached.client;
+}
+
+export function requireStripe(): Stripe {
+  const client = stripeClient();
+  if (!client) throw new Error("Stripe is not configured");
+  return client;
+}
+
+// ── webhooks ─────────────────────────────────────────────────────────────────
 
 /** Subscribe the Stripe webhook endpoint to exactly these events. */
 export const STRIPE_WEBHOOK_EVENTS: ReadonlySet<string> = new Set([
@@ -89,128 +118,50 @@ export const STRIPE_WEBHOOK_EVENTS: ReadonlySet<string> = new Set([
   "radar.early_fraud_warning.created",
 ]);
 
-function parseSignatureHeader(header: string) {
-  const timestamps: string[] = [];
-  const signatures: string[] = [];
-  for (const part of header.split(",")) {
-    const at = part.indexOf("=");
-    if (at <= 0) continue;
-    const key = part.slice(0, at).trim();
-    const value = part.slice(at + 1).trim();
-    if (key === "t") timestamps.push(value);
-    if (key === "v1") signatures.push(value);
-  }
-  return { timestamp: timestamps[0], signatures };
-}
-
 /**
- * Verifies a `Stripe-Signature` header against the exact raw request body.
- * Accepts any of several `v1` signatures (Stripe sends two while a secret is being rolled),
- * ignores other schemes (`v0`), and rejects timestamps outside the tolerance window.
+ * The verified event, or null when the signature doesn't match the raw body, is missing, or is
+ * outside the SDK's default five-minute tolerance. Throws on a body that isn't JSON.
  */
-export function verifyStripeSignature(
-  rawBody: Buffer | string,
-  header: string | null | undefined,
-  secret: string,
-  { toleranceSeconds = SIGNATURE_TOLERANCE_SECONDS, now = Date.now() } = {},
-): boolean {
-  if (!header || !secret) return false;
-  const { timestamp, signatures } = parseSignatureHeader(header);
-  if (!timestamp || !/^\d+$/.test(timestamp) || signatures.length === 0) return false;
-
-  const ageSeconds = Math.abs(now / 1000 - Number(timestamp));
-  if (!Number.isFinite(ageSeconds) || ageSeconds > toleranceSeconds) return false;
-
-  const body = typeof rawBody === "string" ? Buffer.from(rawBody, "utf8") : rawBody;
-  const expected = createHmac("sha256", secret)
-    .update(Buffer.concat([Buffer.from(`${timestamp}.`, "utf8"), body]))
-    .digest();
-
-  return signatures.some((signature) => {
-    if (!/^[0-9a-f]+$/i.test(signature)) return false;
-    const actual = Buffer.from(signature, "hex");
-    return actual.length === expected.length && timingSafeEqual(actual, expected);
-  });
-}
-
-/** Builds a valid header, for tests and local tooling. */
-export function signStripePayload(payload: string, secret: string, timestamp = Math.floor(Date.now() / 1000)) {
-  const signature = createHmac("sha256", secret).update(`${timestamp}.${payload}`).digest("hex");
-  return `t=${timestamp},v1=${signature}`;
-}
-
-// ── REST ──────────────────────────────────────────────────────────────────────
-
-export class StripeApiError extends Error {
-  constructor(
-    readonly status: number,
-    readonly code: string | undefined,
-    readonly param: string | undefined,
-    message: string,
-  ) {
-    super(message);
-    this.name = "StripeApiError";
+export function verifiedEvent(rawBody: Buffer, signature: string | null, secret: string): Stripe.Event | null {
+  if (!signature || !secret) return null;
+  try {
+    return requireStripe().webhooks.constructEvent(rawBody, signature, secret);
+  } catch (error) {
+    if (error instanceof Stripe.errors.StripeSignatureVerificationError) return null;
+    throw error;
   }
 }
 
-type StripeErrorBody = { error?: { message?: string; code?: string; param?: string; type?: string } };
+// ── errors ───────────────────────────────────────────────────────────────────
 
-export async function stripeRequest<T>(
-  method: "GET" | "POST" | "DELETE",
-  path: string,
-  params?: URLSearchParams,
-  { idempotencyKey }: { idempotencyKey?: string } = {},
-): Promise<T> {
-  const apiKey = stripeSecretKey();
-  if (!apiKey) throw new StripeApiError(0, "not_configured", undefined, "Stripe is not configured");
+type AnyStripeError = InstanceType<typeof Stripe.errors.StripeError>;
 
-  const url = method === "GET" && params ? `${STRIPE_API}${path}?${params}` : `${STRIPE_API}${path}`;
-  const response = await fetch(url, {
-    method,
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Stripe-Version": STRIPE_API_VERSION,
-      ...(method === "POST" ? { "Content-Type": "application/x-www-form-urlencoded" } : {}),
-      ...(idempotencyKey ? { "Idempotency-Key": idempotencyKey } : {}),
-    },
-    ...(method === "POST" && params ? { body: params.toString() } : {}),
-    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-    cache: "no-store",
-  });
-
-  const payload = (await response.json().catch(() => ({}))) as T & StripeErrorBody;
-  if (!response.ok) {
-    throw new StripeApiError(
-      response.status,
-      payload.error?.code,
-      payload.error?.param,
-      payload.error?.message || `Stripe request failed with ${response.status}`,
-    );
-  }
-  return payload;
+export function stripeErrorInfo(error: unknown): { status?: number; code?: string; param?: string } {
+  if (!(error instanceof Stripe.errors.StripeError)) return {};
+  const e = error as AnyStripeError;
+  return { status: e.statusCode, code: e.code, param: e.param };
 }
 
-// ── subscriptions ────────────────────────────────────────────────────────────
+/** Network trouble, timeouts, rate limits, Stripe 5xx: worth a retry. Anything else won't change. */
+export function isTransientStripeError(error: unknown): boolean {
+  if (!(error instanceof Stripe.errors.StripeError)) return true;
+  if (error instanceof Stripe.errors.StripeConnectionError || error instanceof Stripe.errors.StripeRateLimitError) return true;
+  const status = (error as AnyStripeError).statusCode ?? 0;
+  return status === 0 || status === 409 || status === 429 || status >= 500;
+}
 
-export type StripeSubscription = {
-  id: string;
-  object?: "subscription";
-  customer: string | { id: string };
-  status: string;
-  cancel_at_period_end?: boolean;
-  cancel_at?: number | null;
-  /** unix seconds */
-  created?: number;
-  latest_invoice?: string | { id: string } | null;
-  /** Removed from the subscription in API version 2025-03-31.basil; now on each item. */
-  current_period_start?: number;
-  current_period_end?: number;
-  items?: { data?: { current_period_start?: number; current_period_end?: number; price?: string | { id: string } }[] };
-  metadata?: Record<string, string>;
+const notFoundToNull = (error: unknown) => {
+  const { status } = stripeErrorInfo(error);
+  if (status === 400 || status === 404) return null;
+  throw error;
 };
 
+// ── subscriptions, invoices, charges ─────────────────────────────────────────
+
+export type StripeSubscription = Stripe.Subscription;
+
 export function retrieveSubscription(id: string) {
-  return stripeRequest<StripeSubscription>("GET", `/subscriptions/${encodeURIComponent(id)}`);
+  return requireStripe().subscriptions.retrieve(id);
 }
 
 export function stripeId(value: unknown): string | null {
@@ -223,14 +174,15 @@ export function stripeId(value: unknown): string | null {
 
 const unixToDate = (value: unknown) => (typeof value === "number" && Number.isFinite(value) ? new Date(value * 1000) : null);
 
-/** Billing period of a subscription in both the old and the item-level (basil+) shapes. */
+/** Billing period from the subscription items (top-level fields only in pre-basil webhook payloads). */
 export function subscriptionPeriod(subscription: StripeSubscription) {
+  const legacy = subscription as unknown as { current_period_start?: number; current_period_end?: number };
   const items = subscription.items?.data ?? [];
   const starts = items.map((item) => item.current_period_start).filter((v): v is number => typeof v === "number");
   const ends = items.map((item) => item.current_period_end).filter((v): v is number => typeof v === "number");
   return {
-    start: unixToDate(subscription.current_period_start) ?? (starts.length ? unixToDate(Math.min(...starts)) : null),
-    end: unixToDate(subscription.current_period_end) ?? (ends.length ? unixToDate(Math.max(...ends)) : null),
+    start: unixToDate(legacy.current_period_start) ?? (starts.length ? unixToDate(Math.min(...starts)) : null),
+    end: unixToDate(legacy.current_period_end) ?? (ends.length ? unixToDate(Math.max(...ends)) : null),
   };
 }
 
@@ -244,7 +196,6 @@ export function billsPlusPrice(subscription: StripeSubscription, env: Env = proc
 }
 
 type PaymentRef = { payment_intent?: string | { id: string } | null; charge?: string | { id: string } | null };
-type InvoicePaymentEntry = { status?: string; payment?: PaymentRef & { type?: string } };
 
 function paymentOf(ref: PaymentRef | undefined | null): ["payment_intent" | "charge", string] | null {
   const intent = stripeId(ref?.payment_intent);
@@ -253,66 +204,50 @@ function paymentOf(ref: PaymentRef | undefined | null): ["payment_intent" | "cha
   return charge ? ["charge", charge] : null;
 }
 
-/**
- * What a refund of this invoice needs, whatever the API shape: Basil+ lists payments on the
- * invoice (`expand[]=payments`); older versions carry payment_intent / charge on the invoice;
- * the invoice_payments list is the last resort.
- */
+const paidPayment = (entries?: Stripe.InvoicePayment[]) =>
+  entries?.find((entry) => !entry.status || entry.status === "paid")?.payment as PaymentRef | undefined;
+
+/** What a refund of this invoice needs: the invoice with `expand[]=payments`, else the invoice payments list. */
 export async function invoiceForRefund(invoiceId: string): Promise<{
   amountPaid: number;
   billingReason: string | null;
   payment: ["payment_intent" | "charge", string] | null;
 }> {
-  const invoice = await stripeRequest<PaymentRef & {
-    amount_paid?: number;
-    billing_reason?: string | null;
-    payments?: { data?: InvoicePaymentEntry[] };
-  }>("GET", `/invoices/${encodeURIComponent(invoiceId)}`, new URLSearchParams({ "expand[]": "payments" }));
+  const stripe = requireStripe();
+  const invoice = await stripe.invoices.retrieve(invoiceId, { expand: ["payments"] });
   const amountPaid = invoice.amount_paid ?? 0;
-  const billingReason = invoice.billing_reason ?? null;
-  const paid = (entries?: InvoicePaymentEntry[]) => entries?.find((entry) => !entry.status || entry.status === "paid")?.payment;
-
-  let payment = paymentOf(paid(invoice.payments?.data)) ?? paymentOf(invoice);
+  let payment = paymentOf(paidPayment(invoice.payments?.data));
   if (!payment && amountPaid > 0) {
-    const params = new URLSearchParams({ invoice: invoiceId, status: "paid", limit: "1" });
-    // an API version without this endpoint answers 400/404; that only means "not found here"
-    const list = await stripeRequest<{ data?: InvoicePaymentEntry[] }>("GET", "/invoice_payments", params).catch((error: unknown) => {
-      if (error instanceof StripeApiError && (error.status === 400 || error.status === 404)) return null;
-      throw error;
-    });
-    payment = paymentOf(paid(list?.data));
+    const list = await stripe.invoicePayments.list({ invoice: invoiceId, status: "paid", limit: 1 }).catch(notFoundToNull);
+    payment = paymentOf(paidPayment(list?.data));
   }
-  return { amountPaid, billingReason, payment };
+  return { amountPaid, billingReason: invoice.billing_reason ?? null, payment };
 }
 
 export type StripeInvoiceRef = {
+  customer?: unknown;
   subscription?: string | { id: string } | null;
   parent?: { subscription_details?: { subscription?: string | { id: string } | null; metadata?: Record<string, string> | null } | null } | null;
 };
 
-/** The subscription an invoice belongs to: Basil+ `parent.subscription_details`, else `subscription`. */
+/** The subscription an invoice belongs to: `parent.subscription_details` (pre-basil payloads: `subscription`). */
 export function subscriptionOfInvoice(invoice: StripeInvoiceRef | null | undefined): string | null {
   return stripeId(invoice?.parent?.subscription_details?.subscription) ?? stripeId(invoice?.subscription);
 }
 
-const notFound = (error: unknown) => error instanceof StripeApiError && (error.status === 400 || error.status === 404);
-
 /**
- * Charge → invoice → subscription, per Stripe's guide. Basil+: the PaymentIntent's invoice comes
- * from the invoice payments list; older versions put `invoice` on the charge. Null for a charge
- * that isn't a subscription payment.
+ * Charge → PaymentIntent → invoice payments → invoice → subscription, per Stripe's guide (the
+ * charge itself no longer names its invoice). Null for a charge that isn't a subscription payment.
  */
-export async function subscriptionForCharge(charge: { invoice?: string | { id: string } | null; payment_intent?: string | { id: string } | null }): Promise<string | null> {
-  let invoiceId = stripeId(charge.invoice);
+export async function subscriptionForCharge(charge: { payment_intent?: unknown }): Promise<string | null> {
   const paymentIntent = stripeId(charge.payment_intent);
-  if (!invoiceId && paymentIntent) {
-    const params = new URLSearchParams({ "payment[type]": "payment_intent", "payment[payment_intent]": paymentIntent, limit: "1" });
-    const list = await stripeRequest<{ data?: { invoice?: string | { id: string } }[] }>("GET", "/invoice_payments", params)
-      .catch((error: unknown) => { if (notFound(error)) return null; throw error; });
-    invoiceId = stripeId(list?.data?.[0]?.invoice);
-  }
+  if (!paymentIntent) return null;
+  const stripe = requireStripe();
+  const list = await stripe.invoicePayments
+    .list({ payment: { type: "payment_intent", payment_intent: paymentIntent }, status: "paid", limit: 1 })
+    .catch(notFoundToNull);
+  const invoiceId = stripeId(list?.data?.[0]?.invoice);
   if (!invoiceId) return null;
-  const invoice = await stripeRequest<StripeInvoiceRef>("GET", `/invoices/${encodeURIComponent(invoiceId)}`)
-    .catch((error: unknown) => { if (notFound(error)) return null; throw error; });
-  return subscriptionOfInvoice(invoice);
+  const invoice = await stripe.invoices.retrieve(invoiceId).catch(notFoundToNull);
+  return subscriptionOfInvoice(invoice as StripeInvoiceRef | null);
 }

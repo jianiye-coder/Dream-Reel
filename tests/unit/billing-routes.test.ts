@@ -87,11 +87,11 @@ describe("POST /api/billing/checkout", () => {
     const { url, init, params } = sentParams();
     expect(url).toBe("https://api.stripe.com/v1/checkout/sessions");
     expect(init.method).toBe("POST");
-    expect(init.headers).toMatchObject({
-      Authorization: "Bearer sk_test_123",
-      "Content-Type": "application/x-www-form-urlencoded",
-      "Stripe-Version": "2025-03-31.basil",
-    });
+    const headers = new Headers(init.headers as HeadersInit);
+    expect(headers.get("Authorization")).toBe("Bearer sk_test_123");
+    expect(headers.get("Content-Type")).toBe("application/x-www-form-urlencoded");
+    expect(headers.get("Stripe-Version")).toBe("2026-08-26.dahlia");
+    expect(headers.get("Idempotency-Key")).toBeTruthy(); // the SDK adds one to every POST
     expect(params).toEqual({
       mode: "subscription",
       "line_items[0][price]": "price_cny_1299",
@@ -105,8 +105,10 @@ describe("POST /api/billing/checkout", () => {
       "subscription_data[metadata][user_id]": "42",
       "subscription_data[metadata][plan]": "plus",
       customer_email: "reader@example.com",
+      integration_identifier: "dreamreel_plus_lwgclcae",
     });
-    expect(Object.keys(params).some((key) => key.startsWith("automatic_payment_methods"))).toBe(false);
+    expect(params.integration_identifier).toMatch(/^dreamreel_plus_[a-z]{8}$/);
+    expect(Object.keys(params).some((key) => /^(automatic_payment_methods|payment_method_types)/.test(key))).toBe(false);
   });
 
   it("sends en readers the USD price and an English Checkout", async () => {

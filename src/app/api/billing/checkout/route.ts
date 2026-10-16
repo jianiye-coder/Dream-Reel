@@ -1,4 +1,5 @@
 import { NextRequest } from "next/server";
+import type Stripe from "stripe";
 import { API_ERROR_CODES } from "@/lib/apiErrors";
 import { getBillingStatus, getStripeCustomerId } from "@/lib/billing";
 import { errorJson, privateJson, returnPage, sessionUser } from "@/lib/billingHttp";
@@ -6,9 +7,10 @@ import { safeErrorMetadata } from "@/lib/safeServerLog";
 import {
   appOrigin,
   isCheckoutConfigured,
+  CHECKOUT_INTEGRATION_IDENTIFIER,
   plusPriceId,
-  StripeApiError,
-  stripeRequest,
+  requireStripe,
+  stripeErrorInfo,
   type BillingLang,
 } from "@/lib/stripe";
 
@@ -25,25 +27,22 @@ function checkoutParams(input: {
   lang: BillingLang;
   origin: string;
   from: string;
-}) {
-  const params = new URLSearchParams();
-  params.set("mode", "subscription");
-  params.set("line_items[0][price]", input.priceId);
-  params.set("line_items[0][quantity]", "1");
-  params.set("success_url", `${input.origin}${input.from}?upgraded=1`);
-  params.set("cancel_url", `${input.origin}${input.from}?billing=cancelled`);
-  params.set("client_reference_id", String(input.userId));
-  params.set("locale", input.lang);
-  params.set("metadata[user_id]", String(input.userId));
-  params.set("metadata[plan]", "plus");
-  params.set("subscription_data[metadata][user_id]", String(input.userId));
-  params.set("subscription_data[metadata][plan]", "plus");
-  // Payment methods come from the Dashboard (dynamic payment methods); Checkout has no
-  // automatic_payment_methods parameter. In subscription mode Checkout creates the customer
-  // itself, so only an existing one is passed.
-  if (input.customerId) params.set("customer", input.customerId);
-  else if (input.email) params.set("customer_email", input.email);
-  return params;
+}): Stripe.Checkout.SessionCreateParams {
+  const ids = { user_id: String(input.userId), plan: "plus" };
+  return {
+    mode: "subscription",
+    line_items: [{ price: input.priceId, quantity: 1 }],
+    success_url: `${input.origin}${input.from}?upgraded=1`,
+    cancel_url: `${input.origin}${input.from}?billing=cancelled`,
+    client_reference_id: String(input.userId),
+    locale: input.lang,
+    metadata: ids,
+    subscription_data: { metadata: ids },
+    integration_identifier: CHECKOUT_INTEGRATION_IDENTIFIER,
+    // No payment_method_types: dynamic payment methods from the Dashboard. In subscription mode
+    // Checkout creates the customer itself, so only an existing one is passed.
+    ...(input.customerId ? { customer: input.customerId } : input.email ? { customer_email: input.email } : {}),
+  };
 }
 
 export async function POST(request: NextRequest) {
@@ -74,16 +73,18 @@ export async function POST(request: NextRequest) {
       from: returnPage(body.from),
     };
 
-    let session: { url?: string | null };
+    const sessions = requireStripe().checkout.sessions;
+    let session: Stripe.Checkout.Session;
     try {
-      session = await stripeRequest("POST", "/checkout/sessions", checkoutParams(input));
+      session = await sessions.create(checkoutParams(input));
     } catch (error) {
       // the stored customer was deleted in the Dashboard, or already bills in the other
       // currency (a customer can't mix currencies): let Checkout create a fresh one
-      const customerRejected = error instanceof StripeApiError && error.status === 400 && input.customerId &&
-        (error.param === "customer" || /currenc/i.test(error.message));
+      const info = stripeErrorInfo(error);
+      const customerRejected = info.status === 400 && input.customerId &&
+        (info.param === "customer" || /currenc/i.test((error as Error).message));
       if (!customerRejected) throw error;
-      session = await stripeRequest("POST", "/checkout/sessions", checkoutParams({ ...input, customerId: null }));
+      session = await sessions.create(checkoutParams({ ...input, customerId: null }));
     }
 
     if (!session.url) return errorJson(API_ERROR_CODES.paymentError, 502);
@@ -91,7 +92,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error("[billing] checkout failed", {
       ...safeErrorMetadata(error),
-      ...(error instanceof StripeApiError ? { status: error.status, stripeCode: error.code, stripeParam: error.param } : {}),
+      ...stripeErrorInfo(error),
     });
     return errorJson(API_ERROR_CODES.paymentError, 502);
   }

@@ -3,7 +3,7 @@ import { API_ERROR_CODES } from "@/lib/apiErrors";
 import { getStripeCustomerId } from "@/lib/billing";
 import { errorJson, privateJson, sessionUser } from "@/lib/billingHttp";
 import { safeErrorMetadata } from "@/lib/safeServerLog";
-import { appOrigin, StripeApiError, stripeRequest, stripeSecretKey } from "@/lib/stripe";
+import { appOrigin, requireStripe, stripeErrorInfo, stripeSecretKey } from "@/lib/stripe";
 
 export const runtime = "nodejs";
 
@@ -20,22 +20,17 @@ export async function POST(request: NextRequest) {
     const customerId = await getStripeCustomerId(user.id);
     if (!customerId) return errorJson(API_ERROR_CODES.noSubscription, 404);
 
-    const params = new URLSearchParams();
-    params.set("customer", customerId);
-    params.set("return_url", `${origin}/account`);
-    params.set("locale", body.lang === "en" ? "en" : "zh");
-
-    const session = await stripeRequest<{ url?: string | null }>("POST", "/billing_portal/sessions", params);
+    const session = await requireStripe().billingPortal.sessions.create({
+      customer: customerId,
+      return_url: `${origin}/account`,
+      locale: body.lang === "en" ? "en" : "zh",
+    });
     if (!session.url) return errorJson(API_ERROR_CODES.paymentError, 502);
     return privateJson({ url: session.url });
   } catch (error) {
-    if (error instanceof StripeApiError && error.code === "resource_missing" && error.param === "customer") {
-      return errorJson(API_ERROR_CODES.noSubscription, 404);
-    }
-    console.error("[billing] portal failed", {
-      ...safeErrorMetadata(error),
-      ...(error instanceof StripeApiError ? { status: error.status, stripeCode: error.code, stripeParam: error.param } : {}),
-    });
+    const info = stripeErrorInfo(error);
+    if (info.code === "resource_missing" && info.param === "customer") return errorJson(API_ERROR_CODES.noSubscription, 404);
+    console.error("[billing] portal failed", { ...safeErrorMetadata(error), ...info });
     return errorJson(API_ERROR_CODES.paymentError, 502);
   }
 }

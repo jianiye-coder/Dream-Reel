@@ -1,7 +1,12 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 import { Pool } from "pg";
-import { signStripePayload } from "@/lib/stripe";
+import Stripe from "stripe";
+
+// signed exactly like Stripe does, by the SDK's own test helper
+const signer = new Stripe("sk_test_signer").webhooks;
+const signStripePayload = (payload: string, secret: string, timestamp?: number) =>
+  signer.generateTestHeaderString({ payload, secret, ...(timestamp ? { timestamp } : {}) });
 
 /* Signed fake Stripe events go through the real webhook route into PostgreSQL; only
    api.stripe.com is faked (fetch), and only the subscription that the route reads back. */
@@ -61,7 +66,8 @@ databaseDescribe("Stripe webhook → Plus in PostgreSQL", () => {
       const id = invoice[1];
       const override = invoiceOverrides.get(id);
       if (override && "error" in override) return new Response(JSON.stringify({ error: override.error }), { status: Number(override.status ?? 400) });
-      const expanded = new URL(url).searchParams.get("expand[]") === "payments";
+      // the SDK sends expand[0]=payments
+      const expanded = [...new URL(url).searchParams].some(([key, value]) => key.startsWith("expand[") && value === "payments");
       return new Response(JSON.stringify({
         id, object: "invoice", billing_reason: "subscription_create", amount_paid: id.includes("trial") ? 0 : 1299,
         ...(expanded ? { payments: { object: "list", data: [{ object: "invoice_payment", status: "paid", payment: { type: "payment_intent", payment_intent: `pi_for_${id}` } }] } } : {}),
@@ -589,15 +595,6 @@ databaseDescribe("Stripe webhook → Plus in PostgreSQL", () => {
       expect(callsTo("DELETE", `/subscriptions/${current.subscription}`)).toHaveLength(1);
     });
 
-    it("finds the invoice on the charge in older API shapes", async () => {
-      vi.spyOn(console, "warn").mockImplementation(() => undefined);
-      stripeSubscriptions.set(current.subscription, subscription("active"));
-      await deliver(checkoutCompleted());
-      invoiceOverrides.set("in_legacy", { subscription: current.subscription });
-      await deliver(event("charge.refunded", refundedCharge({ invoice: "in_legacy", payment_intent: null })));
-      expect(await plan()).toBe("free");
-    });
-
     it("leaves the subscription alone for a partial refund or a one-off charge", async () => {
       stripeSubscriptions.set(current.subscription, subscription("active"));
       await deliver(checkoutCompleted());
@@ -647,7 +644,7 @@ databaseDescribe("Stripe webhook → Plus in PostgreSQL", () => {
     await deliver(checkoutCompleted());
     expect(fetchMock).toHaveBeenCalled();
     for (const [, init] of fetchMock.mock.calls) {
-      expect(new Headers(init?.headers).get("Stripe-Version")).toBe("2025-03-31.basil");
+      expect(new Headers(init?.headers as HeadersInit).get("Stripe-Version")).toBe("2026-08-26.dahlia");
     }
   });
 
