@@ -59,7 +59,7 @@ jobs:
       LC_ALL: C
       # keep these identical in quality-sweep.yml (and the list in .github/quality-sweep-prompt.md)
       ALLOWED: '^(src/|docs/|tests/unit/)'
-      PROTECTED: '^(src/app/api/|src/lib/billing\.ts$|src/lib/stripe\.ts$|src/lib/dreams\.ts$|src/lib/safeServerLog\.ts$|src/lib/email\.ts$|src/lib/session\.ts$|src/lib/authRateLimit\.ts$|src/lib/db\.ts$|src/lib/dreamTextEncryption\.ts$|src/auth|src/middleware|src/proxy|src/instrumentation|src/types/next-auth\.d\.ts$|tests/unit/i18n-keys\.test\.ts$|docs/golden-principles\.md$)|(^|/)route\.[jt]sx?$|(^|/)actions?\.[jt]sx?$|(^|/)\.|migration'
+      PROTECTED: '^(src/app/api/|src/lib/billing\.ts$|src/lib/stripe\.ts$|src/lib/dreams\.ts$|src/lib/safeServerLog\.ts$|src/lib/email\.ts$|src/lib/session\.ts$|src/lib/authRateLimit\.ts$|src/lib/db\.ts$|src/lib/dreamTextEncryption\.ts$|src/auth|src/middleware|src/proxy|src/instrumentation|src/types/next-auth\.d\.ts$|tests/unit/i18n-keys\.test\.ts$|docs/golden-principles\.md$)|(^|/)route\.[jt]sx?$|(^|/)actions?\.[jt]sx?$|(^|/)\.|(^|/)(CLAUDE|AGENTS)\.md$|(^|/)package(-lock)?\.json$|migration'
       SAFE_PATH: '^[]A-Za-z0-9._/()+@[-]+$'
       MAX_CHANGED_LINES: 150
       MAX_CHANGED_FILES: 10

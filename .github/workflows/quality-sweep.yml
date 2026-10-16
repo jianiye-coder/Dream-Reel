@@ -4,11 +4,13 @@ name: Quality sweep
 # small fix (or draft an issue when the fix needs a protected path), and publish it as one PR labelled
 # quality-sweep. quality-automerge.yml decides whether that PR may merge itself.
 #
-# Jobs, so that no code the agent wrote ever runs next to a secret:
-# - sweep: Claude (CLAUDE_CODE_OAUTH_TOKEN; read-only job token) may only read the checkout and edit
-#   files under src/, docs/, tests/unit/ and its drafts in .quality-sweep/. It runs no commands
-#   except `git status` / `git diff`. Nothing executes after it in this job: the diff and the drafts
-#   are size-limited, scanned for secret-like strings and uploaded.
+# Jobs, so that no repository code (main's or the agent's) ever runs next to a secret:
+# - score (no secrets): skips cleanly without CLAUDE_CODE_OAUTH_TOKEN or while a sweep PR is open;
+#   otherwise runs main's `npm run quality` and hands score-main.json on as an artifact.
+# - sweep: only checkout, that artifact and the action. Claude (CLAUDE_CODE_OAUTH_TOKEN; read-only
+#   job token) may only read the checkout and edit files under src/, docs/, tests/unit/ and its
+#   drafts in .quality-sweep/; it has no shell. Afterwards git packages the diff and the drafts,
+#   size-limited and scanned for secret-like strings, and uploads them.
 # - verify: a fresh checkout with the diff applied runs lint, tsc, knip, the unit tests and the score,
 #   with no secrets and a read-only token. This is the only place the agent's code runs.
 # - publish (write token, runs no repository code): validates the diff against an allowlist, commits
@@ -33,7 +35,7 @@ concurrency:
 env:
   # keep these identical in quality-automerge.yml (and the list in .github/quality-sweep-prompt.md)
   ALLOWED: '^(src/|docs/|tests/unit/)'
-  PROTECTED: '^(src/app/api/|src/lib/billing\.ts$|src/lib/stripe\.ts$|src/lib/dreams\.ts$|src/lib/safeServerLog\.ts$|src/lib/email\.ts$|src/lib/session\.ts$|src/lib/authRateLimit\.ts$|src/lib/db\.ts$|src/lib/dreamTextEncryption\.ts$|src/auth|src/middleware|src/proxy|src/instrumentation|src/types/next-auth\.d\.ts$|tests/unit/i18n-keys\.test\.ts$|docs/golden-principles\.md$)|(^|/)route\.[jt]sx?$|(^|/)actions?\.[jt]sx?$|(^|/)\.|migration'
+  PROTECTED: '^(src/app/api/|src/lib/billing\.ts$|src/lib/stripe\.ts$|src/lib/dreams\.ts$|src/lib/safeServerLog\.ts$|src/lib/email\.ts$|src/lib/session\.ts$|src/lib/authRateLimit\.ts$|src/lib/db\.ts$|src/lib/dreamTextEncryption\.ts$|src/auth|src/middleware|src/proxy|src/instrumentation|src/types/next-auth\.d\.ts$|tests/unit/i18n-keys\.test\.ts$|docs/golden-principles\.md$)|(^|/)route\.[jt]sx?$|(^|/)actions?\.[jt]sx?$|(^|/)\.|(^|/)(CLAUDE|AGENTS)\.md$|(^|/)package(-lock)?\.json$|migration'
   # ASCII path characters Next.js routes use (letters, digits, . _ / ( ) + @ [ ] -)
   SAFE_PATH: '^[]A-Za-z0-9._/()+@[-]+$'
   SECRET_LIKE: 'sk-ant-|gh[pousr]_[A-Za-z0-9]{20,}|github_pat_|xox[abprs]-|AKIA[0-9A-Z]{16}|-----BEGIN [A-Z ]*PRIVATE KEY|CLAUDE_CODE_OAUTH_TOKEN=|x-access-token:'
@@ -41,53 +43,89 @@ env:
   MAX_CHANGED_FILES: 10
 
 jobs:
-  sweep:
+  # main's own code, with no secrets: the gate, then the score the agent starts from
+  score:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 15
     permissions:
       contents: read
       pull-requests: read
     outputs:
-      skip: ${{ steps.gate.outputs.open != '0' }}
+      skip: ${{ steps.gate.outputs.skip }}
+    steps:
+      # skip cleanly (a notice, not a failure) until the owner has added the token, and while a
+      # sweep PR is open (one at a time; saves the Claude usage)
+      - name: Gate
+        id: gate
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HAS_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN != '' }}
+        run: |
+          if [ "$GITHUB_REF" != "refs/heads/main" ]; then echo "::error::the sweep only runs on main"; exit 1; fi
+          if [ "$HAS_TOKEN" != "true" ]; then
+            echo "::notice::CLAUDE_CODE_OAUTH_TOKEN is not set; skipping the quality sweep (see README, Code quality)."
+            echo "skip=true" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          open=$(gh pr list --repo "$GITHUB_REPOSITORY" --label quality-sweep --state open --json number --jq length)
+          if [ "$open" != "0" ]; then
+            echo "::notice::A quality-sweep PR is already open; skipping today's sweep."
+            echo "skip=true" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          echo "skip=false" >> "$GITHUB_OUTPUT"
+
+      # github.sha: main as it was when this run was triggered (the gate checks the PR's parent is it)
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        if: steps.gate.outputs.skip == 'false'
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        if: steps.gate.outputs.skip == 'false'
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Score main
+        if: steps.gate.outputs.skip == 'false'
+        run: |
+          npm ci
+          npm run quality > /dev/null
+          mkdir -p "$RUNNER_TEMP/score-main"
+          cp quality/score.json "$RUNNER_TEMP/score-main/score-main.json"
+          cat quality/REPORT.md >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: steps.gate.outputs.skip == 'false'
+        with:
+          name: quality-score-main
+          path: ${{ runner.temp }}/score-main/
+          retention-days: 3
+
+  # Only checkout, the score file and the action: no setup-node, no npm, no repository code runs in
+  # this job, so nothing can be waiting for the agent's secrets.
+  sweep:
+    needs: score
+    if: needs.score.outputs.skip == 'false'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    outputs:
       changed: ${{ steps.package.outputs.changed }}
       main_sha: ${{ github.sha }}
     steps:
-      # github.sha: main as it was when this run was triggered (the gate checks the PR's parent is it)
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
 
-      # one sweep PR at a time: skip the whole run (and the Claude usage) while one is open
-      - name: Look for an open sweep PR
-        id: gate
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          if [ "$GITHUB_REF" != "refs/heads/main" ]; then echo "::error::the sweep only runs on main"; exit 1; fi
-          open=$(gh pr list --repo "$GITHUB_REPOSITORY" --label quality-sweep --state open --json number --jq length)
-          echo "open=$open" >> "$GITHUB_OUTPUT"
-          if [ "$open" != "0" ]; then
-            echo "A quality-sweep PR is already open; skipping today's sweep." >> "$GITHUB_STEP_SUMMARY"
-          fi
-
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
-        if: steps.gate.outputs.open == '0'
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
-          node-version: 22
-          cache: npm
-
-      # main's own code, before the agent touches anything
-      - name: Score main
-        if: steps.gate.outputs.open == '0'
-        run: |
-          npm ci
-          npm run quality > /dev/null
-          cp quality/score.json quality/score-main.json
-          cat quality/REPORT.md >> "$GITHUB_STEP_SUMMARY"
+          name: quality-score-main
+          path: quality
 
       - name: Build the prompt
-        if: steps.gate.outputs.open == '0'
         id: prompt
         run: |
           {
@@ -98,9 +136,8 @@ jobs:
             echo "QUALITY_SWEEP_PROMPT"
           } >> "$GITHUB_OUTPUT"
 
-      # Read and edit only, inside the checkout; the only commands are `git status` and `git diff`.
+      # Read and edit only, inside the checkout; no shell at all.
       - name: Sweep
-        if: steps.gate.outputs.open == '0'
         uses: anthropics/claude-code-action@374f254f5efaf968abfe15d399fd90972e8138b9 # v1.0.251
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
@@ -109,13 +146,12 @@ jobs:
           prompt: ${{ steps.prompt.outputs.text }}
           claude_args: |
             --max-turns 80
-            --allowedTools "Read(./**),Glob,Grep,Edit(src/**),Edit(docs/**),Edit(tests/unit/**),Edit(.quality-sweep/**),Bash(git status),Bash(git diff)"
-            --disallowedTools "Read(.git/**),Read(//proc/**),Read(//sys/**),Read(~/**),Read(//tmp/**),Read(//home/**),WebFetch,WebSearch,Task,Bash(npm:*),Bash(npx:*),Bash(node:*),Bash(git push:*),Bash(git commit:*),Bash(git config:*),Bash(gh:*),Bash(curl:*),Bash(wget:*)"
+            --allowedTools "Read(./**),Glob,Grep,Edit(src/**),Edit(docs/**),Edit(tests/unit/**),Edit(.quality-sweep/**)"
+            --disallowedTools "Bash,Read(.git/**),Read(//proc/**),Read(//sys/**),Read(~/**),Read(//tmp/**),Read(//home/**),WebFetch,WebSearch,Task,NotebookEdit"
 
       # No code runs from here on in this job. Package the diff and the drafts, size-limited and
       # scanned for anything that looks like a secret (artifacts of a public repo are public).
       - name: Package the result
-        if: steps.gate.outputs.open == '0'
         id: package
         run: |
           set -euo pipefail
@@ -141,7 +177,6 @@ jobs:
           fi
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        if: steps.gate.outputs.open == '0'
         with:
           name: quality-sweep
           path: sweep-out/
@@ -165,10 +200,10 @@ jobs:
           name: quality-sweep
           path: ${{ runner.temp }}/sweep-out
 
+      # no npm cache here: the agent's code runs in this job and must not be able to poison it
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
-          cache: npm
 
       # the agent's code runs here only: no secrets, no write token
       - name: Lint, typecheck, knip, unit tests, score
@@ -194,7 +229,7 @@ jobs:
   publish:
     needs: [sweep, verify]
     if: >-
-      always() && needs.sweep.result == 'success' && needs.sweep.outputs.skip != 'true' &&
+      always() && needs.sweep.result == 'success' &&
       (needs.verify.result == 'success' || (needs.verify.result == 'skipped' && needs.sweep.outputs.changed != 'true'))
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -318,8 +353,8 @@ jobs:
   # through auto-merge): main must not have been force-pushed, and every commit that reached it since
   # the run started must belong to a merged PR.
   main-guard:
-    needs: [sweep, verify, publish]
-    if: always()
+    needs: [score, sweep, verify, publish]
+    if: always() && needs.score.outputs.skip == 'false'
     runs-on: ubuntu-latest
     permissions:
       contents: read

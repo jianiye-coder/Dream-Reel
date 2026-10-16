@@ -125,8 +125,8 @@ rarely shows up in a click-through.
 `src/app/api/user/**`) or dream-text encryption ships with a unit or
 integration test that exercises it. The automated sweep may only touch
 `src/`, `docs/` and new files in `tests/unit/`, and within those never these
-paths, API routes and server entry points, data and privacy modules or the
-gates: see `.github/quality-sweep-prompt.md` and the `ALLOWED` / `PROTECTED`
+paths, API routes and server entry points, data and privacy modules, any
+`package.json` / `package-lock.json`, `CLAUDE.md` / `AGENTS.md` or the gates: see `.github/quality-sweep-prompt.md` and the `ALLOWED` / `PROTECTED`
 patterns, kept identical, in `.github/workflows/quality-sweep.yml` and
 `quality-automerge.yml`.
 
