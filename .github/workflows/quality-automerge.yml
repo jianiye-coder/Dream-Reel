@@ -1,0 +1,90 @@
+name: Quality sweep auto-merge
+
+# Lets a quality-sweep PR merge itself when it is small and safe: opened by the Claude GitHub App,
+# every commit by claude[bot], at most 150 changed lines, nothing under a protected path. Then it
+# enables auto-merge (squash); GitHub merges only after the required checks pass, so the owner must
+# turn on "Allow auto-merge" and protect main with the CI "verify" check required (see README).
+# Anything else gets a comment asking for human review, and auto-merge is switched off again.
+#
+# Never checks out or runs the PR's code: it only reads the PR through the API.
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, labeled]
+
+permissions:
+  contents: read
+
+jobs:
+  gate:
+    if: contains(github.event.pull_request.labels.*.name, 'quality-sweep')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPO: ${{ github.repository }}
+      PR: ${{ github.event.pull_request.number }}
+      AUTHOR: ${{ github.event.pull_request.user.login }}
+      AUTHOR_TYPE: ${{ github.event.pull_request.user.type }}
+      HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+      BASE_REF: ${{ github.event.pull_request.base.ref }}
+      EXPECTED_AUTHOR: claude[bot]
+      MAX_CHANGED_LINES: 150
+      # keep in sync with .github/quality-sweep-prompt.md
+      PROTECTED: '^(src/app/api/billing/|src/lib/billing\.ts$|src/lib/stripe\.ts$|src/auth[^/]*\.ts$|src/middleware\.ts$|src/lib/db\.ts$|src/lib/dreamTextEncryption\.ts$|\.github/|package\.json$|package-lock\.json$|scripts/quality\.mjs$|quality/|knip\.json$|tsconfig\.json$|eslint\.config\.mjs$|docs/golden-principles\.md$)|migration'
+    steps:
+      - name: Check the PR
+        id: check
+        run: |
+          set -euo pipefail
+          reasons=()
+
+          [ "$AUTHOR" = "$EXPECTED_AUTHOR" ] && [ "$AUTHOR_TYPE" = "Bot" ] \
+            || reasons+=("opened by \`$AUTHOR\` ($AUTHOR_TYPE), not \`$EXPECTED_AUTHOR\`")
+          [ "$HEAD_REPO" = "$REPO" ] || reasons+=("comes from a fork (\`$HEAD_REPO\`)")
+          [ "$BASE_REF" = "main" ] || reasons+=("targets \`$BASE_REF\`, not \`main\`")
+
+          others=$(gh api --paginate "repos/$REPO/pulls/$PR/commits" --jq '.[].commit.author.name' | grep -vxF "$EXPECTED_AUTHOR" | sort -u | paste -sd, - || true)
+          [ -z "$others" ] || reasons+=("has commits by someone else: $others")
+
+          changed=$(gh pr view "$PR" --repo "$REPO" --json additions,deletions --jq '.additions + .deletions')
+          [ "$changed" -le "$MAX_CHANGED_LINES" ] || reasons+=("changes $changed lines (limit $MAX_CHANGED_LINES)")
+
+          files=$(gh api --paginate "repos/$REPO/pulls/$PR/files" --jq '.[] | .filename, (.previous_filename // empty)')
+          protected=$(grep -E "$PROTECTED" <<<"$files" | sort -u | paste -sd, - || true)
+          [ -z "$protected" ] || reasons+=("touches protected paths: $protected")
+
+          if [ ${#reasons[@]} -eq 0 ]; then
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+            {
+              echo "reasons<<REASONS"
+              printf -- '- %s\n' "${reasons[@]}"
+              echo "REASONS"
+            } >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Enable auto-merge
+        if: steps.check.outputs.ok == 'true'
+        run: gh pr merge "$PR" --repo "$REPO" --auto --squash
+
+      - name: Ask for human review
+        if: steps.check.outputs.ok == 'false'
+        env:
+          REASONS: ${{ steps.check.outputs.reasons }}
+        run: |
+          gh pr merge "$PR" --repo "$REPO" --disable-auto 2>/dev/null || true
+          marker='<!-- quality-automerge -->'
+          body="$marker
+          This quality-sweep PR needs a human review before it merges; auto-merge is off because it:
+
+          $REASONS"
+          existing=$(gh api --paginate "repos/$REPO/issues/$PR/comments" --jq ".[] | select(.body | startswith(\"$marker\")) | .id" | head -n1)
+          if [ -n "$existing" ]; then
+            gh api --method PATCH "repos/$REPO/issues/comments/$existing" -f body="$body" > /dev/null
+          else
+            gh pr comment "$PR" --repo "$REPO" --body "$body"
+          fi
