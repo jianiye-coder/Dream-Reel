@@ -181,3 +181,6 @@ configured they show a quiet mono "Plus 即将开放 / Plus is coming soon" (plu
 pencilled line on pricing and account), never a button that errors. Coming
 back from Stripe, `?upgraded=1` and `?billing=cancelled` become a calm green
 `nb-msg` (a desk slip on the journal) and are removed from the address bar.
+Only the two configured Plus prices grant Plus, so the customer portal must not
+offer plan switching. Plus dream entries are "unlimited" (a 9999 cap in
+`billing.ts`); the library card shows 不限 / unlimited, never the number.

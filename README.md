@@ -112,15 +112,15 @@ Image prompts are assembled from dream content and structured fields in `src/lib
 
 ### Payments (Stripe)
 
-Stripe is called over its REST API with `fetch` (`src/lib/stripe.ts`); there is no SDK. Until **all four** of these are set, `/api/billing/status` reports `checkoutAvailable: false`, every upgrade button shows "Plus 即将开放 / Plus is coming soon", and checkout answers `503 BILLING_UNAVAILABLE`. No setting name ever reaches the browser.
+Stripe is called over its REST API with `fetch` (`src/lib/stripe.ts`); there is no SDK. Every call pins `Stripe-Version: 2025-03-31.basil` (`STRIPE_API_VERSION`), so the response shapes the code reads don't follow the account's default version; change it only together with the parsing in `stripe.ts`. Until **all four** of these are set (and, in production, `NEXT_PUBLIC_APP_URL`), `/api/billing/status` reports `checkoutAvailable: false`, every upgrade button shows "Plus 即将开放 / Plus is coming soon", and checkout answers `503 BILLING_UNAVAILABLE`. No setting name ever reaches the browser.
 
 | Variable | Value |
 | --- | --- |
-| `STRIPE_SECRET_KEY` | Secret key (`sk_live_…`, or `sk_test_…` for test mode). A restricted key needs write access to Checkout Sessions and Customer portal, and read access to Subscriptions |
+| `STRIPE_SECRET_KEY` | Secret key (`sk_live_…`, or `sk_test_…` for test mode). A restricted key needs write access to Checkout Sessions, Customer portal, Subscriptions and Refunds, and read access to Invoices |
 | `STRIPE_PLUS_PRICE_ID_CNY` | Price for Chinese pages: recurring, monthly, CNY 12.99 |
 | `STRIPE_PLUS_PRICE_ID_USD` | Price for English pages: recurring, monthly, USD 1.99 |
 | `STRIPE_WEBHOOK_SECRET` | Signing secret (`whsec_…`) of the webhook endpoint below |
-| `NEXT_PUBLIC_APP_URL` | Public origin for Stripe's return URLs, e.g. `https://dream-reel.vercel.app`. Falls back to the request origin |
+| `NEXT_PUBLIC_APP_URL` | Public origin for Stripe's return URLs, e.g. `https://dream-reel.vercel.app`. **Required in production** (the request Host header is not trusted); locally the request origin is used |
 
 Readers pay in the language they read in: `zh` gets the CNY price, `en` the USD price. A reader who already has a Stripe customer (from an earlier subscription) checks out on that customer.
 
@@ -131,9 +131,9 @@ Webhook endpoint: `https://<your domain>/api/billing/webhook`, subscribed to exa
 - `customer.subscription.updated`
 - `customer.subscription.deleted`
 
-The handler verifies the signature (raw body, 5-minute tolerance, any of several `v1` signatures), records each event id once in `payment_events` (a failed event is not recorded, so Stripe's retry runs it again), and reads the subscription back from Stripe instead of trusting event order. `active` and `trialing` mean Plus until `current_period_end`; `past_due`, `unpaid`, `incomplete`, `incomplete_expired`, `paused` and `canceled` do not. Both the item-level billing period (API `2025-03-31.basil` and later) and the older top-level fields are understood. Plan limits and usage periods are defined in `src/lib/billing.ts`.
+The handler verifies the signature (raw body, 5-minute tolerance, any of several `v1` signatures), records each event id once in `payment_events` (a failed event is not recorded, so Stripe's retry runs it again), and reads the subscription back from Stripe instead of trusting event order. Only a subscription billing one of the two configured price ids grants Plus; any other subscription is recorded as `free` and logged by id. If a reader ends up with two active Plus subscriptions (two Checkout tabs both paid), the older one is kept and the newer one is refunded (reason `duplicate`) and cancelled immediately, idempotently. `active` and `trialing` mean Plus until `current_period_end`; `past_due`, `unpaid`, `incomplete`, `incomplete_expired`, `paused` and `canceled` do not. Both the item-level billing period (API `2025-03-31.basil` and later) and the older top-level fields are understood. Plan limits and usage periods are defined in `src/lib/billing.ts`.
 
-Readers manage and cancel in the Stripe customer portal (Account → Manage Subscription), which needs a saved portal configuration in **both** test and live mode. Stripe also asks for the policy pages at `/terms`, `/privacy` and `/refund` before activation. Their text is a draft the owner must review.
+Readers manage and cancel in the Stripe customer portal (Account → Manage Subscription), which needs a saved portal configuration in **both** test and live mode. **Turn plan switching (and quantity changes) off** in the portal: a reader switched to any other price would lose Plus, and there is nothing else to switch to. Stripe also asks for the policy pages at `/terms`, `/privacy` and `/refund` before activation. Their text is a draft the owner must review.
 
 Local check with the Stripe CLI: `stripe listen --forward-to localhost:3000/api/billing/webhook` prints a `whsec_…` for `STRIPE_WEBHOOK_SECRET`.
 
