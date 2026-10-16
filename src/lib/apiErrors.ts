@@ -11,6 +11,10 @@ export const API_ERROR_CODES = {
   invalidResponse: "INVALID_RESPONSE",
   notFound: "NOT_FOUND",
   internalError: "INTERNAL_ERROR",
+  billingUnavailable: "BILLING_UNAVAILABLE",
+  paymentError: "PAYMENT_ERROR",
+  noSubscription: "NO_SUBSCRIPTION",
+  alreadySubscribed: "ALREADY_SUBSCRIBED",
 } as const;
 
 export type ApiErrorCode = typeof API_ERROR_CODES[keyof typeof API_ERROR_CODES];
@@ -26,6 +30,10 @@ const messages: Record<ApiErrorCode, Record<Lang, string>> = {
   INVALID_RESPONSE: { zh: "服务返回了无法解析的结果，请重试。", en: "The service returned an invalid response. Please try again." },
   NOT_FOUND: { zh: "没有找到对应记录。", en: "The requested record was not found." },
   INTERNAL_ERROR: { zh: "服务暂时出现错误，请稍后重试。", en: "Something went wrong. Please try again." },
+  BILLING_UNAVAILABLE: { zh: "Plus 即将开放，现在可以先免费使用。", en: "Plus is coming soon. Everything in Free works in the meantime." },
+  PAYMENT_ERROR: { zh: "付款页面暂时打不开，请稍后再试。没有产生任何扣款。", en: "The payment page couldn’t open. Nothing was charged. Please try again shortly." },
+  NO_SUBSCRIPTION: { zh: "还没有可以管理的订阅。", en: "There’s no subscription to manage yet." },
+  ALREADY_SUBSCRIBED: { zh: "你已经有一份订阅了，可以在“管理订阅”里查看。", en: "You already have a subscription. You can review it under Manage subscription." },
 };
 
 export function getApiErrorMessage(

@@ -1,78 +1,96 @@
-import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/auth";
+import { NextRequest } from "next/server";
+import { API_ERROR_CODES } from "@/lib/apiErrors";
+import { getBillingStatus, getStripeCustomerId } from "@/lib/billing";
+import { errorJson, privateJson, returnPage, sessionUser } from "@/lib/billingHttp";
+import { safeErrorMetadata } from "@/lib/safeServerLog";
+import {
+  appOrigin,
+  isCheckoutConfigured,
+  plusPriceId,
+  StripeApiError,
+  stripeRequest,
+  type BillingLang,
+} from "@/lib/stripe";
 
 export const runtime = "nodejs";
 
-function parseUserId(id: string | undefined) {
-  if (!id) return null;
-  const value = Number(id);
-  return Number.isFinite(value) ? value : null;
-}
+// a subscription in these states is still the reader's: send them to the portal, not to a second checkout
+const OPEN_SUBSCRIPTION_STATUSES = new Set(["past_due", "unpaid"]);
 
-function getOrigin(request: NextRequest) {
-  return process.env.NEXT_PUBLIC_APP_URL || request.nextUrl.origin;
+function checkoutParams(input: {
+  userId: number;
+  email: string | null;
+  customerId: string | null;
+  priceId: string;
+  lang: BillingLang;
+  origin: string;
+  from: string;
+}) {
+  const params = new URLSearchParams();
+  params.set("mode", "subscription");
+  params.set("line_items[0][price]", input.priceId);
+  params.set("line_items[0][quantity]", "1");
+  params.set("success_url", `${input.origin}${input.from}?upgraded=1`);
+  params.set("cancel_url", `${input.origin}${input.from}?billing=cancelled`);
+  params.set("client_reference_id", String(input.userId));
+  params.set("locale", input.lang);
+  params.set("metadata[user_id]", String(input.userId));
+  params.set("metadata[plan]", "plus");
+  params.set("subscription_data[metadata][user_id]", String(input.userId));
+  params.set("subscription_data[metadata][plan]", "plus");
+  // Payment methods come from the Dashboard (dynamic payment methods); Checkout has no
+  // automatic_payment_methods parameter. In subscription mode Checkout creates the customer
+  // itself, so only an existing one is passed.
+  if (input.customerId) params.set("customer", input.customerId);
+  else if (input.email) params.set("customer_email", input.email);
+  return params;
 }
 
 export async function POST(request: NextRequest) {
-  const session = await auth() as { user?: { id?: string; email?: string | null } } | null;
-  const userId = parseUserId(session?.user?.id);
-  if (!userId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const user = await sessionUser();
+  if (!user) return errorJson(API_ERROR_CODES.unauthorized, 401);
+
+  if (!isCheckoutConfigured()) return errorJson(API_ERROR_CODES.billingUnavailable, 503);
+
+  const body = await request.json().catch(() => ({})) as { lang?: unknown; from?: unknown };
+  const lang: BillingLang = body.lang === "en" ? "en" : "zh";
+  const priceId = plusPriceId(lang);
+  if (!priceId) return errorJson(API_ERROR_CODES.billingUnavailable, 503);
+
+  try {
+    const status = await getBillingStatus(user.id);
+    if (!status.isUnlimited && (status.plan === "plus" || OPEN_SUBSCRIPTION_STATUSES.has(status.subscriptionStatus ?? ""))) {
+      return errorJson(API_ERROR_CODES.alreadySubscribed, 409);
+    }
+
+    const input = {
+      userId: user.id,
+      email: user.email,
+      customerId: await getStripeCustomerId(user.id),
+      priceId,
+      lang,
+      origin: appOrigin(request.nextUrl.origin),
+      from: returnPage(body.from),
+    };
+
+    let session: { url?: string | null };
+    try {
+      session = await stripeRequest("POST", "/checkout/sessions", checkoutParams(input));
+    } catch (error) {
+      // the stored customer was deleted in the Dashboard: let Checkout create a fresh one
+      if (!(error instanceof StripeApiError && error.code === "resource_missing" && error.param === "customer" && input.customerId)) {
+        throw error;
+      }
+      session = await stripeRequest("POST", "/checkout/sessions", checkoutParams({ ...input, customerId: null }));
+    }
+
+    if (!session.url) return errorJson(API_ERROR_CODES.paymentError, 502);
+    return privateJson({ url: session.url });
+  } catch (error) {
+    console.error("[billing] checkout failed", {
+      ...safeErrorMetadata(error),
+      ...(error instanceof StripeApiError ? { status: error.status, stripeCode: error.code } : {}),
+    });
+    return errorJson(API_ERROR_CODES.paymentError, 502);
   }
-
-  const apiKey = process.env.STRIPE_SECRET_KEY;
-  if (!apiKey) {
-    return NextResponse.json({ error: "缺少 STRIPE_SECRET_KEY，暂时无法开启订阅。" }, { status: 500 });
-  }
-
-  const body = await request.json().catch(() => ({})) as { currency?: string; lang?: "zh" | "en" };
-  const useCny = body.currency === "cny" || body.lang === "zh";
-  const priceId = useCny
-    ? process.env.STRIPE_PLUS_PRICE_ID_CNY
-    : process.env.STRIPE_PLUS_PRICE_ID_USD;
-  const fallbackPriceId = process.env.STRIPE_PLUS_PRICE_ID_USD || process.env.STRIPE_PLUS_PRICE_ID_CNY;
-
-  if (!priceId && !fallbackPriceId) {
-    return NextResponse.json(
-      { error: "缺少 Stripe Plus price id，请配置 STRIPE_PLUS_PRICE_ID_USD 或 STRIPE_PLUS_PRICE_ID_CNY。" },
-      { status: 500 },
-    );
-  }
-
-  const origin = getOrigin(request);
-  const params = new URLSearchParams();
-  params.set("mode", "subscription");
-  params.set("line_items[0][price]", priceId || fallbackPriceId || "");
-  params.set("line_items[0][quantity]", "1");
-  params.set("success_url", `${origin}/journal?upgraded=1`);
-  params.set("cancel_url", `${origin}/?billing=cancelled`);
-  params.set("client_reference_id", String(userId));
-  params.set("locale", body.lang === "en" ? "en" : "zh");
-  params.set("automatic_payment_methods[enabled]", "true");
-  params.set("metadata[user_id]", String(userId));
-  params.set("metadata[plan]", "plus");
-  params.set("subscription_data[metadata][user_id]", String(userId));
-  params.set("subscription_data[metadata][plan]", "plus");
-  if (session?.user?.email) {
-    params.set("customer_email", session.user.email);
-  }
-
-  const stripeResponse = await fetch("https://api.stripe.com/v1/checkout/sessions", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/x-www-form-urlencoded",
-    },
-    body: params,
-  });
-
-  const payload = (await stripeResponse.json()) as { url?: string; error?: { message?: string } };
-  if (!stripeResponse.ok || !payload.url) {
-    return NextResponse.json(
-      { error: payload.error?.message || "Stripe Checkout 创建失败。" },
-      { status: 502 },
-    );
-  }
-
-  return NextResponse.json({ url: payload.url });
 }

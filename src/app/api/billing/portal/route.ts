@@ -1,53 +1,37 @@
-import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/auth";
+import { NextRequest } from "next/server";
+import { API_ERROR_CODES } from "@/lib/apiErrors";
 import { getStripeCustomerId } from "@/lib/billing";
+import { errorJson, privateJson, sessionUser } from "@/lib/billingHttp";
+import { safeErrorMetadata } from "@/lib/safeServerLog";
+import { appOrigin, StripeApiError, stripeRequest, stripeSecretKey } from "@/lib/stripe";
 
 export const runtime = "nodejs";
 
-function parseUserId(id: string | undefined) {
-  if (!id) return null;
-  const value = Number(id);
-  return Number.isFinite(value) ? value : null;
-}
-
 export async function POST(request: NextRequest) {
-  const session = await auth() as { user?: { id?: string } } | null;
-  const userId = parseUserId(session?.user?.id);
-  if (!userId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const user = await sessionUser();
+  if (!user) return errorJson(API_ERROR_CODES.unauthorized, 401);
+
+  if (!stripeSecretKey()) return errorJson(API_ERROR_CODES.billingUnavailable, 503);
+
+  const body = await request.json().catch(() => ({})) as { lang?: unknown };
+
+  try {
+    const customerId = await getStripeCustomerId(user.id);
+    if (!customerId) return errorJson(API_ERROR_CODES.noSubscription, 404);
+
+    const params = new URLSearchParams();
+    params.set("customer", customerId);
+    params.set("return_url", `${appOrigin(request.nextUrl.origin)}/account`);
+    params.set("locale", body.lang === "en" ? "en" : "zh");
+
+    const session = await stripeRequest<{ url?: string | null }>("POST", "/billing_portal/sessions", params);
+    if (!session.url) return errorJson(API_ERROR_CODES.paymentError, 502);
+    return privateJson({ url: session.url });
+  } catch (error) {
+    console.error("[billing] portal failed", {
+      ...safeErrorMetadata(error),
+      ...(error instanceof StripeApiError ? { status: error.status, stripeCode: error.code } : {}),
+    });
+    return errorJson(API_ERROR_CODES.paymentError, 502);
   }
-
-  const apiKey = process.env.STRIPE_SECRET_KEY;
-  if (!apiKey) {
-    return NextResponse.json({ error: "缺少 STRIPE_SECRET_KEY。" }, { status: 500 });
-  }
-
-  const customerId = await getStripeCustomerId(userId);
-  if (!customerId) {
-    return NextResponse.json({ error: "还没有可管理的订阅。" }, { status: 400 });
-  }
-
-  const origin = process.env.NEXT_PUBLIC_APP_URL || request.nextUrl.origin;
-  const params = new URLSearchParams();
-  params.set("customer", customerId);
-  params.set("return_url", `${origin}/archive`);
-
-  const stripeResponse = await fetch("https://api.stripe.com/v1/billing_portal/sessions", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/x-www-form-urlencoded",
-    },
-    body: params,
-  });
-
-  const payload = (await stripeResponse.json()) as { url?: string; error?: { message?: string } };
-  if (!stripeResponse.ok || !payload.url) {
-    return NextResponse.json(
-      { error: payload.error?.message || "Stripe Portal 创建失败。" },
-      { status: 502 },
-    );
-  }
-
-  return NextResponse.json({ url: payload.url });
 }
