@@ -6,7 +6,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import css from "./legal.module.css";
 
 // the same address as the landing page footer
-export const CONTACT_EMAIL = "yejiani0831@gmail.com";
+const CONTACT_EMAIL = "yejiani0831@gmail.com";
 
 export type LegalDocId = "terms" | "privacy" | "refund";
 

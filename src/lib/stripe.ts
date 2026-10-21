@@ -65,7 +65,7 @@ export function plusPriceId(lang: BillingLang): string | null {
  * Prices that grant Plus: the two current ones plus STRIPE_PLUS_PRICE_IDS_LEGACY (comma list).
  * When a price id changes, move the old id to the legacy list, or existing payers lose Plus.
  */
-export function plusPriceIds(env: Env = process.env): Set<string> {
+function plusPriceIds(env: Env = process.env): Set<string> {
   const ids = [env.STRIPE_PLUS_PRICE_ID_USD, env.STRIPE_PLUS_PRICE_ID_CNY, ...(env.STRIPE_PLUS_PRICE_IDS_LEGACY ?? "").split(",")];
   return new Set(ids.map((id) => id?.trim()).filter((id): id is string => Boolean(id)));
 }
