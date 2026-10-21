@@ -23,7 +23,7 @@ export type ClientBillingStatus = {
 };
 
 /** Plus dream entries are "unlimited", stored as a 9999 cap (PLAN_LIMITS in billing.ts); never show the number. */
-export const UNLIMITED_QUOTA = 9999;
+const UNLIMITED_QUOTA = 9999;
 export const isUnlimitedQuota = (status: Pick<ClientBillingStatus, "isUnlimited" | "limits">, key: keyof Quota) =>
   status.isUnlimited || status.limits[key] >= UNLIMITED_QUOTA;
 
