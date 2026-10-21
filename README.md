@@ -108,11 +108,63 @@ Image prompts are assembled from dream content and structured fields in `src/lib
 | `DREAM_AGENT_GUARDED_PERCENT` | Guarded recall-policy canary allocation; defaults to `0` |
 | `ADMIN_EMAIL` | Access to administrator credit and agent-feedback endpoints |
 | `ADMIN_UNLIMITED_EMAILS` | Comma-separated accounts exempt from quotas; set explicitly rather than relying on the creator-account default in `billing.ts` |
-| `STRIPE_SECRET_KEY` | Stripe checkout and customer portal |
-| `STRIPE_PLUS_PRICE_ID_USD`, `STRIPE_PLUS_PRICE_ID_CNY` | Plus subscription price IDs; checkout falls back to the other configured currency price if one is absent |
-| `STRIPE_WEBHOOK_SECRET` | Signature verification for `/api/billing/webhook` |
+| `STRIPE_SECRET_KEY`, `STRIPE_PLUS_PRICE_ID_USD`, `STRIPE_PLUS_PRICE_ID_CNY`, `STRIPE_WEBHOOK_SECRET` | Plus subscriptions; see [Payments (Stripe)](#payments-stripe). All four or none |
 
-Subscription handling supports `checkout.session.completed` and `customer.subscription.created`, `.updated`, and `.deleted`. Webhook processing is transactional and deduplicates committed events. Plan limits and usage periods are defined in `src/lib/billing.ts`.
+### Payments (Stripe)
+
+Stripe is called through the official Node SDK (`stripe`, pinned exactly), one client created lazily in `src/lib/stripe.ts`. The client pins API version `2026-08-26.dahlia` (`STRIPE_API_VERSION`), so the response shapes the code reads don't follow the account's default version; change it only together with the parsing in `stripe.ts`, after reading the [changelog](https://docs.stripe.com/changelog). Create the webhook endpoint on the same API version. Until **all four** of these are set (and, in production, `NEXT_PUBLIC_APP_URL`), `/api/billing/status` reports `checkoutAvailable: false`, every upgrade button shows "Plus 即将开放 / Plus is coming soon", and checkout answers `503 BILLING_UNAVAILABLE`. No setting name ever reaches the browser.
+
+| Variable | Value |
+| --- | --- |
+| `STRIPE_SECRET_KEY` | A **restricted key** (`rk_live_…` / `rk_test_…`), not the account's `sk_` secret key; see [Keys and secrets](#keys-and-secrets) |
+| `STRIPE_PLUS_PRICE_ID_CNY` | Price for Chinese pages: recurring, monthly, CNY 12.99 |
+| `STRIPE_PLUS_PRICE_ID_USD` | Price for English pages: recurring, monthly, USD 1.99 |
+| `STRIPE_WEBHOOK_SECRET` | Signing secret (`whsec_…`) of the webhook endpoint below |
+| `NEXT_PUBLIC_APP_URL` | Public origin for Stripe's return URLs, e.g. `https://dream-reel.vercel.app`. **Required in production and must be `https://`** (the request Host header is not trusted); locally the request origin is used |
+| `STRIPE_PLUS_PRICE_IDS_LEGACY` | Optional comma list of earlier Plus price ids that still grant Plus. **If you ever change a price id above, move the old one here**, or every reader still billed on it silently drops to Free at their next webhook |
+
+Readers pay in the language they read in: `zh` gets the CNY price, `en` the USD price. A reader who already has a Stripe customer (from an earlier subscription) checks out on that customer.
+
+Webhook endpoint: `https://<your domain>/api/billing/webhook`, subscribed to exactly
+
+- `checkout.session.completed`, `checkout.session.async_payment_succeeded`, `checkout.session.async_payment_failed`
+- `customer.subscription.created`, `customer.subscription.updated`, `customer.subscription.deleted`
+- `invoice.paid` (Stripe's recommended signal to provision and extend access), `invoice.payment_failed`
+- `charge.refunded`
+- `charge.dispute.created`, `radar.early_fraud_warning.created`
+
+Readers are found from Stripe ids: Checkout Session events link the new customer to the reader who opened the session (`client_reference_id`, trusted only on sessions this app created: `metadata.plan=plus` and our `integration_identifier`); every other event is mapped through the exact subscription already linked in our database, else its customer, with subscription metadata only as a fallback. A linked subscription never changes hands, and a customer linked to two readers is not guessed at; both are recorded as `needs_action`. `async_payment_succeeded` fulfils only when `payment_status` is `paid`. Subscription, invoice and checkout events all go through the same locked re-sync: the subscription (found on the invoice via `parent.subscription_details.subscription`) is read back from Stripe. A **full** refund of a subscription payment (`charge.refunded`, resolved charge → PaymentIntent → invoice payments → invoice → subscription) cancels that subscription immediately, as the refund policy says; partial refunds and one-off charges are left alone. Disputes and early fraud warnings are recorded as `needs_action` rows (ids only) for the owner.
+
+Dream Reel sends no billing emails itself. In Dashboard → Billing → Revenue recovery, turn on **Smart Retries** and Stripe's customer emails for failed payments and expiring cards (and the upcoming-renewal reminder if you want one).
+
+The handler verifies the signature (raw body, 5-minute tolerance, any of several `v1` signatures), records each event id once in `payment_events` (a failed event is not recorded, so Stripe's retry runs it again), and reads the subscription back from Stripe instead of trusting event order. Only a subscription billing one of the two configured price ids grants Plus; any other subscription is recorded as `free` and logged by id. If a reader ends up with two active Plus subscriptions (two Checkout tabs both paid), they keep the one that is paid and staying (active, no cancellation scheduled, not in trial; then the older), and the other is cancelled immediately. It is refunded (reason `duplicate`) only if the charge is its first invoice (`billing_reason=subscription_create`). Anything the code won't settle alone (a duplicate found after a renewal, a refund or cancel Stripe refuses, a payment it can't find) is still cancelled where possible, returns 2xx so later events keep flowing, and is recorded for the owner: `SELECT * FROM payment_events WHERE status = 'needs_action';`. Only transient Stripe failures (network, timeouts, 409/429, 5xx) and 401/403 make the webhook fail so Stripe retries; a 401/403 usually means the restricted key lacks a permission, so the log says so (code only) and Stripe emails the owner about the failing endpoint. `active` and `trialing` mean Plus until `current_period_end`; `past_due`, `unpaid`, `incomplete`, `incomplete_expired`, `paused` and `canceled` do not. The billing period is read from the subscription items (`items.data[].current_period_*`). Plan limits and usage periods are defined in `src/lib/billing.ts`.
+
+Readers manage and cancel in the Stripe customer portal (Account → Manage Subscription), which needs a saved portal configuration in **both** test and live mode. **Turn plan switching (and quantity changes) off** in the portal: a reader switched to any other price would lose Plus, and there is nothing else to switch to. Stripe also asks for the policy pages at `/terms`, `/privacy` and `/refund` before activation. Their text is a draft the owner must review.
+
+**Before going live, do a duplicate-refund dry run in test mode**: open Checkout in two tabs, pay both with a test card, and check that one subscription is cancelled and its payment refunded in the Dashboard (this exercises the invoice/payment shapes of your account's API version for real).
+
+Test renewals, failed renewals and cancellation at period end with **test clocks** in the sandbox (Billing → Subscriptions → Test clocks): create a customer on a clock, subscribe via Checkout, then advance the clock past the period end and watch `invoice.paid` / `invoice.payment_failed` arrive.
+
+#### Keys and secrets
+
+- **Restricted key, least privilege.** In Developers → API keys → Create restricted key, give it only what the code calls (everything else **None**):
+
+  | Resource | Access | Used for |
+  | --- | --- | --- |
+  | Checkout Sessions | Write | `checkout.sessions.create` |
+  | Customer portal | Write | `billingPortal.sessions.create` |
+  | Subscriptions | Write | `subscriptions.retrieve`, `subscriptions.cancel` (duplicates, refunded subscriptions) |
+  | Invoices | Read | `invoices.retrieve` (with `expand[]=payments`) |
+  | Invoice payments | Read | `invoicePayments.list` (charge → invoice, refund lookup) |
+  | Refunds | Write | `refunds.create` (duplicate subscriptions) |
+
+  Write includes Read. Webhook verification needs no API permission (only the signing secret). Dashboard labels can differ slightly from these names; build and exercise the key in a sandbox first and add exactly what a `403` names (for example Customers: Read if Checkout asks for it when reusing a customer), then create the live key and expire any `sk_` key in use.
+- **Vercel:** store `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET` as **Sensitive** environment variables (write-only once saved), with live values only in the Production environment.
+- **Sandboxes:** use separate [sandboxes](https://docs.stripe.com/sandboxes) rather than the shared test mode: one for local development (with `stripe listen`), one for the owner's acceptance tests (test clocks, the duplicate dry run). CI needs no Stripe key at all (every Stripe call in the test suite is mocked); if that ever changes, give CI its own sandbox and key.
+- **GitHub:** keep secret scanning and push protection on (Settings → Code security), so a pushed Stripe key is blocked or flagged. Never commit `.env*` files or paste keys into issues.
+- **Tax:** US sales tax and EU/UK VAT can apply to digital subscriptions. `automatic_tax` stays **off** on purpose: with Stripe Tax but no active registration Stripe collects nothing while it looks switched on. Before turning it on, add registrations under Tax → Registrations, then enable `automatic_tax` (and address collection) in `checkout/route.ts` together with prices set to the right tax behaviour.
+
+Local check with the Stripe CLI: `stripe listen --forward-to localhost:3000/api/billing/webhook` prints a `whsec_…` for `STRIPE_WEBHOOK_SECRET`.
 
 ### Troubleshooting
 
@@ -232,7 +284,7 @@ Next.js 16 App Router、React 19、TypeScript、纯 CSS 笔记本设计系统（
 | 独立标题接口 | 仍然只使用 OpenAI 的 `gpt-4o-mini`，需要 `OPENAI_API_KEY` |
 | 图片生成 | 配置 `FLATKEY_API_KEY` 时使用 Flatkey，否则使用 OpenAI；代码中的模型为 `gpt-image-2` |
 | 图片存储 | 公共 Vercel Blob Store；本地可配置 `BLOB_READ_WRITE_TOKEN` |
-| 订阅支付 | `STRIPE_SECRET_KEY`、Plus Price ID、`STRIPE_WEBHOOK_SECRET`，以及用于跳转的 `NEXT_PUBLIC_APP_URL` |
+| 订阅支付 | `STRIPE_SECRET_KEY`、`STRIPE_PLUS_PRICE_ID_CNY`（中文页，CNY 12.99/月）、`STRIPE_PLUS_PRICE_ID_USD`（英文页，USD 1.99/月）、`STRIPE_WEBHOOK_SECRET` 四项缺一不可，否则升级按钮显示“Plus 即将开放”；`NEXT_PUBLIC_APP_URL` 用于跳转。webhook 订阅 `checkout.session.completed` 与 `customer.subscription.created/updated/deleted`，详见上方 [Payments (Stripe)](#payments-stripe) |
 
 图片提示词会随梦境字段更新；手动编辑后，自动更新暂停，直到恢复自动填充。另需注意：图片接口收到超过 200 字符的视觉描述时，会优先使用该描述，并附加原始梦境及可选性别信息，而不是直接使用编辑框里的组装提示词。
 

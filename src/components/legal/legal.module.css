@@ -1,0 +1,39 @@
+/* ── Terms / privacy / refunds: a long, plain sheet ─────────────────────── */
+:global(.nb-root) .sheet { max-width: 46em; }
+
+:global(.nb-root) .tabs { display: flex; gap: 28px; margin-bottom: 44px; font-family: var(--mono); font-size: 11.5px; letter-spacing: .12em; }
+:global(.nb-root) .tabs a { color: var(--ink-soft); padding-bottom: 4px; border-bottom: 1px solid transparent; }
+:global(.nb-root) .tabs a:hover { border-color: var(--ink-soft); }
+:global(.nb-root) .tabs a[aria-current="page"] { color: var(--ink); border-color: var(--ink); }
+
+:global(.nb-root) .updated { margin-top: 14px; font-family: var(--mono); font-size: 11px; letter-spacing: .1em; color: var(--ink-faint); }
+
+:global(.nb-root) .sections { list-style: none; margin-top: 56px; border-top: 1px solid var(--ink); counter-reset: clause; }
+:global(.nb-root) .sections li { counter-increment: clause; display: grid; grid-template-columns: 40px 1fr; column-gap: 18px; padding: 26px 0 28px; border-bottom: 1px dotted #cfc5b2; }
+:global(.nb-root) .sections li::before { content: counter(clause, decimal-leading-zero); grid-row: span 9; font-family: var(--mono); font-size: 11px; color: var(--ink-faint); padding-top: 5px; }
+:global(.nb-root) .sections h2 { font-size: 17px; font-weight: 600; }
+:global(.nb-root) .sections p { font-size: 15px; line-height: 1.95; color: var(--ink-soft); margin-top: 10px; max-width: 38em; }
+:global(.nb-root) .sections a, :global(.nb-root) .contact a { color: var(--ink); border-bottom: 1px solid rgba(31,28,23,.35); }
+
+:global(.nb-root) .contact { margin-top: 40px; display: flex; gap: 18px; align-items: baseline; font-family: var(--mono); font-size: 11.5px; letter-spacing: .1em; color: var(--ink-faint); }
+
+/* the quiet line at the foot of pricing (and wherever else the policies are linked) */
+:global(.nb-root) .links { display: flex; flex-wrap: wrap; gap: 10px 22px; align-items: baseline; margin-top: 56px; padding-top: 22px; border-top: 1px solid rgba(31,28,23,.18);
+  font-family: var(--mono); font-size: 11px; letter-spacing: .1em; color: var(--ink-faint); }
+:global(.nb-root) .links a { color: var(--ink-soft); border-bottom: 1px solid transparent; }
+:global(.nb-root) .links a:hover { border-color: var(--ink-soft); }
+:global(.nb-root) .links span { margin-right: auto; }
+
+@media (max-width: 900px) {
+  :global(.nb-root) .tabs { gap: 20px; margin-bottom: 32px; }
+  :global(.nb-root) .sections { margin-top: 40px; }
+  :global(.nb-root) .sections li { grid-template-columns: 1fr; padding: 22px 0 24px; }
+  :global(.nb-root) .sections li::before { grid-row: auto; padding: 0 0 6px; }
+  :global(.nb-root) .contact { flex-direction: column; gap: 6px; }
+  :global(.nb-root) .links span { margin-right: 0; flex-basis: 100%; }
+}
+
+/* the landing page footer */
+:global(.nb-root) .footLinks { display: inline-flex; gap: 18px; }
+:global(.nb-root) .footLinks a { color: var(--ink-soft); border-bottom: 1px solid transparent; }
+:global(.nb-root) .footLinks a:hover { border-color: var(--ink-soft); }
