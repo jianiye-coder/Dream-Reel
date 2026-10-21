@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { auth } from "@/auth";
+import { requireUserId } from "@/lib/session";
 import {
   checkAiRateLimit,
   checkAndConsumeUsage,
@@ -99,11 +99,9 @@ function buildContextLines(
 
 export async function POST(req: NextRequest) {
   const requestStartedAt = Date.now();
-  const session = await auth() as { user?: { id?: string } } | null;
-  const userId = Number(session?.user?.id);
-  if (!Number.isInteger(userId) || userId <= 0) {
-    return NextResponse.json({ error: API_ERROR_CODES.unauthorized }, { status: 401 });
-  }
+  const signedIn = await requireUserId();
+  if (signedIn instanceof NextResponse) return signedIn;
+  const userId = signedIn; // a plain number, so the nested functions below see it narrowed
 
   let consumedUsagePeriodId: number | undefined;
 

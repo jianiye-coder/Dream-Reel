@@ -36,13 +36,13 @@ export default function RootLayout({
   return (
     <html
       lang="zh-CN"
-      className={`h-full antialiased ${workSans.variable} ${nbSerif.variable} ${nbSerifLatin.variable} ${nbLatin.variable} ${nbMono.variable} ${nbScript.variable}`}
+      className={`${workSans.variable} ${nbSerif.variable} ${nbSerifLatin.variable} ${nbLatin.variable} ${nbMono.variable} ${nbScript.variable}`}
       suppressHydrationWarning
     >
       <head>
         <link rel="manifest" href="/manifest.json" />
       </head>
-      <body className="min-h-full flex flex-col">
+      <body>
         <a className="skip-link" href="#main-content">跳至主要内容</a>
         <SessionProvider>
           <LanguageProvider><div id="main-content" tabIndex={-1}>{children}</div></LanguageProvider>

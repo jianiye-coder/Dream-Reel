@@ -14,10 +14,5 @@ export default defineConfig({
     restoreMocks: true,
     testTimeout: 15_000,
     hookTimeout: 30_000,
-    coverage: {
-      provider: "v8",
-      reporter: ["text", "json-summary"],
-      include: ["src/app/api/**/*.ts", "src/lib/**/*.ts"],
-    },
   },
 });

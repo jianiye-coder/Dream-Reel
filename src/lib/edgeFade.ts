@@ -2,8 +2,7 @@
    instead of slicing the text in half: sets data-fade-top / data-fade-bottom for the pane's CSS mask
    (and data-scrolls while it has more than fits).
    Use as a React 19 ref callback (it returns its own cleanup). `focusable` also gives the pane a tab
-   stop while it scrolls, so it can be read with the keyboard.
-   (The journal keeps its own copy in src/app/journal/page.tsx for now.) */
+   stop while it scrolls, so it can be read with the keyboard. */
 export function edgeFade(el: HTMLElement | null, { focusable = false }: { focusable?: boolean } = {}) {
   if (!el) return;
   const update = () => {

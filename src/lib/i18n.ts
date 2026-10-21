@@ -23,7 +23,6 @@ export function formatDateTime(value: string, lang: Lang): string {
 const zh = {
   nav: {
     archive: "梦境档案",
-    journal: "记录梦境",
     morningPages: "晨间书写",
   },
 
@@ -103,10 +102,6 @@ const zh = {
   },
 
   landing: {
-    heroKicker: "AI 梦境日记 · 记忆图谱 · 睡眠反思",
-    sleepTitle: "你的梦，和做梦时的身体。",
-    pricingTitle: "为真实的梦境习惯设计。",
-    pricingBody: "免费版可以完整体验 Dream Reel 的核心功能。升级 Plus 解锁更高额度，让记录和生成图片的习惯可以长期持续。",
     pricingPlans: [
       {
         name: "Free",
@@ -392,13 +387,11 @@ const zh = {
     welcome:
       "今夜的梦，还记得什么吗？\n\n先把最先浮现的片段写下来，不需要完整，不需要逻辑。",
     placeholder: "写下还记得的片段…",
-    modeLabel: "记录模式",
     chatMode: "对话",
     quickMode: "快速记录",
     quickTitle: "记录正在消散的梦",
     quickPlaceholder: "从第一幕开始写起…",
     chatInputLabel: "继续追问这场梦",
-    analyzeBtn: "分析梦境",
     analyzingBtn: "分析中…",
     signalLost: "信号断了一会儿。",
     analyzeError: "分析遇到了问题：",
@@ -427,18 +420,12 @@ const zh = {
       activityPlaceholder: "刷手机、看书…",
     },
     toolbar: {
-      image: "◇ 生成图片",
-      sleep: "≋ 睡眠记录",
       sleepNext: "睡眠记录 →",
-      backToDream: "← 返回梦境",
       sleepOptional: "可选 · 不填也可以直接保存",
       voice: "语音记录",
       recording: "录音中…",
       voiceUnsupported: "当前浏览器不支持语音识别。",
       voiceError: "语音识别失败，请再试一次。",
-      save: "↓ 保存梦境",
-      saving: "保存中…",
-      saved: "已保存 ✓",
     },
     analysis: {
       title: "✦  梦境整理",
@@ -455,25 +442,15 @@ const zh = {
       generate: "显影",
       archive: "入档",
       beforeAnalyze: "可以让 AI 提取人物、地点、符号与情绪，也可以直接与 Agent 一起回忆这场梦。",
-      afterAnalyze: "梦境线索已经浮现。可以继续与 Agent 对话、生成图像，或保存进 archive。",
     },
     quickFlow: {
       analysisWaiting: "初步读取",
-      analysisReady: "梦境线索",
-      reanalyze: "重新读取",
       chooseNext: "分析完成",
       chooseNextDesc: "提示词已根据梦境内容优化，现在生成图像效果最准确。",
       generateImage: "生成梦境图像",
       imageReady: "图像已显影",
       chatUnlocked: "现在可以带着这段梦和图像继续进入 AI 对话。",
       enterChat: "进入 AI 对话",
-      chatDirect: "与 Agent 对话",
-    },
-    memoryPreview: {
-      label: "梦境线索预览",
-      awake: "梦境正在被读取",
-      reading: "人物、地点与符号已经浮现",
-      fragment: "片段",
     },
     // the notebook spread (/journal)
     nb: {
@@ -572,7 +549,6 @@ const zh = {
     serviceUnavailable: "登录服务暂时不可用，请稍后再试",
     registerFailed: "注册失败，请稍后再试",
     networkError: "连接失败，请稍后再试",
-    signOut: "退出",
   },
 
   archive: {
@@ -759,7 +735,6 @@ const zh = {
 const en: typeof zh = {
   nav: {
     archive: "Archive",
-    journal: "Journal",
     morningPages: "Morning Pages",
   },
 
@@ -839,10 +814,6 @@ const en: typeof zh = {
   },
 
   landing: {
-    heroKicker: "AI DREAM JOURNAL · MEMORY ATLAS · SLEEP REFLECTION",
-    sleepTitle: "Your dreams, and the body that had them.",
-    pricingTitle: "Designed for a real dream practice.",
-    pricingBody: "Free gives you the full Dream Reel experience. Upgrade to Plus for higher monthly limits so your recording habit can keep going.",
     pricingPlans: [
       {
         name: "Free",
@@ -1127,13 +1098,11 @@ const en: typeof zh = {
     welcome:
       "What do you remember from last night?\n\nWrite down the first fragments — no order needed, no logic required.",
     placeholder: "Write the part you still remember…",
-    modeLabel: "Record mode",
     chatMode: "Chat",
     quickMode: "Quick Record",
     quickTitle: "Record the dream while it is fading",
     quickPlaceholder: "Begin with the first frame…",
     chatInputLabel: "Continue exploring this dream",
-    analyzeBtn: "Analyze Dream",
     analyzingBtn: "Analyzing…",
     signalLost: "Lost connection for a moment.",
     analyzeError: "Analysis ran into an issue: ",
@@ -1162,18 +1131,12 @@ const en: typeof zh = {
       activityPlaceholder: "scrolled phone, read…",
     },
     toolbar: {
-      image: "◇ Generate Image",
-      sleep: "≋ Sleep Log",
       sleepNext: "Sleep Log →",
-      backToDream: "← Back",
       sleepOptional: "Optional · save anytime without filling this in",
       voice: "Voice Record",
       recording: "Recording…",
       voiceUnsupported: "Voice recognition is not supported in this browser.",
       voiceError: "Voice recognition failed. Please try again.",
-      save: "↓ Save Dream",
-      saving: "Saving…",
-      saved: "Saved ✓",
     },
     analysis: {
       title: "✦  Dream Summary",
@@ -1190,25 +1153,15 @@ const en: typeof zh = {
       generate: "Develop",
       archive: "Archive",
       beforeAnalyze: "Let AI extract people, places, symbols, and mood, or start recalling the dream directly with the Agent.",
-      afterAnalyze: "The dream signals have surfaced. Continue with the Agent, develop an image, or save it to the archive.",
     },
     quickFlow: {
       analysisWaiting: "First reading",
-      analysisReady: "Dream signals",
-      reanalyze: "Read again",
       chooseNext: "Analysis complete",
       chooseNextDesc: "The image prompt has been refined. Generating now will give the most accurate result.",
       generateImage: "Generate Dream Image",
       imageReady: "Image developed",
       chatUnlocked: "You can now continue into AI chat with this dream and its image.",
       enterChat: "Enter AI Chat",
-      chatDirect: "Chat with Agent",
-    },
-    memoryPreview: {
-      label: "Dream signal preview",
-      awake: "The dream is being read",
-      reading: "People, places, and symbols have surfaced",
-      fragment: "Fragment",
     },
     // the notebook spread (/journal)
     nb: {
@@ -1307,7 +1260,6 @@ const en: typeof zh = {
     serviceUnavailable: "Sign-in is temporarily unavailable. Please try again later.",
     registerFailed: "Registration failed, please try again",
     networkError: "Connection failed, please try again",
-    signOut: "Sign out",
   },
 
   archive: {

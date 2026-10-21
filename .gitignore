@@ -8,3 +8,7 @@ next-env.d.ts
 /test-results/
 /playwright-report/
 *.tmp.*
+
+# Office/LibreOffice lock files
+.~*
+outputs/**/.~*

@@ -2,7 +2,7 @@ export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { auth } from "@/auth";
+import { requireUserId } from "@/lib/session";
 
 const requestSchema = z.object({
   text: z.string().trim().min(1).max(3000),
@@ -60,10 +60,8 @@ Title: Train I Can't Catch
 Return only the title itself, nothing else.`;
 
 export async function POST(request: NextRequest) {
-  const session = await auth() as { user?: { id?: string } } | null;
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const signedIn = await requireUserId();
+  if (signedIn instanceof NextResponse) return signedIn;
 
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) return NextResponse.json({ error: "Missing API key" }, { status: 500 });

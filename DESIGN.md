@@ -15,7 +15,8 @@ description: |
 The whole design system lives in `src/app/notebook.css`. Every class is
 prefixed `nb-` and every surface effect and token is scoped to `.nb-root`, the
 element `NotebookShell` renders around each page. `src/app/globals.css` only
-holds what sits outside the notebook: Tailwind base, the page canvas colour,
+holds what sits outside the notebook: the base reset (the parts of Tailwind 3's
+preflight the notebook relies on; Tailwind itself is gone), the page canvas colour,
 `::selection`, the skip link and its focus ring, and the iOS rule that keeps
 form fields at 16px on phones (≤520px) so Safari doesn't zoom.
 
