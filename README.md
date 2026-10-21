@@ -108,7 +108,7 @@ Image prompts are assembled from dream content and structured fields in `src/lib
 | `DREAM_AGENT_GUARDED_PERCENT` | Guarded recall-policy canary allocation; defaults to `0` |
 | `ADMIN_EMAIL` | Access to administrator credit and agent-feedback endpoints |
 | `ADMIN_UNLIMITED_EMAILS` | Comma-separated accounts exempt from quotas; set explicitly rather than relying on the creator-account default in `billing.ts` |
-| `STRIPE_SECRET_KEY`, `STRIPE_PLUS_PRICE_ID_USD`, `STRIPE_PLUS_PRICE_ID_CNY`, `STRIPE_WEBHOOK_SECRET` | Plus subscriptions; see [Payments (Stripe)](#payments-stripe). All four or none |
+| `STRIPE_SECRET_KEY`, `STRIPE_PLUS_PRICE_ID_USD`, `STRIPE_WEBHOOK_SECRET` | Plus subscriptions; see [Payments (Stripe)](#payments-stripe). All three or none |
 
 ### Payments (Stripe)
 
@@ -117,13 +117,12 @@ Stripe is called through the official Node SDK (`stripe`, pinned exactly), one c
 | Variable | Value |
 | --- | --- |
 | `STRIPE_SECRET_KEY` | A **restricted key** (`rk_live_…` / `rk_test_…`), not the account's `sk_` secret key; see [Keys and secrets](#keys-and-secrets) |
-| `STRIPE_PLUS_PRICE_ID_CNY` | Price for Chinese pages: recurring, monthly, CNY 12.99 |
-| `STRIPE_PLUS_PRICE_ID_USD` | Price for English pages: recurring, monthly, USD 1.99 |
+| `STRIPE_PLUS_PRICE_ID_USD` | The Plus price for everyone: recurring, monthly, USD 1.99 |
 | `STRIPE_WEBHOOK_SECRET` | Signing secret (`whsec_…`) of the webhook endpoint below |
 | `NEXT_PUBLIC_APP_URL` | Public origin for Stripe's return URLs, e.g. `https://dream-reel.vercel.app`. **Required in production and must be `https://`** (the request Host header is not trusted); locally the request origin is used |
 | `STRIPE_PLUS_PRICE_IDS_LEGACY` | Optional comma list of earlier Plus price ids that still grant Plus. **If you ever change a price id above, move the old one here**, or every reader still billed on it silently drops to Free at their next webhook |
 
-Readers pay in the language they read in: `zh` gets the CNY price, `en` the USD price. A reader who already has a Stripe customer (from an earlier subscription) checks out on that customer.
+Everyone pays the same USD price, whatever language they read in; Chinese pages show `$1.99` too. (Alipay and WeChat Pay don't support Checkout in subscription mode, so a CNY price wouldn't reach readers who only use them; cards in other currencies are converted by the reader's bank.) A reader who already has a Stripe customer (from an earlier subscription) checks out on that customer.
 
 Webhook endpoint: `https://<your domain>/api/billing/webhook`, subscribed to exactly
 
@@ -308,7 +307,7 @@ Next.js 16 App Router、React 19、TypeScript、纯 CSS 笔记本设计系统（
 | 独立标题接口 | 仍然只使用 OpenAI 的 `gpt-4o-mini`，需要 `OPENAI_API_KEY` |
 | 图片生成 | 配置 `FLATKEY_API_KEY` 时使用 Flatkey，否则使用 OpenAI；代码中的模型为 `gpt-image-2` |
 | 图片存储 | 公共 Vercel Blob Store；本地可配置 `BLOB_READ_WRITE_TOKEN` |
-| 订阅支付 | `STRIPE_SECRET_KEY`、`STRIPE_PLUS_PRICE_ID_CNY`（中文页，CNY 12.99/月）、`STRIPE_PLUS_PRICE_ID_USD`（英文页，USD 1.99/月）、`STRIPE_WEBHOOK_SECRET` 四项缺一不可，否则升级按钮显示“Plus 即将开放”；`NEXT_PUBLIC_APP_URL` 用于跳转。webhook 订阅 `checkout.session.completed` 与 `customer.subscription.created/updated/deleted`，详见上方 [Payments (Stripe)](#payments-stripe) |
+| 订阅支付 | `STRIPE_SECRET_KEY`、`STRIPE_PLUS_PRICE_ID_USD`（所有语言统一 USD 1.99/月）、`STRIPE_WEBHOOK_SECRET` 三项缺一不可，否则升级按钮显示“Plus 即将开放”；`NEXT_PUBLIC_APP_URL` 用于跳转。webhook 订阅 `checkout.session.completed` 与 `customer.subscription.created/updated/deleted`，详见上方 [Payments (Stripe)](#payments-stripe) |
 
 图片提示词会随梦境字段更新；手动编辑后，自动更新暂停，直到恢复自动填充。另需注意：图片接口收到超过 200 字符的视觉描述时，会优先使用该描述，并附加原始梦境及可选性别信息，而不是直接使用编辑框里的组装提示词。
 

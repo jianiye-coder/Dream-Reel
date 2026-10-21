@@ -79,7 +79,7 @@ export function PricingView({ checkoutAvailable }: { checkoutAvailable: boolean 
               <section key={plan.name} className="nb-plan">
                 {i === 1 && <span className="nb-stamp">{P.recommended}</span>}
                 <div className="nb-plan-name">{plan.name}</div>
-                <div className="nb-price"><b><i className="nb-yen">{currency}</i>{amount}</b><span>{plan.cadence}</span></div>
+                <div className="nb-price"><b><i className="nb-currency">{currency}</i>{amount}</b><span>{plan.cadence}</span></div>
                 <p className="nb-for">{fors[i]}</p>
                 <ul className="nb-items">
                   {plan.items.map(([label, value]) => <li key={label}>{label}<span className="nb-lead" /><b>{value}</b></li>)}

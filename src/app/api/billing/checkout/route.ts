@@ -53,7 +53,7 @@ export async function POST(request: NextRequest) {
 
   const body = await request.json().catch(() => ({})) as { lang?: unknown; from?: unknown };
   const lang: BillingLang = body.lang === "en" ? "en" : "zh";
-  const priceId = plusPriceId(lang);
+  const priceId = plusPriceId();
   const origin = appOrigin(request.nextUrl.origin);
   if (!priceId || !origin) return errorJson(API_ERROR_CODES.billingUnavailable, 503);
 
@@ -78,11 +78,9 @@ export async function POST(request: NextRequest) {
     try {
       session = await sessions.create(checkoutParams(input));
     } catch (error) {
-      // the stored customer was deleted in the Dashboard, or already bills in the other
-      // currency (a customer can't mix currencies): let Checkout create a fresh one
+      // the stored customer was deleted in the Dashboard: let Checkout create a fresh one
       const info = stripeErrorInfo(error);
-      const customerRejected = info.status === 400 && input.customerId &&
-        (info.param === "customer" || /currenc/i.test((error as Error).message));
+      const customerRejected = info.status === 400 && input.customerId && info.param === "customer";
       if (!customerRejected) throw error;
       session = await sessions.create(checkoutParams({ ...input, customerId: null }));
     }

@@ -16,7 +16,6 @@ import { GET as status } from "@/app/api/billing/status/route";
 const STRIPE_ENV = {
   STRIPE_SECRET_KEY: "sk_test_123",
   STRIPE_PLUS_PRICE_ID_USD: "price_usd_199",
-  STRIPE_PLUS_PRICE_ID_CNY: "price_cny_1299",
   STRIPE_WEBHOOK_SECRET: "whsec_123",
   NEXT_PUBLIC_APP_URL: "https://dream-reel.example",
 };
@@ -66,7 +65,7 @@ describe("POST /api/billing/checkout", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it.each(["STRIPE_SECRET_KEY", "STRIPE_PLUS_PRICE_ID_USD", "STRIPE_PLUS_PRICE_ID_CNY", "STRIPE_WEBHOOK_SECRET"])(
+  it.each(["STRIPE_SECRET_KEY", "STRIPE_PLUS_PRICE_ID_USD", "STRIPE_WEBHOOK_SECRET"])(
     "answers BILLING_UNAVAILABLE without naming settings when %s is missing", async (name) => {
       vi.stubEnv(name, "");
       const res = await checkout(post("/api/billing/checkout", { lang: "zh" }));
@@ -78,7 +77,7 @@ describe("POST /api/billing/checkout", () => {
     },
   );
 
-  it("sends zh readers the CNY price with exactly the documented Checkout parameters", async () => {
+  it("sends zh readers the USD price with exactly the documented Checkout parameters", async () => {
     const res = await checkout(post("/api/billing/checkout", { lang: "zh", from: "/journal" }));
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ url: "https://checkout.stripe.com/c/pay/cs_test_1" });
@@ -94,7 +93,7 @@ describe("POST /api/billing/checkout", () => {
     expect(headers.get("Idempotency-Key")).toBeTruthy(); // the SDK adds one to every POST
     expect(params).toEqual({
       mode: "subscription",
-      "line_items[0][price]": "price_cny_1299",
+      "line_items[0][price]": "price_usd_199",
       "line_items[0][quantity]": "1",
       success_url: "https://dream-reel.example/journal?upgraded=1",
       cancel_url: "https://dream-reel.example/journal?billing=cancelled",
@@ -164,17 +163,6 @@ describe("POST /api/billing/checkout", () => {
     expect(sentParams(0).params.customer).toBe("cus_deleted");
     expect(sentParams(1).params.customer).toBeUndefined();
     expect(sentParams(1).params.customer_email).toBe("reader@example.com");
-  });
-
-  it("starts over with the email when the stored customer bills in the other currency", async () => {
-    billing.getStripeCustomerId.mockResolvedValue("cus_cny");
-    fetchMock
-      .mockResolvedValueOnce(new Response(JSON.stringify({ error: { type: "invalid_request_error", message: "You cannot combine currencies on a single customer." } }), { status: 400 }))
-      .mockResolvedValueOnce(stripeOk({ url: "https://checkout.stripe.com/c/pay/cs_test_3" }));
-    const res = await checkout(post("/api/billing/checkout", { lang: "en" }));
-    expect(await res.json()).toEqual({ url: "https://checkout.stripe.com/c/pay/cs_test_3" });
-    expect(sentParams(1).params.customer).toBeUndefined();
-    expect(sentParams(1).params["line_items[0][price]"]).toBe("price_usd_199");
   });
 
   it("does not retry other Stripe rejections", async () => {
@@ -274,7 +262,7 @@ describe("GET /api/billing/status", () => {
   it("says whether checkout is available, and nothing about which setting is missing", async () => {
     let res = await status();
     expect(await res.json()).toEqual({ ...freeStatus, checkoutAvailable: true });
-    vi.stubEnv("STRIPE_PLUS_PRICE_ID_CNY", "");
+    vi.stubEnv("STRIPE_PLUS_PRICE_ID_USD", "");
     res = await status();
     const text = await res.text();
     expect(JSON.parse(text)).toEqual({ ...freeStatus, checkoutAvailable: false });

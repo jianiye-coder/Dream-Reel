@@ -105,7 +105,7 @@ const zh = {
     pricingPlans: [
       {
         name: "Free",
-        price: "¥0",
+        price: "$0",
         cadence: "/ 月",
         badge: "开始体验",
         cta: "开始记录",
@@ -118,7 +118,7 @@ const zh = {
       },
       {
         name: "Dream Reel Plus",
-        price: "¥12.99",
+        price: "$1.99",
         cadence: "/ 月",
         badge: "推荐",
         cta: "升级 Plus",
@@ -201,7 +201,7 @@ const zh = {
     laterMeta: "自动保存 · 支持语音",
     priceKicker: "订阅",
     priceText: "免费就能完整地记梦、整理和显影。",
-    priceSoft: "习惯了以后，Plus 每月 ¥12.99。",
+    priceSoft: "习惯了以后，Plus 每月 $1.99。",
     priceLink: "看看两种方案 →",
     privateStamp: "私密",
     privateText: "梦是写给自己的。正文加密保存在数据库里，只在你要查看、分析或显影时被临时读取，原文不会进入任何日志。",
@@ -321,7 +321,7 @@ const zh = {
           "你写下的梦、文字和显影出的图片都属于你。我们只为提供服务而处理它们（见隐私政策），你可以随时导出全部内容。",
         ] },
         { h: "Plus 订阅", p: [
-          "Dream Reel Plus 每月 ¥12.99（中文页面，人民币计价）或每月 US$1.99（英文页面，美元计价），以付款页面显示的金额为准。付款由 Stripe 处理。",
+          "Dream Reel Plus 每月 US$1.99，以美元计价，以付款页面显示的金额为准。如果你的银行卡以其他货币结算，银行可能按当日汇率换算并收取手续费。付款由 Stripe 处理。",
           "订阅按月自动续费：每个计费周期开始时，会从你保存的付款方式自动扣款，直到你取消为止。",
           "免费版和 Plus 的每月额度以订阅页面为准，当期没用完的额度不会累积到下个月。如果价格调整，我们会在下一次扣款之前告诉你。",
         ] },
@@ -1033,7 +1033,7 @@ const en: typeof zh = {
           "Your dreams, writing and developed pictures belong to you. We only process them to run the service (see the privacy policy), and you can export everything at any time.",
         ] },
         { h: "Dream Reel Plus", p: [
-          "Plus costs US$1.99 a month (English pages, charged in US dollars) or ¥12.99 a month (Chinese pages, charged in yuan); the amount shown on the payment page is what you pay. Payments are handled by Stripe.",
+          "Plus costs US$1.99 a month, charged in US dollars; the amount shown on the payment page is what you pay. If your card is in another currency, your bank may convert it and charge a fee. Payments are handled by Stripe.",
           "The subscription renews automatically every month: at the start of each billing period your saved payment method is charged until you cancel.",
           "The monthly allowances for Free and Plus are the ones on the plans page; unused allowance doesn’t carry over. If the price changes, we’ll tell you before your next charge.",
         ] },
