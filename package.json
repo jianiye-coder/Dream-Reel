@@ -23,6 +23,12 @@
   },
   "dependencies": {
     "@auth/pg-adapter": "^1.11.3",
+    "@fontsource-variable/noto-serif": "5.3.0",
+    "@fontsource-variable/noto-serif-sc": "5.3.1",
+    "@fontsource/ibm-plex-mono": "5.3.0",
+    "@fontsource/instrument-serif": "5.3.0",
+    "@fontsource/pinyon-script": "5.3.0",
+    "@fontsource/work-sans": "5.3.0",
     "@vercel/blob": "^2.6.1",
     "bcryptjs": "^3.0.3",
     "lucide-react": "^1.52.0",

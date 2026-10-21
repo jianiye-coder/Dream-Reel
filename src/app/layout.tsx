@@ -1,26 +1,21 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import "./notebook.css";
-import "lxgw-wenkai-webfont/lxgwwenkai-regular.css";
-import { IBM_Plex_Mono, Instrument_Serif, Noto_Serif, Noto_Serif_SC, Pinyon_Script, Work_Sans } from "next/font/google";
+// Fonts ship from node_modules (Fontsource and lxgw-wenkai-webfont): woff2 sliced by unicode-range and
+// served from our own origin (the CSP only allows same-origin fonts), so the build never downloads a
+// font. fonts.css names the families for the --font-* variables notebook.css reads.
+import "@fontsource-variable/noto-serif-sc/wght.css"; // --font-nb-serif: 400/600/900 from one variable file per slice
+import "@fontsource-variable/noto-serif/wght.css"; // --font-nb-serif-latin: English pages, so apostrophes and dashes aren't set full-width by the CJK face
+import "@fontsource/instrument-serif/400.css"; // --font-nb-latin
+import "@fontsource/instrument-serif/400-italic.css";
+import "@fontsource/ibm-plex-mono/400.css"; // --font-nb-mono
+import "@fontsource/ibm-plex-mono/500.css";
+import "@fontsource/pinyon-script/400.css"; // --font-nb-script
+import "@fontsource/work-sans/700.css"; // --font-sub: outside .nb-root only the bold skip link uses it
+import "lxgw-wenkai-webfont/lxgwwenkai-regular.css"; // --hand
+import "./fonts.css";
 import { SessionProvider } from "next-auth/react";
 import { LanguageProvider } from "@/contexts/LanguageContext";
-
-// the base font outside .nb-root: in practice only the bold skip link, so one weight (700)
-const workSans = Work_Sans({
-  subsets: ["latin"],
-  weight: ["700"],
-  variable: "--font-sub",
-  display: "swap",
-});
-
-// notebook design: self-hosted at build time (the CSP only allows same-origin fonts)
-const nbSerif = Noto_Serif_SC({ weight: ["400", "600", "900"], variable: "--font-nb-serif", display: "swap", preload: false });
-// English pages put a Latin serif first so apostrophes and dashes aren't set full-width by the CJK face
-const nbSerifLatin = Noto_Serif({ weight: ["400", "600", "900"], subsets: ["latin"], variable: "--font-nb-serif-latin", display: "swap" });
-const nbLatin = Instrument_Serif({ weight: "400", style: ["normal", "italic"], subsets: ["latin"], variable: "--font-nb-latin", display: "swap" });
-const nbMono = IBM_Plex_Mono({ weight: ["400", "500"], subsets: ["latin"], variable: "--font-nb-mono", display: "swap" });
-const nbScript = Pinyon_Script({ weight: "400", subsets: ["latin"], variable: "--font-nb-script", display: "swap" });
 
 export const metadata: Metadata = {
   title: "Dream Reel — Dream Journal · 梦境日记",
@@ -34,11 +29,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html
-      lang="zh-CN"
-      className={`${workSans.variable} ${nbSerif.variable} ${nbSerifLatin.variable} ${nbLatin.variable} ${nbMono.variable} ${nbScript.variable}`}
-      suppressHydrationWarning
-    >
+    <html lang="zh-CN" suppressHydrationWarning>
       <head>
         <link rel="manifest" href="/manifest.json" />
       </head>

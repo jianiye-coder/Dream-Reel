@@ -1,0 +1,65 @@
+/* The font families behind notebook.css's type tokens. The faces themselves come from Fontsource
+   packages imported in layout.tsx: woff2 sliced by unicode-range, bundled from node_modules and
+   served from our own origin, so neither the build nor the browser fetches from Google Fonts.
+
+   Each family is followed by a local fallback face with metric overrides (the values next/font
+   used to generate). They keep the swap from shifting the layout, and they also draw the few
+   glyphs a face lacks: the → after an English action in Noto Serif and in IBM Plex Mono is set
+   in these metric-adjusted Times New Roman and Arial. */
+:root {
+  --font-nb-serif: "Noto Serif SC Variable", "Noto Serif SC Fallback";
+  --font-nb-serif-latin: "Noto Serif Variable", "Noto Serif Fallback";
+  --font-nb-latin: "Instrument Serif", "Instrument Serif Fallback";
+  --font-nb-mono: "IBM Plex Mono", "IBM Plex Mono Fallback";
+  --font-nb-script: "Pinyon Script", "Pinyon Script Fallback";
+  --font-sub: "Work Sans", "Work Sans Fallback";
+}
+
+@font-face {
+  font-family: "Noto Serif SC Fallback";
+  src: local("Times New Roman");
+  ascent-override: 95.04%;
+  descent-override: 23.62%;
+  line-gap-override: 0%;
+  size-adjust: 121.11%;
+}
+@font-face {
+  font-family: "Noto Serif Fallback";
+  src: local("Times New Roman");
+  ascent-override: 90.29%;
+  descent-override: 24.75%;
+  line-gap-override: 0%;
+  size-adjust: 118.4%;
+}
+@font-face {
+  font-family: "Instrument Serif Fallback";
+  src: local("Times New Roman");
+  ascent-override: 117.94%;
+  descent-override: 36.93%;
+  line-gap-override: 0%;
+  size-adjust: 83.94%;
+}
+@font-face {
+  font-family: "IBM Plex Mono Fallback";
+  src: local("Arial");
+  ascent-override: 76.16%;
+  descent-override: 20.43%;
+  line-gap-override: 0%;
+  size-adjust: 134.59%;
+}
+@font-face {
+  font-family: "Pinyon Script Fallback";
+  src: local("Arial");
+  ascent-override: 107.82%;
+  descent-override: 48%;
+  line-gap-override: 0%;
+  size-adjust: 80.07%;
+}
+@font-face {
+  font-family: "Work Sans Fallback";
+  src: local("Arial");
+  ascent-override: 83.09%;
+  descent-override: 21.71%;
+  line-gap-override: 0%;
+  size-adjust: 111.93%;
+}
