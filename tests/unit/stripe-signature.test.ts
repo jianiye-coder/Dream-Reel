@@ -73,11 +73,10 @@ describe("Stripe configuration", () => {
   const full = {
     STRIPE_SECRET_KEY: "sk_test_x",
     STRIPE_PLUS_PRICE_ID_USD: "price_usd",
-    STRIPE_PLUS_PRICE_ID_CNY: "price_cny",
     STRIPE_WEBHOOK_SECRET: "whsec_x",
   } as Record<string, string | undefined>;
 
-  it("needs the key, both prices and the webhook secret", () => {
+  it("needs the key, the price and the webhook secret", () => {
     expect(isCheckoutConfigured(full)).toBe(true);
     for (const name of Object.keys(full)) {
       expect(isCheckoutConfigured({ ...full, [name]: undefined })).toBe(false);
@@ -101,11 +100,12 @@ describe("Stripe configuration", () => {
 
   it("recognises only the configured Plus prices", () => {
     const sub = (price: unknown) => asSubscription({ id: "sub_1", customer: "cus_1", status: "active", items: { data: [{ price }] } });
-    expect(billsPlusPrice(sub({ id: "price_cny" }), full)).toBe(true);
+    expect(billsPlusPrice(sub({ id: "price_usd" }), full)).toBe(true);
     expect(billsPlusPrice(sub("price_usd"), full)).toBe(true);
+    expect(billsPlusPrice(sub({ id: "price_cny" }), full)).toBe(false);
     expect(billsPlusPrice(sub({ id: "price_other" }), full)).toBe(false);
     expect(billsPlusPrice(asSubscription({ id: "sub_1", customer: "cus_1", status: "active" }), full)).toBe(false);
-    expect(billsPlusPrice(sub({ id: "price_cny" }), {})).toBe(false);
+    expect(billsPlusPrice(sub({ id: "price_usd" }), {})).toBe(false);
   });
 
   it("uses NEXT_PUBLIC_APP_URL's origin, else the request origin", () => {

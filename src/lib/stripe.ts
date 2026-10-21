@@ -44,7 +44,6 @@ export function isCheckoutConfigured(env: Env = process.env): boolean {
   return Boolean(
     env.STRIPE_SECRET_KEY?.trim() &&
     env.STRIPE_PLUS_PRICE_ID_USD?.trim() &&
-    env.STRIPE_PLUS_PRICE_ID_CNY?.trim() &&
     // without the webhook secret a paid checkout would never turn Plus on
     env.STRIPE_WEBHOOK_SECRET?.trim() &&
     (configuredOrigin(env) || env.NODE_ENV !== "production"),
@@ -55,18 +54,17 @@ export function stripeSecretKey(): string | null {
   return process.env.STRIPE_SECRET_KEY?.trim() || null;
 }
 
-/** zh readers pay the CNY price, en readers the USD price. */
-export function plusPriceId(lang: BillingLang): string | null {
-  const id = lang === "zh" ? process.env.STRIPE_PLUS_PRICE_ID_CNY : process.env.STRIPE_PLUS_PRICE_ID_USD;
-  return id?.trim() || null;
+/** One price for everyone, in US dollars, whatever language the reader uses. */
+export function plusPriceId(): string | null {
+  return process.env.STRIPE_PLUS_PRICE_ID_USD?.trim() || null;
 }
 
 /**
- * Prices that grant Plus: the two current ones plus STRIPE_PLUS_PRICE_IDS_LEGACY (comma list).
+ * Prices that grant Plus: the current one plus STRIPE_PLUS_PRICE_IDS_LEGACY (comma list).
  * When a price id changes, move the old id to the legacy list, or existing payers lose Plus.
  */
 function plusPriceIds(env: Env = process.env): Set<string> {
-  const ids = [env.STRIPE_PLUS_PRICE_ID_USD, env.STRIPE_PLUS_PRICE_ID_CNY, ...(env.STRIPE_PLUS_PRICE_IDS_LEGACY ?? "").split(",")];
+  const ids = [env.STRIPE_PLUS_PRICE_ID_USD, ...(env.STRIPE_PLUS_PRICE_IDS_LEGACY ?? "").split(",")];
   return new Set(ids.map((id) => id?.trim()).filter((id): id is string => Boolean(id)));
 }
 

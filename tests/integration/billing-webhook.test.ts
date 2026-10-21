@@ -117,7 +117,7 @@ databaseDescribe("Stripe webhook → Plus in PostgreSQL", () => {
       metadata: { user_id: String(userId), plan: "plus" },
       created: nowSec() - 60,
       latest_invoice: `in_${current.subscription}`,
-      items: { object: "list", data: [{ id: "si_1", current_period_start: period.start, current_period_end: period.end, price: { id: "price_cny", object: "price" } }] },
+      items: { object: "list", data: [{ id: "si_1", current_period_start: period.start, current_period_end: period.end, price: { id: "price_usd", object: "price" } }] },
       ...extra,
     };
   }
@@ -171,7 +171,6 @@ databaseDescribe("Stripe webhook → Plus in PostgreSQL", () => {
     vi.stubEnv("STRIPE_SECRET_KEY", "sk_test_integration");
     vi.stubEnv("STRIPE_WEBHOOK_SECRET", WEBHOOK_SECRET);
     vi.stubEnv("STRIPE_PLUS_PRICE_ID_USD", "price_usd");
-    vi.stubEnv("STRIPE_PLUS_PRICE_ID_CNY", "price_cny");
     vi.stubEnv("NEXT_PUBLIC_APP_URL", "https://dream-reel.example");
     vi.stubGlobal("fetch", fetchMock);
     fetchMock.mockClear();
@@ -854,7 +853,7 @@ databaseDescribe("Stripe webhook → Plus in PostgreSQL", () => {
     const firstParams = new URLSearchParams(String((fetchMock.mock.calls.at(-1)![1] as RequestInit).body));
     expect(firstParams.get("customer")).toBeNull();
     expect(firstParams.get("customer_email")).toBe(`billing-${run}-${seq}@example.test`);
-    expect(firstParams.get("line_items[0][price]")).toBe("price_cny");
+    expect(firstParams.get("line_items[0][price]")).toBe("price_usd");
 
     stripeSubscriptions.set(current.subscription, subscription("active"));
     await deliver(checkoutCompleted());
