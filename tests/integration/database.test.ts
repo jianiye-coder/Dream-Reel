@@ -4,7 +4,7 @@ import {
   processStripeEvent,
   refundConsumedUsage,
 } from "@/lib/billing";
-import { ensureSchema, getPool } from "@/lib/db";
+import { ensureSchema, getPool, lockDownPublicApi } from "@/lib/db";
 import { createDreamEntry, listDreamEntries, updateDreamEntry } from "@/lib/dreams";
 
 const hasDatabase = Boolean(process.env.TEST_DATABASE_URL);
@@ -80,5 +80,59 @@ databaseDescribe("PostgreSQL integration", () => {
     await expect(processStripeEvent(event, async () => {
       throw new Error("must not run");
     })).resolves.toBe("duplicate");
+  });
+
+  it("closes the hosted REST API roles out of every app table", async () => {
+    // One transaction, rolled back: roles, grants and probe tables never outlive the test.
+    const client = await getPool().connect();
+    try {
+      await client.query("BEGIN");
+      // Recreate what Supabase does: an `anon` role granted on today's and tomorrow's tables.
+      await client.query(`
+        DO $$ BEGIN
+          IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN CREATE ROLE anon NOLOGIN; END IF;
+        END $$;
+      `);
+      await client.query("CREATE ROLE rls_owner_probe NOLOGIN");
+      await client.query("GRANT CREATE ON SCHEMA public TO rls_owner_probe");
+      await client.query("GRANT USAGE ON SCHEMA public TO anon");
+      await client.query("GRANT SELECT ON users, dream_entries TO anon");
+      await client.query("INSERT INTO users (email, name) VALUES ('rls@example.com', 'rls')");
+
+      // Supabase's `postgres` is an owner, not a superuser, so run the lockdown as one.
+      await client.query("SET ROLE rls_owner_probe");
+      await client.query("ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO anon");
+      await client.query("CREATE TABLE rls_probe (id INTEGER)");
+      await client.query("INSERT INTO rls_probe VALUES (1)");
+      await client.query("GRANT SELECT ON rls_probe TO anon");
+      await lockDownPublicApi(client);
+      await client.query("CREATE TABLE rls_probe_later (id INTEGER)");
+      // the owner still sees its rows
+      await expect(client.query("SELECT id FROM rls_probe")).resolves.toMatchObject({ rowCount: 1 });
+      await client.query("RESET ROLE");
+
+      await lockDownPublicApi(client);
+      const open = await client.query<{ relname: string }>(`
+        SELECT c.relname FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+        WHERE n.nspname = 'public' AND c.relkind = 'r' AND NOT c.relrowsecurity
+          AND c.relname <> 'rls_probe_later'
+      `);
+      expect(open.rows).toEqual([]);
+      const grants = await client.query(`
+        SELECT has_table_privilege('anon', 'users', 'SELECT') AS users,
+               has_table_privilege('anon', 'dream_entries', 'SELECT') AS dreams,
+               has_table_privilege('anon', 'rls_probe', 'SELECT') AS probe,
+               has_table_privilege('anon', 'rls_probe_later', 'SELECT') AS later
+      `);
+      expect(grants.rows[0]).toEqual({ users: false, dreams: false, probe: false, later: false });
+
+      // even if a grant slips back in, RLS with no policies shows anon nothing
+      await client.query("GRANT SELECT ON users TO anon");
+      await client.query("SET ROLE anon");
+      await expect(client.query("SELECT id FROM users")).resolves.toMatchObject({ rowCount: 0 });
+    } finally {
+      await client.query("ROLLBACK").catch(() => {});
+      client.release();
+    }
   });
 });
