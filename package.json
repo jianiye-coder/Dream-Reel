@@ -29,18 +29,18 @@
     "@fontsource/instrument-serif": "5.3.0",
     "@fontsource/pinyon-script": "5.3.0",
     "@fontsource/work-sans": "5.3.0",
-    "@vercel/blob": "^2.6.1",
+    "@vercel/blob": "^2.8.2",
     "bcryptjs": "^3.0.3",
     "lucide-react": "^1.52.0",
     "lxgw-wenkai-webfont": "^1.7.0",
-    "next": "~16.3.8",
+    "next": "~16.4.5",
     "next-auth": "^5.0.0-beta.32",
     "pg": "^8.20.0",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "sharp": "^0.35.5",
     "stripe": "22.6.2",
-    "zod": "^4.3.6"
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@playwright/test": "^1.62.1",
@@ -49,10 +49,15 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
-    "eslint-config-next": "~16.3.8",
+    "eslint-config-next": "~16.4.5",
     "knip": "^6.31.0",
     "tsx": "^4.23.12",
     "typescript": "^5",
     "vitest": "^4.1.11"
+  },
+  "overrides": {
+    "@vercel/cli-config": {
+      "zod": "$zod"
+    }
   }
 }
