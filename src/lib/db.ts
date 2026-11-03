@@ -1,4 +1,4 @@
-import { Pool } from "pg";
+import { Pool, type PoolClient } from "pg";
 import {
   getCurrentDreamEncryptionKeyId,
   needsDreamTextReencryption,
@@ -32,7 +32,7 @@ export function getPool(): Pool {
 
 // Bump this whenever you add new migrations. ensureSchema will skip all DDL
 // once this version is recorded in the DB, making cold starts near-instant.
-const SCHEMA_VERSION = 10;
+const SCHEMA_VERSION = 11;
 
 let schemaReady = false;
 let schemaReadyPromise: Promise<void> | null = null;
@@ -251,6 +251,41 @@ async function schemaVersionApplied(pool: Pool): Promise<boolean> {
   if (!rows[0]?.present) return false;
   const version = await pool.query("SELECT 1 FROM schema_version WHERE version = $1", [SCHEMA_VERSION]);
   return version.rows.length > 0;
+}
+
+/**
+ * Hosted Postgres such as Supabase also serves the public schema over a REST API as the `anon`
+ * and `authenticated` roles. Dream Reel never uses that API: it connects directly as the table
+ * owner, which RLS does not restrict. So switch RLS on with no policies (deny everyone else)
+ * and take away those roles' grants, now and for tables created later.
+ * Only touches what this role owns, so a table someone else added cannot make it fail.
+ */
+export async function lockDownPublicApi(db: Pool | PoolClient): Promise<void> {
+  await db.query(`
+    DO $$
+    DECLARE
+      t record;
+      r text;
+    BEGIN
+      FOR t IN SELECT tablename FROM pg_tables
+               WHERE schemaname = 'public' AND tableowner = current_user LOOP
+        EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY', t.tablename);
+      END LOOP;
+      FOREACH r IN ARRAY ARRAY['anon', 'authenticated'] LOOP
+        CONTINUE WHEN NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = r);
+        FOR t IN SELECT c.relname, c.relkind FROM pg_class c
+                 JOIN pg_namespace n ON n.oid = c.relnamespace
+                 WHERE n.nspname = 'public' AND c.relkind IN ('r', 'p', 'S')
+                   AND pg_get_userbyid(c.relowner) = current_user LOOP
+          EXECUTE format('REVOKE ALL ON %s public.%I FROM %I',
+                         CASE WHEN t.relkind = 'S' THEN 'SEQUENCE' ELSE 'TABLE' END, t.relname, r);
+        END LOOP;
+        EXECUTE format('ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON TABLES FROM %I', r);
+        EXECUTE format('ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON SEQUENCES FROM %I', r);
+        EXECUTE format('ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON FUNCTIONS FROM %I', r);
+      END LOOP;
+    END $$;
+  `);
 }
 
 async function ensureSchemaInternal(): Promise<void> {
@@ -517,6 +552,7 @@ async function applySchema(pool: Pool): Promise<void> {
   ]);
 
   await normalizeUserEmails(pool);
+  await lockDownPublicApi(pool);
 
   // Record that this schema version is now applied
   await pool.query(

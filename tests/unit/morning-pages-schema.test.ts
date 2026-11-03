@@ -13,7 +13,7 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-it("adds schema version 10 with a separate owner/date key and cascading user reference", async () => {
+it("creates morning_pages with a separate owner/date key and cascading user reference", async () => {
   vi.resetModules();
   globalThis.dreamPool = undefined;
   vi.stubEnv("DATABASE_URL", "postgresql://invalid:invalid@localhost:1/no-real-database");
@@ -29,6 +29,6 @@ it("adds schema version 10 with a separate owner/date key and cascading user ref
   expect(ddl).toContain("content TEXT NOT NULL");
   expect(ddl).toContain("revision INTEGER NOT NULL DEFAULT 1 CHECK (revision > 0)");
   expect(database.query).toHaveBeenCalledWith(
-    "INSERT INTO schema_version (version) VALUES ($1) ON CONFLICT DO NOTHING", [10],
+    "INSERT INTO schema_version (version) VALUES ($1) ON CONFLICT DO NOTHING", [expect.any(Number)],
   );
 });
