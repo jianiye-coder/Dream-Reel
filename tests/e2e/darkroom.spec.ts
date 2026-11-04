@@ -92,7 +92,11 @@ test("the darkroom runs the whole ceremony the first time, offers skip after, an
 test("a print that doesn't come up says so in the dark, and trying again starts the ceremony over", async ({ page }) => {
   test.setTimeout(90_000);
   await registerAndOpenJournal(page, `e2e-darkroom-failed-${run}@example.com`);
-  await page.route("**/api/generate-image", (route) => route.fulfill({ status: 500, json: { error: "IMAGE_GENERATION_FAILED" } }));
+  // a real failure takes a while to come back; an instant one would end the exposure before it shows
+  await page.route("**/api/generate-image", async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    await route.fulfill({ status: 500, json: { error: "IMAGE_GENERATION_FAILED" } });
+  });
   await page.route("**/api/analyze-dream", (route) => route.fulfill({
     json: { title: "Lake", mood: "calm", stressScore: 1, people: [], locations: ["lake"], symbols: [], sleepInsight: "", visualBrief: "" },
   }));
