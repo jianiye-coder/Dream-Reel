@@ -80,6 +80,7 @@ export function Darkroom({ t, imageUrl, generating, error, caption, fragments, a
   const funcRefs = useRef<(SVGFEFuncRElement | SVGFEFuncGElement | SVGFEFuncBElement | null)[]>([]);
   const colourRef = useRef<SVGImageElement | null>(null);
   const closeRef = useRef<HTMLButtonElement | null>(null);
+  const nextRef = useRef<HTMLDivElement | null>(null);
   const latest = useRef({ imageUrl, generating, error });
   useEffect(() => { latest.current = { imageUrl, generating, error }; }, [imageUrl, generating, error]);
   const skipRef = useRef(false);
@@ -133,12 +134,12 @@ export function Darkroom({ t, imageUrl, generating, error, caption, fragments, a
       while (!cancelled && !ready() && !latest.current.error) await pause(250);
     };
     // decode before developing, so the curve isn't half over when the pixels arrive (capped at 4 s)
-    const preload = (url: string) => new Promise<void>((resolve) => {
+    const preload = (url: string) => {
       const img = new window.Image();
-      const timer = setTimeout(resolve, 4000);
-      img.onload = img.onerror = () => { clearTimeout(timer); resolve(); };
+      const loaded = new Promise<void>((resolve) => { img.onload = img.onerror = () => resolve(); });
       img.src = url;
-    });
+      return Promise.race([loaded, beat(4000)]);   // skip and cleanup end the wait too
+    };
     // skipped or failed: settle in the developer, then hang the print the moment it exists
     const settle = async () => {
       setBeam(false); setLifted(false); setSlot((s) => Math.max(s, 1)); setStage((s) => Math.max(s, 1));
@@ -179,6 +180,11 @@ export function Darkroom({ t, imageUrl, generating, error, caption, fragments, a
       wake.forEach((w) => w());
     };
   }, [ceremony, seen]);
+
+  // a failure takes the skip button away: if it had focus, hand it to the first way on
+  useEffect(() => {
+    if (failed && document.activeElement === document.body) nextRef.current?.querySelector("button")?.focus();
+  }, [failed]);
 
   function skip() {
     skipRef.current = true;
@@ -288,7 +294,7 @@ export function Darkroom({ t, imageUrl, generating, error, caption, fragments, a
       )}
 
       {failed && (
-        <div className={css.next}>
+        <div className={css.next} ref={nextRef}>
           <p role="alert" className={css.error}>{error}</p>
           <div className={css.acts}>
             {failureActions.map((a, i) => (

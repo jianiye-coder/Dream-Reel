@@ -33,7 +33,8 @@ async function stubProviders(page: Page, imageDelayMs: number) {
   });
 }
 
-const room = (page: Page) => page.getByRole("dialog");
+// by name: on narrow screens the notebook's contents panel is a dialog too
+const room = (page: Page) => page.getByRole("dialog", { name: /梦境显影室|Dream Developing Room/ });
 const surfaced = /梦境已经显影|The dream has surfaced/;
 
 // a fill that lands before React hydrates the page is wiped by hydration: write until it stays,
