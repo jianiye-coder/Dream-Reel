@@ -22,7 +22,7 @@ const lineOf = (text, index) => text.slice(0, index).split("\n").length;
 const lineCount = (text) => text.split("\n").length - (text.endsWith("\n") ? 1 : 0);
 const inSrc = (re) => files.filter((f) => f.startsWith("src/") && re.test(f));
 const srcCode = inSrc(/\.(ts|tsx)$/);
-const serverCode = srcCode.filter((f) => /^src\/(app\/api\/|lib\/|auth|middleware)/.test(f) && f !== "src/lib/i18n.ts");
+const serverCode = srcCode.filter((f) => /^src\/(app\/api\/|lib\/|auth|proxy)/.test(f) && f !== "src/lib/i18n.ts");
 const run = (cmd, args) => spawnSync(cmd, args, { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
 
 /** text between the parentheses of a call starting at `open` (the index of "(") */
@@ -186,10 +186,10 @@ principle(6, "Users see error codes, never env names or raw errors", ({ add, met
 
 // 7 ── payments and auth are tested ────────────────────────────────────────────────────────────
 principle(7, "Payments and auth changes come with tests", ({ add, metrics }) => {
-  const critical = srcCode.filter((f) => !f.includes("[...nextauth]") && /^src\/(app\/api\/(billing|auth|user)\/|lib\/(billing|stripe|session|authRateLimit|dreamTextEncryption)\.ts$|auth(\.config)?\.ts$|middleware\.ts$)/.test(f));
+  const critical = srcCode.filter((f) => !f.includes("[...nextauth]") && /^src\/(app\/api\/(billing|auth|user)\/|lib\/(billing|stripe|session|authRateLimit|dreamTextEncryption)\.ts$|auth(\.config)?\.ts$|proxy\.ts$)/.test(f));
   const tests = files.filter((f) => /^tests\/(unit|integration)\/.*\.test\.ts$/.test(f)).map(read).join("\n");
   const imported = new Set();
-  for (const m of tests.matchAll(/(?:from\s+|import\(\s*)["']([^"']+)["']/g)) imported.add(m[1].replace(/^@\//, "src/"));
+  for (const m of tests.matchAll(/(?:from\s+|import\s*\(?\s*)["']([^"']+)["']/g)) imported.add(m[1].replace(/^@\//, "src/"));
   let covered = 0;
   for (const f of critical) {
     const mod = f.replace(/\.tsx?$/, "");

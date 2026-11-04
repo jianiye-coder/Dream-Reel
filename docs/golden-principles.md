@@ -120,7 +120,7 @@ passed through. Agent judgement on new routes.
 rarely shows up in a click-through.
 
 **Rule.** Any change to billing (`src/lib/billing.ts`, `src/lib/stripe.ts`,
-`src/app/api/billing/**`), auth (`src/auth*.ts`, `src/middleware.ts`,
+`src/app/api/billing/**`), auth (`src/auth*.ts`, `src/proxy.ts`,
 `src/lib/session.ts`, `src/lib/authRateLimit.ts`, `src/app/api/auth/**`,
 `src/app/api/user/**`) or dream-text encryption ships with a unit or
 integration test that exercises it. The automated sweep may only touch
