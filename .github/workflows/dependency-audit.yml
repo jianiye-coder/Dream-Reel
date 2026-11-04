@@ -4,6 +4,9 @@ on:
   pull_request:
   push:
     branches: [main]
+  # the quality sweep dispatches it on its PR branch, like ci.yml: `audit` is a required check and
+  # PRs opened with GITHUB_TOKEN don't start pull_request runs
+  workflow_dispatch:
 
 permissions:
   contents: read
