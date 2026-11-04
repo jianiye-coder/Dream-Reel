@@ -36,13 +36,23 @@ async function stubProviders(page: Page, imageDelayMs: number) {
 const room = (page: Page) => page.getByRole("dialog");
 const surfaced = /梦境已经显影|The dream has surfaced/;
 
+// a fill that lands before React hydrates the page is wiped by hydration: write until it stays,
+// then ask for the reading
+async function writeAndRead(page: Page, text: string) {
+  const organise = page.getByRole("button", { name: /整理这个梦|Read this dream/ }).first();
+  await expect(async () => {
+    await page.locator(".quick-textarea").fill(text);
+    await expect(organise).toBeVisible({ timeout: 1_000 });
+  }).toPass({ timeout: 30_000 });
+  await organise.click();
+}
+
 test("the darkroom runs the whole ceremony the first time, offers skip after, and reopens on the line", async ({ page }) => {
   test.setTimeout(120_000);
   await registerAndOpenJournal(page, `e2e-darkroom-${run}@example.com`);
   await stubProviders(page, 2500);
 
-  await page.locator(".quick-textarea").fill("I walked down my grandmother's corridor and every door was half open.");
-  await page.getByRole("button", { name: /整理这个梦|Read this dream/ }).first().click();
+  await writeAndRead(page, "I walked down my grandmother's corridor and every door was half open.");
   await page.getByRole("button", { name: /生成梦境图像|Generate Dream Image/ }).first().click();
 
   // first time: exposure under the safelight, no skip yet
@@ -78,7 +88,7 @@ test("the darkroom runs the whole ceremony the first time, offers skip after, an
   await expect(room(page)).toBeHidden();
 });
 
-test("a print that doesn't come up says so in the dark and can be tried again", async ({ page }) => {
+test("a print that doesn't come up says so in the dark, and trying again starts the ceremony over", async ({ page }) => {
   test.setTimeout(90_000);
   await registerAndOpenJournal(page, `e2e-darkroom-failed-${run}@example.com`);
   await page.route("**/api/generate-image", (route) => route.fulfill({ status: 500, json: { error: "IMAGE_GENERATION_FAILED" } }));
@@ -86,12 +96,40 @@ test("a print that doesn't come up says so in the dark and can be tried again", 
     json: { title: "Lake", mood: "calm", stressScore: 1, people: [], locations: ["lake"], symbols: [], sleepInsight: "", visualBrief: "" },
   }));
 
-  await page.locator(".quick-textarea").fill("A still lake at dawn.");
-  await page.getByRole("button", { name: /整理这个梦|Read this dream/ }).first().click();
+  await writeAndRead(page, "A still lake at dawn.");
   await page.getByRole("button", { name: /生成梦境图像|Generate Dream Image/ }).first().click();
 
-  await expect(room(page).getByRole("heading", { name: /这一张没有显影出来|This print didn't come up/ })).toBeVisible({ timeout: 20_000 });
-  await expect(room(page).getByRole("button", { name: /重新生成|Try again/ })).toBeVisible();
+  const failedTitle = room(page).getByRole("heading", { name: /这一张没有显影出来|This print didn't come up/ });
+  await expect(failedTitle).toBeVisible({ timeout: 20_000 });
+  await room(page).getByRole("button", { name: /重新生成|Try again/ }).click();
+  await expect(room(page).getByRole("heading", { name: /把梦投在相纸上|Projecting the dream onto paper/ })).toBeVisible();
+  await expect(failedTitle).toBeVisible({ timeout: 20_000 });
   await room(page).getByRole("button", { name: /返回梦境|Back to dream/ }).click();
   await expect(room(page)).toBeHidden();
+});
+
+test("when another print fails, the earlier one isn't developed in its place", async ({ page }) => {
+  test.setTimeout(120_000);
+  await registerAndOpenJournal(page, `e2e-darkroom-again-${run}@example.com`);
+  await stubProviders(page, 500);
+
+  await writeAndRead(page, "A train that never reached the station.");
+  await page.getByRole("button", { name: /生成梦境图像|Generate Dream Image/ }).first().click();
+  await expect(room(page).getByRole("heading", { name: surfaced })).toBeVisible({ timeout: 45_000 });
+  await room(page).getByRole("button", { name: /关闭|Close/ }).first().click();
+
+  // the next print fails while the first one is still on the page
+  await page.unroute("**/api/generate-image");
+  await page.route("**/api/generate-image", (route) => route.fulfill({ status: 500, json: { error: "IMAGE_GENERATION_FAILED" } }));
+  await page.getByRole("button", { name: /再显影一张|Develop another/ }).first().click();
+  await expect(room(page).getByRole("heading", { name: /这一张没有显影出来|This print didn't come up/ })).toBeVisible({ timeout: 20_000 });
+  await expect(room(page).getByRole("button", { name: /重新生成|Try again/ })).toBeVisible();
+  await expect(room(page).getByRole("button", { name: /和 AI 聊聊|Talk it through with AI/ })).toHaveCount(0);
+  await expect(room(page).getByRole("img", { name: /梦境图|Dream image/ })).toHaveCount(0);
+  await room(page).getByRole("button", { name: /返回梦境|Back to dream/ }).click();
+
+  // and the first print is still there to look at, straight on the line
+  await page.getByRole("button", { name: /查看图像|View image/ }).first().click();
+  await expect(room(page).getByRole("heading", { name: surfaced })).toBeVisible();
+  await expect(room(page).getByRole("button", { name: /重新生成|Try again/ })).toHaveCount(0);
 });

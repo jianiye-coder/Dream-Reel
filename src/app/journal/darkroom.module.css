@@ -210,8 +210,30 @@
 @media (max-width: 600px) {
   :global(.nb-root) .lamp span { display: none; }
 }
+/* short screens (small laptops, phones on their side): a smaller print, higher on the line */
+@media (max-height: 760px) {
+  :global(.nb-root) .line { top: 20vh; }
+  :global(.nb-root) .hang { top: calc(20vh + 14px); }
+  :global(.nb-root) .sheet { width: 240px; margin-left: -120px; padding: 12px 12px 38px; }
+  :global(.nb-root) .sheet img { width: 216px; height: 216px; }
+  :global(.nb-root) .sheet figcaption { bottom: 10px; font-size: 15px; }
+  :global(.nb-root) .next { bottom: 6vh; }
+}
+@media (max-height: 560px) {
+  :global(.nb-root) .root { --s: .5; }
+  :global(.nb-root) .copy { top: 3vh; }
+  :global(.nb-root) .copy h2 { margin-top: 6px; font-size: 18px; }
+  :global(.nb-root) .line { top: 17vh; }
+  :global(.nb-root) .hang { top: calc(17vh + 10px); }
+  :global(.nb-root) .sheet { width: 170px; margin-left: -85px; padding: 9px 9px 30px; }
+  :global(.nb-root) .sheet img { width: 152px; height: 152px; }
+  :global(.nb-root) .sheet figcaption { left: 11px; right: 11px; bottom: 8px; font-size: 13px; }
+  :global(.nb-root) .steps { bottom: 3vh; }
+  :global(.nb-root) .next { bottom: 3vh; gap: 8px; }
+  :global(.nb-root) .acts button { font-size: 15px; }
+}
 @media (prefers-reduced-motion: reduce) {
   :global(.nb-root) .surface::before, :global(.nb-root) .surface::after, :global(.nb-root) .agitate,
   :global(.nb-root) .hang.show, :global(.nb-root) .fragments span, :global(.nb-root) .next { animation: none; }
-  :global(.nb-root) .root *, :global(.nb-root) .dark, :global(.nb-root) .desk { transition: none; }
+  :global(.nb-root) .root * { transition: none; }
 }

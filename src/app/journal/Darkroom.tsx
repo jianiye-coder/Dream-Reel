@@ -62,7 +62,7 @@ function markSeen(count: number) {
  * opened on a print that already exists, it goes straight to the line.
  */
 export function Darkroom({ t, imageUrl, generating, error, caption, fragments, actions, note, alert, failureActions, onClose }: Props) {
-  const filterId = `develop-${useId().replace(/:/g, "")}`;
+  const filterId = `develop-${useId().replace(/[^A-Za-z0-9_-]/g, "")}`;
   // decided once per mount: a print being made now gets the ceremony
   const [ceremony] = useState(() => generating);
   const [seen] = useState(() => (ceremony ? readSeen() : 0));
@@ -79,25 +79,34 @@ export function Darkroom({ t, imageUrl, generating, error, caption, fragments, a
 
   const funcRefs = useRef<(SVGFEFuncRElement | SVGFEFuncGElement | SVGFEFuncBElement | null)[]>([]);
   const colourRef = useRef<SVGImageElement | null>(null);
+  const closeRef = useRef<HTMLButtonElement | null>(null);
   const latest = useRef({ imageUrl, generating, error });
   useEffect(() => { latest.current = { imageUrl, generating, error }; }, [imageUrl, generating, error]);
   const skipRef = useRef(false);
+  const markedRef = useRef(false);
   const wakeRef = useRef(new Set<() => void>());
 
-  const failed = !!error && !generating;
+  // only this print's failure counts: an old error must not stand in front of a print that exists
+  const failed = !!error && !generating && (ceremony || !imageUrl);
 
   useEffect(() => {
     if (!ceremony) return;
     let cancelled = false;
-    markSeen(seen + 1);
+    // once per print, though StrictMode runs this effect twice in development
+    if (!markedRef.current) { markedRef.current = true; markSeen(seen + 1); }
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) skipRef.current = true;
 
     const wake = wakeRef.current;
-    const sleep = (ms: number) => new Promise<void>((resolve) => {
-      const done = () => { clearTimeout(timer); wake.delete(done); resolve(); };
-      const timer = setTimeout(done, ms);
-      wake.add(done);
+    // a pause that cleanup (and, for beat, skip) can cut short
+    const pause = (ms: number) => new Promise<void>((resolve) => {
+      const end = () => { clearTimeout(timer); wake.delete(end); resolve(); };
+      const timer = setTimeout(end, ms);
+      wake.add(end);
     });
+    const ready = () => !!latest.current.imageUrl && !latest.current.generating && !latest.current.error;
+    // skipped, or the print didn't come up: no more motion either way
+    const stopped = () => cancelled || skipRef.current || !!latest.current.error;
+    const beat = (ms: number) => (stopped() ? Promise.resolve() : pause(ms));
     const paint = (dev: number, light: number) => {
       const table = developTable(dev);
       funcRefs.current.forEach((f) => f?.setAttribute("tableValues", table));
@@ -106,7 +115,7 @@ export function Darkroom({ t, imageUrl, generating, error, caption, fragments, a
     const animate = (ms: number, frame: (k: number) => void) => new Promise<void>((resolve) => {
       const t0 = performance.now();
       const tick = (now: number) => {
-        if (cancelled || skipRef.current) return resolve();
+        if (stopped()) return resolve();
         const k = Math.min(1, (now - t0) / ms);
         frame(k);
         if (k < 1) requestAnimationFrame(tick); else resolve();
@@ -115,45 +124,54 @@ export function Darkroom({ t, imageUrl, generating, error, caption, fragments, a
     });
     const moveTo = async (next: number) => {
       setAgitating(false); setLifted(true);
-      await sleep(350); setSlot(next);
-      await sleep(1300); setLifted(false); setAgitating(true);
+      await beat(350); if (stopped()) return;
+      setSlot(next);
+      await beat(1300); if (stopped()) return;
+      setLifted(false); setAgitating(true);
     };
-    const ready = () => !!latest.current.imageUrl && !latest.current.generating;
-    const stopped = () => cancelled || skipRef.current;
-    const finish = () => {
+    const waitForImage = async () => {
+      while (!cancelled && !ready() && !latest.current.error) await pause(250);
+    };
+    // decode before developing, so the curve isn't half over when the pixels arrive (capped at 4 s)
+    const preload = (url: string) => new Promise<void>((resolve) => {
+      const img = new window.Image();
+      const timer = setTimeout(resolve, 4000);
+      img.onload = img.onerror = () => { clearTimeout(timer); resolve(); };
+      img.src = url;
+    });
+    // skipped or failed: settle in the developer, then hang the print the moment it exists
+    const settle = async () => {
+      setBeam(false); setLifted(false); setSlot((s) => Math.max(s, 1)); setStage((s) => Math.max(s, 1));
+      setAgitating(!latest.current.error);
+      await waitForImage();
+      if (cancelled) return;
+      if (!ready()) { setAgitating(false); return; }   // didn't come up: the page says why
       paint(1, 1);
-      setBeam(false); setAgitating(false); setLifted(false);
-      setStage(5); setLights(true); setHung(true); setWritten(true); setDone(true);
+      setAgitating(false); setStage(5); setLights(true); setHung(true); setWritten(true); setDone(true);
     };
 
     (async () => {
       paint(0, 0);
-      if (!stopped()) {
-        await sleep(700);
-        setStage(0); setBeam(true);
-        await sleep(2200); setBeam(false); await sleep(500);
-      }
-      if (!stopped()) { setStage(1); await moveTo(1); } else setSlot(1);
+      await beat(700); if (cancelled) return; if (stopped()) return settle();
+      setStage(0); setBeam(true);
+      await beat(2200); setBeam(false);
+      await beat(500); if (cancelled) return; if (stopped()) return settle();
+      setStage(1); await moveTo(1); if (cancelled) return; if (stopped()) return settle();
       // the print stays in the developer, rocking, for as long as the image takes to arrive
-      setStage(1); setAgitating(true);
-      while (!cancelled && !ready() && !latest.current.error) await sleep(250);
-      if (cancelled) return;
-      if (!ready()) { setAgitating(false); return; }   // didn't come up: the page shows why
-      if (skipRef.current) return finish();
+      await waitForImage(); if (cancelled) return; if (stopped()) return settle();
+      await preload(latest.current.imageUrl as string); if (cancelled) return; if (stopped()) return settle();
 
-      await animate(6500, (k) => paint(k, 0));
-      if (stopped()) return cancelled ? undefined : finish();
-      setStage(2); await moveTo(2); await sleep(1400);
-      if (stopped()) return cancelled ? undefined : finish();
-      setStage(3); await moveTo(3); await sleep(2200);
-      if (stopped()) return cancelled ? undefined : finish();
-      setStage(4); await moveTo(4); setLights(true);
-      await animate(2200, (k) => paint(1, k)); await sleep(800);
-      if (stopped()) return cancelled ? undefined : finish();
-      setStage(5); setAgitating(false); paint(1, 1);
-      setHung(true); await sleep(900);
-      setWritten(true); await sleep(1600);
-      if (!cancelled) setDone(true);
+      await animate(6500, (k) => paint(k, 0)); if (cancelled) return; if (stopped()) return settle();
+      setStage(2); await moveTo(2); await beat(1400); if (cancelled) return; if (stopped()) return settle();
+      setStage(3); await moveTo(3); await beat(2200); if (cancelled) return; if (stopped()) return settle();
+      setStage(4); await moveTo(4); if (cancelled) return; if (stopped()) return settle();
+      setLights(true);
+      await animate(2200, (k) => paint(1, k)); await beat(800); if (cancelled) return; if (stopped()) return settle();
+      setStage(5); setAgitating(false); paint(1, 1); setHung(true);
+      await beat(900); if (cancelled) return; if (stopped()) return settle();
+      setWritten(true);
+      await beat(1600); if (cancelled) return; if (stopped()) return settle();
+      setDone(true);
     })();
 
     return () => {
@@ -166,10 +184,11 @@ export function Darkroom({ t, imageUrl, generating, error, caption, fragments, a
     skipRef.current = true;
     setCanSkip(false);
     wakeRef.current.forEach((w) => w());
+    closeRef.current?.focus();   // the skip button is about to go
   }
 
   const title = failed ? t.failed : done ? t.surfaced : stage >= 0 ? t.titles[stage] : t.titles[0];
-  const rootClass = [css.root, lights && css.lights, hung && css.dry, done && css.done].filter(Boolean).join(" ");
+  const rootClass = [css.root, lights && css.lights, hung && css.dry].filter(Boolean).join(" ");
   const printClass = [css.print, lifted && css.lifted, agitating && css.agitate].filter(Boolean).join(" ");
   const benchStyle = { transform: `translateX(${-SLOTS[slot]}px)` } as CSSProperties;
   const printStyle = { transform: `translate(${SLOTS[slot]}px, 0)` } as CSSProperties;
@@ -183,12 +202,12 @@ export function Darkroom({ t, imageUrl, generating, error, caption, fragments, a
 
       <div className={css.bar}>
         {ceremony && canSkip && !done && !failed && <button type="button" onClick={skip}>{t.skip}</button>}
-        <button type="button" onClick={onClose}>{t.close}</button>
+        <button ref={closeRef} type="button" onClick={onClose}>{t.close}</button>
       </div>
 
       <header className={css.copy}>
         <p className={css.kicker}>{t.label}</p>
-        <h2 aria-live="polite">{title}</h2>
+        <h2 aria-live={failed ? "off" : "polite"}>{title}</h2>
       </header>
 
       <div className={css.fragments} role="group" aria-label={t.fragmentsLabel}>
@@ -239,7 +258,7 @@ export function Darkroom({ t, imageUrl, generating, error, caption, fragments, a
         <svg viewBox="0 0 1000 40" preserveAspectRatio="none"><path d="M0 8 Q 500 26 1000 8" /></svg>
       </div>
       {imageUrl && (
-        <figure className={`${css.hang}${hung ? ` ${css.show}` : ""}${written ? ` ${css.written}` : ""}`}>
+        <figure className={`${css.hang}${hung ? ` ${css.show}` : ""}${written ? ` ${css.written}` : ""}`} aria-hidden={!hung}>
           <div className={css.sheet}>
             <Image src={imageUrl} alt={t.alt} width={1024} height={1024} unoptimized />
             <figcaption><span>{caption}</span></figcaption>
@@ -256,12 +275,12 @@ export function Darkroom({ t, imageUrl, generating, error, caption, fragments, a
         </ol>
       )}
 
-      {done && (
+      {done && !failed && (
         <div className={css.next}>
           {note && <p role="status">{note}</p>}
           <div className={css.acts}>
-            {actions.map((a) => (
-              <button key={a.label} type="button" onClick={a.onClick} disabled={a.disabled} className={a.primary ? css.primary : undefined}>{a.label}</button>
+            {actions.map((a, i) => (
+              <button key={i} type="button" onClick={a.onClick} disabled={a.disabled} className={a.primary ? css.primary : undefined}>{a.label}</button>
             ))}
           </div>
           {alert && <p role="alert" className={css.error}>{alert}</p>}
@@ -272,8 +291,8 @@ export function Darkroom({ t, imageUrl, generating, error, caption, fragments, a
         <div className={css.next}>
           <p role="alert" className={css.error}>{error}</p>
           <div className={css.acts}>
-            {failureActions.map((a) => (
-              <button key={a.label} type="button" onClick={a.onClick} disabled={a.disabled} className={a.primary ? css.primary : undefined}>{a.label}</button>
+            {failureActions.map((a, i) => (
+              <button key={i} type="button" onClick={a.onClick} disabled={a.disabled} className={a.primary ? css.primary : undefined}>{a.label}</button>
             ))}
           </div>
         </div>
