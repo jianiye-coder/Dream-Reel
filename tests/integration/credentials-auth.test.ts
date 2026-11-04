@@ -15,7 +15,6 @@ vi.mock("next-auth", () => ({
 }));
 vi.mock("next-auth/providers/credentials", () => ({ default: (options: unknown) => options }));
 
-import "@/auth";
 import { authConfig } from "@/auth.config";
 import { ensureSchema, getPool } from "@/lib/db";
 
@@ -47,6 +46,8 @@ databaseDescribe("credentials sign-in in PostgreSQL", () => {
   beforeAll(async () => {
     process.env.DATABASE_URL = process.env.TEST_DATABASE_URL;
     process.env.DREAM_TEXT_ENCRYPTION_KEY = "integration-encryption-secret";
+    // imported only now: src/auth.ts opens its pool at import time, and it must be the test database
+    await import("@/auth");
     await ensureSchema();
   });
 
@@ -100,6 +101,8 @@ databaseDescribe("credentials sign-in in PostgreSQL", () => {
     const locked = authorize({ email: user.email, password: "correct-horse" }, "198.51.100.99");
     await expect(locked).rejects.toBeInstanceOf(CredentialsSignin);
     await expect(locked).rejects.toMatchObject({ code: "rate_limited" });
+    // a wrong password gets the same answer, so the lock says nothing about which password is right
+    await expect(authorize({ email: user.email, password: "wrong-horse" }, "198.51.100.98")).rejects.toMatchObject({ code: "rate_limited" });
   });
 
   it("clears the failure count after a successful sign-in", async () => {

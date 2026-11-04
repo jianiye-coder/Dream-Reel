@@ -86,7 +86,7 @@ databaseDescribe("account routes in PostgreSQL", () => {
       const res = await register(request("POST", "/api/auth/register", body));
       expect(res.status).toBe(400);
       expect(await res.json()).toEqual({ error: "INVALID_REQUEST" });
-      expect(await userRow("x@example.test")).toBeUndefined();
+      expect(await userRow(body.email.trim().toLowerCase())).toBeUndefined();
     });
 
     it("refuses an address that is already registered, whatever its case", async () => {
@@ -118,7 +118,7 @@ databaseDescribe("account routes in PostgreSQL", () => {
       expect(res.status).toBe(401);
     });
 
-    it("rejects a new password under six characters before checking the old one", async () => {
+    it("rejects a new password under six characters and keeps the hash", async () => {
       const user = await registered();
       const res = await changePassword(request("PUT", "/api/user/password", { currentPassword: "old-password", newPassword: "12345" }));
       expect(res.status).toBe(400);
