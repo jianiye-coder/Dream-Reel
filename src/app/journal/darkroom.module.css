@@ -1,0 +1,239 @@
+/* ── the darkroom: a print exposed, developed, stopped, fixed, washed with the lights on, hung to dry ── */
+:global(.nb-root) .root {
+  --amber: 255, 168, 82;
+  --s: 1;
+  position: fixed; inset: 0; overflow: hidden; color: rgba(255, 226, 190, .88); font-family: var(--serif);
+}
+
+/* two rooms: the darkroom under a safelight, and the morning desk once the lights come on */
+:global(.nb-root) .dark, :global(.nb-root) .desk { position: absolute; inset: 0; transition: opacity 2.2s ease; }
+:global(.nb-root) .dark {
+  background:
+    radial-gradient(ellipse 38% 34% at 14% -4%, rgba(var(--amber), .30), transparent 72%),
+    radial-gradient(ellipse 75% 65% at 50% 56%, #3a2818 0%, #1e140c 60%, #100a06 100%);
+}
+:global(.nb-root) .desk {
+  opacity: 0;
+  background:
+    radial-gradient(ellipse 60% 50% at 30% 0%, rgba(255, 246, 226, .55), transparent 70%),
+    radial-gradient(ellipse 90% 70% at 10% 110%, rgba(150, 128, 96, .25), transparent 70%),
+    linear-gradient(180deg, var(--desk), #cbbfa8);
+}
+:global(.nb-root) .lights .dark { opacity: 0; }
+:global(.nb-root) .lights .desk { opacity: 1; }
+:global(.nb-root) .grain {
+  position: absolute; inset: 0; pointer-events: none; opacity: .5; mix-blend-mode: multiply;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 .5  0 0 0 0 .45  0 0 0 0 .4  0 0 0 .09 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+}
+
+/* the safelight: a small amber lamp in the corner */
+:global(.nb-root) .lamp {
+  position: absolute; left: 7%; top: 0; width: 120px; height: 46px; border-radius: 0 0 60px 60px;
+  background: radial-gradient(ellipse 60% 90% at 50% 0%, rgba(255, 196, 120, .95), rgba(var(--amber), .55) 55%, rgba(var(--amber), 0) 75%);
+  transition: opacity 1.4s;
+}
+:global(.nb-root) .lamp span {
+  position: absolute; left: 50%; top: 54px; transform: translateX(-50%); white-space: nowrap;
+  font-family: var(--mono); font-size: 10px; letter-spacing: .3em; color: rgba(var(--amber), .45);
+}
+:global(.nb-root) .lights .lamp { opacity: 0; }
+
+/* close, and skip from the second time on */
+:global(.nb-root) .bar { position: absolute; top: 22px; right: 26px; z-index: 9; display: flex; gap: 26px; }
+:global(.nb-root) .bar button {
+  font-family: var(--mono); font-size: 11px; letter-spacing: .2em; color: rgba(var(--amber), .7);
+  padding: 4px 0; border-bottom: 1px solid rgba(var(--amber), .3); transition: color .6s, border-color .6s;
+}
+:global(.nb-root) .bar button:hover { color: rgba(var(--amber), 1); }
+:global(.nb-root) .lights .bar button { color: var(--ink-soft); border-bottom-color: rgba(31, 28, 23, .3); }
+:global(.nb-root) .lights .bar button:hover { color: var(--ink); }
+
+/* header copy */
+:global(.nb-root) .copy { position: absolute; left: 0; right: 0; top: 7vh; z-index: 5; text-align: center; pointer-events: none; }
+:global(.nb-root) .kicker { font-family: var(--mono); font-size: 11px; letter-spacing: .3em; color: rgba(var(--amber), .8); transition: color 1.6s; }
+:global(.nb-root) .copy h2 { margin-top: 12px; font-weight: 400; font-size: 26px; letter-spacing: .04em; color: rgba(255, 226, 190, .88); transition: color 1.6s; }
+:global(.nb-root) .lights .kicker { color: var(--red-ink); }
+:global(.nb-root) .lights .copy h2 { color: var(--ink); font-weight: 600; }
+
+/* the dream's own words drift in the dark, and go when the lights come on */
+:global(.nb-root) .fragments { position: absolute; inset: 0; overflow: hidden; pointer-events: none; transition: opacity 2s ease; }
+:global(.nb-root) .fragments span {
+  position: absolute; left: calc(7% + var(--i) * 18%); top: calc(18% + var(--i) * 13%);
+  max-width: 22ch; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  font-family: var(--hand); font-size: 16px; color: rgba(255, 226, 190, .14);
+  animation: drift 16s ease-in-out infinite alternate; animation-delay: calc(var(--i) * -3s);
+}
+:global(.nb-root) .fragments span:nth-child(even) { top: auto; bottom: calc(14% + var(--i) * 8%); }
+@keyframes drift { from { transform: translate(0, 0); } to { transform: translate(24px, -18px); } }
+:global(.nb-root) .lights .fragments { opacity: 0; }
+
+/* the bench: easel and four trays in a row, seen from above; the bench pans along with the print */
+:global(.nb-root) .stage { position: absolute; left: 50%; top: 53%; width: 0; height: 0; transform: scale(var(--s)); transition: opacity 1.4s; }
+:global(.nb-root) .bench { position: absolute; left: 0; top: 0; transition: transform 1.3s cubic-bezier(.62, .04, .26, 1); }
+:global(.nb-root) .slot { position: absolute; top: -160px; width: 320px; height: 320px; margin-left: -160px; }
+:global(.nb-root) .easel { border-radius: 3px; background: #1d1510; box-shadow: 0 30px 60px -30px rgba(0, 0, 0, .8); }
+:global(.nb-root) .easel::before, :global(.nb-root) .easel::after { content: ""; position: absolute; background: #3a2c22; }
+:global(.nb-root) .easel::before { left: 18px; right: 18px; top: 18px; height: 10px; }   /* the easel's blades */
+:global(.nb-root) .easel::after { top: 18px; bottom: 18px; left: 18px; width: 10px; }
+/* the enlarger's light; the paper under it stays white (the image is still latent) */
+:global(.nb-root) .beam {
+  position: absolute; z-index: 3; left: 50%; top: 50%; width: 236px; height: 236px; margin: -118px; opacity: 0; transition: opacity .5s;
+  background: radial-gradient(ellipse 70% 70% at 50% 50%, rgba(255, 236, 200, .32), rgba(255, 236, 200, .16));
+  box-shadow: 0 0 80px 30px rgba(255, 230, 190, .16);
+}
+:global(.nb-root) .beam.on { opacity: 1; }
+
+:global(.nb-root) .tray {
+  border-radius: 10px; background: #18110c; transition: background 2s, box-shadow 2s;
+  box-shadow: inset 0 0 0 9px #3b2b1e, inset 0 0 0 10px rgba(var(--amber), .22), 0 0 0 1px rgba(var(--amber), .10), 0 26px 50px -26px rgba(0, 0, 0, .85);
+}
+:global(.nb-root) .liquid {
+  position: absolute; inset: 14px; border-radius: 5px; overflow: hidden; transition: background 2s;
+  background: radial-gradient(ellipse 80% 70% at 40% 35%, rgba(var(--amber), .10), transparent 70%), #120c08;
+}
+:global(.nb-root) .wash .liquid { background: radial-gradient(ellipse 80% 70% at 40% 35%, rgba(150, 190, 210, .12), transparent 70%), #101418; }
+/* light on the liquid's surface, sloshing as the tray is rocked */
+:global(.nb-root) .surface { position: absolute; inset: 14px; z-index: 3; border-radius: 5px; overflow: hidden; pointer-events: none; }
+:global(.nb-root) .surface::before, :global(.nb-root) .surface::after {
+  content: ""; position: absolute; inset: -30%;
+  background:
+    radial-gradient(ellipse 22% 12% at 30% 40%, rgba(255, 210, 160, .11), transparent 70%),
+    radial-gradient(ellipse 18% 9% at 66% 62%, rgba(255, 210, 160, .08), transparent 70%),
+    radial-gradient(ellipse 30% 6% at 50% 20%, rgba(255, 210, 160, .06), transparent 70%);
+  animation: slosh 3.4s ease-in-out infinite alternate;
+}
+:global(.nb-root) .surface::after { animation-duration: 4.6s; animation-direction: alternate-reverse; opacity: .8; }
+@keyframes slosh { from { transform: translate(-4%, -3%) rotate(-2deg); } to { transform: translate(5%, 4%) rotate(2deg); } }
+:global(.nb-root) .label {
+  position: absolute; left: 0; right: 0; bottom: -40px; text-align: center;
+  font-family: var(--mono); font-size: 12px; letter-spacing: .3em; color: rgba(var(--amber), .7);
+}
+:global(.nb-root) .label i { display: block; margin-top: 4px; font-style: normal; font-size: 9px; letter-spacing: .18em; opacity: .7; }
+:global(.nb-root) .lights .tray { background: #c9bda7; box-shadow: inset 0 0 0 9px #bcae95, 0 20px 40px -24px rgba(60, 42, 20, .45); }
+:global(.nb-root) .lights .liquid { background: rgba(214, 222, 220, .9); }
+:global(.nb-root) .lights .label { color: var(--ink-faint); }
+:global(.nb-root) .lights .surface::before, :global(.nb-root) .lights .surface::after {
+  background:
+    radial-gradient(ellipse 22% 10% at 30% 40%, rgba(255, 255, 255, .35), transparent 70%),
+    radial-gradient(ellipse 30% 6% at 64% 64%, rgba(255, 255, 255, .25), transparent 70%);
+}
+
+/* the print: fibre paper with a white border; the svg filter develops the image on it */
+:global(.nb-root) .print {
+  position: absolute; left: 0; top: 0; z-index: 2; width: 226px; height: 226px; margin: -113px; padding: 13px;
+  background: rgb(188, 151, 114);   /* white paper, as the safelight shows it */
+  box-shadow: 0 1px 1px rgba(0, 0, 0, .3);
+  transition: transform 1.3s cubic-bezier(.62, .04, .26, 1), box-shadow .6s, background 2.2s;
+}
+:global(.nb-root) .lights .print { background: #fffdf8; }
+:global(.nb-root) .emulsion { display: block; width: 200px; height: 200px; }
+:global(.nb-root) .lifted { box-shadow: 0 30px 40px -18px rgba(0, 0, 0, .7); }
+:global(.nb-root) .agitate { animation: agitate 2.2s ease-in-out infinite; }
+@keyframes agitate { 0%, 100% { translate: 0 0; rotate: -.6deg; } 50% { translate: 3px -2px; rotate: .5deg; } }
+:global(.nb-root) .tongs {
+  position: absolute; left: 50%; top: -40px; width: 14px; height: 70px; margin-left: -7px; opacity: 0; transition: opacity .4s;
+  background: linear-gradient(90deg, #6d5a48, #9a8570 50%, #6d5a48); border-radius: 3px 3px 7px 7px;
+}
+:global(.nb-root) .lifted .tongs { opacity: .9; }
+
+/* the drying line by the window */
+:global(.nb-root) .line { position: absolute; left: -2%; right: -2%; top: 26vh; height: 40px; opacity: 0; transition: opacity 1.4s; pointer-events: none; }
+:global(.nb-root) .line svg { width: 100%; height: 100%; }
+:global(.nb-root) .line path { stroke: #8a7a66; stroke-width: 1.2; fill: none; }
+:global(.nb-root) .dry .line { opacity: 1; }
+:global(.nb-root) .dry .stage { opacity: 0; }
+:global(.nb-root) .hang { position: absolute; left: 50%; top: calc(26vh + 14px); z-index: 4; transform-origin: 50% 0; opacity: 0; pointer-events: none; }
+:global(.nb-root) .hang.show { opacity: 1; animation: sway 4.2s ease-in-out infinite; transition: opacity .2s; }
+@keyframes sway { 0%, 100% { rotate: -1.6deg; } 50% { rotate: 1.4deg; } }
+:global(.nb-root) .sheet {
+  position: relative; width: 300px; margin-left: -150px; padding: 16px 16px 46px; background: #fffdf8;
+  box-shadow: 0 2px 2px rgba(60, 42, 20, .14), 0 26px 44px -22px rgba(60, 42, 20, .5);
+}
+:global(.nb-root) .sheet img { display: block; width: 268px; height: 268px; object-fit: cover; }
+:global(.nb-root) .sheet figcaption {
+  position: absolute; left: 18px; right: 18px; bottom: 12px;
+  font-family: var(--hand); font-size: 17px; color: var(--hand-ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+/* written onto the border by hand, a few strokes at a time */
+:global(.nb-root) .sheet figcaption span { display: inline-block; clip-path: inset(0 100% 0 0); transition: clip-path 1.8s steps(14); }
+:global(.nb-root) .written .sheet figcaption span { clip-path: inset(0 0 0 0); }
+:global(.nb-root) .clip {
+  position: absolute; left: 50%; top: -18px; width: 20px; height: 40px; margin-left: -10px; border-radius: 3px;
+  background: linear-gradient(90deg, #b08a5f, #d4ae80 45%, #a98257); box-shadow: 0 2px 3px rgba(60, 42, 20, .3);
+}
+:global(.nb-root) .clip::after { content: ""; position: absolute; left: 4px; right: 4px; top: 15px; height: 6px; border-radius: 3px; background: #8b8f93; }
+
+/* the six steps, along the bottom */
+:global(.nb-root) .steps {
+  position: absolute; left: 0; right: 0; bottom: 9vh; z-index: 5; list-style: none;
+  display: flex; flex-wrap: wrap; justify-content: center; gap: 10px 30px;
+}
+:global(.nb-root) .steps li {
+  position: relative; padding-bottom: 6px;
+  font-family: var(--mono); font-size: 12px; letter-spacing: .2em; color: rgba(var(--amber), .3); transition: color .6s;
+}
+:global(.nb-root) .steps li.past { color: rgba(var(--amber), .5); }
+:global(.nb-root) .steps li.now { color: rgba(var(--amber), .95); }
+:global(.nb-root) .steps li.now::after { content: ""; position: absolute; left: -2px; right: -2px; bottom: 0; height: 5px; background: var(--nb-red-underline) no-repeat center / 100% 100%; }
+:global(.nb-root) .lights .steps li { color: rgba(31, 28, 23, .25); }
+:global(.nb-root) .lights .steps li.past { color: var(--ink-soft); }
+:global(.nb-root) .lights .steps li.now { color: var(--ink); }
+
+/* what to do with the print, once it is dry; or why it didn't come up */
+:global(.nb-root) .next {
+  position: absolute; left: 0; right: 0; bottom: 11vh; z-index: 6; padding: 0 24px;
+  display: grid; gap: 14px; justify-items: center; text-align: center; animation: settle 1s ease both;
+}
+@keyframes settle { from { opacity: 0; } }
+:global(.nb-root) .next > p { font-size: 13.5px; color: var(--ink-soft); }
+:global(.nb-root) .acts { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px 34px; }
+:global(.nb-root) .acts button {
+  font-family: var(--hand); font-size: 18px; color: var(--ink); padding-bottom: 4px;
+  border-bottom: 1px solid rgba(31, 28, 23, .3); transition: border-color .2s, opacity .2s;
+}
+:global(.nb-root) .acts button:hover { border-bottom-color: var(--ink); }
+:global(.nb-root) .acts button:disabled { opacity: .35; cursor: default; }
+:global(.nb-root) .acts button.primary { border-bottom: 0; background: var(--nb-red-underline) no-repeat left bottom / 100% 6px; }
+:global(.nb-root) .error { max-width: 32em; font-family: var(--hand); font-size: 16px; color: var(--red-ink); }
+/* still in the dark when a print fails */
+:global(.nb-root) .root:not(.lights) .acts button { color: rgba(255, 226, 190, .88); border-bottom-color: rgba(var(--amber), .35); }
+:global(.nb-root) .root:not(.lights) .error { color: #e8907a; }
+
+@media (max-width: 900px) {
+  :global(.nb-root) .root { --s: .62; }
+  :global(.nb-root) .copy h2 { font-size: 21px; }
+  :global(.nb-root) .sheet { width: 240px; margin-left: -120px; }
+  :global(.nb-root) .sheet img { width: 208px; height: 208px; }
+  :global(.nb-root) .steps { gap: 8px 18px; }
+  :global(.nb-root) .acts { gap: 12px 22px; }
+}
+@media (max-width: 600px) {
+  :global(.nb-root) .lamp span { display: none; }
+}
+/* short screens (small laptops, phones on their side): a smaller print, higher on the line */
+@media (max-height: 760px) {
+  :global(.nb-root) .line { top: 20vh; }
+  :global(.nb-root) .hang { top: calc(20vh + 14px); }
+  :global(.nb-root) .sheet { width: 240px; margin-left: -120px; padding: 12px 12px 38px; }
+  :global(.nb-root) .sheet img { width: 216px; height: 216px; }
+  :global(.nb-root) .sheet figcaption { bottom: 10px; font-size: 15px; }
+  :global(.nb-root) .next { bottom: 6vh; }
+}
+@media (max-height: 560px) {
+  :global(.nb-root) .root { --s: .5; }
+  :global(.nb-root) .copy { top: 3vh; }
+  :global(.nb-root) .copy h2 { margin-top: 6px; font-size: 18px; }
+  :global(.nb-root) .line { top: 17vh; }
+  :global(.nb-root) .hang { top: calc(17vh + 10px); }
+  :global(.nb-root) .sheet { width: 170px; margin-left: -85px; padding: 9px 9px 30px; }
+  :global(.nb-root) .sheet img { width: 152px; height: 152px; }
+  :global(.nb-root) .sheet figcaption { left: 11px; right: 11px; bottom: 8px; font-size: 13px; }
+  :global(.nb-root) .steps { bottom: 3vh; }
+  :global(.nb-root) .next { bottom: 3vh; gap: 8px; }
+  :global(.nb-root) .acts button { font-size: 15px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  :global(.nb-root) .surface::before, :global(.nb-root) .surface::after, :global(.nb-root) .agitate,
+  :global(.nb-root) .hang.show, :global(.nb-root) .fragments span, :global(.nb-root) .next { animation: none; }
+  :global(.nb-root) .root * { transition: none; }
+}

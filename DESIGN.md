@@ -166,7 +166,7 @@ lay out a book (journal, morning pages, archive) add their own
 | Route | Surface | Layout |
 | --- | --- | --- |
 | `/` | desk | closed hardcover that opens into the hero spread (once per session, `dr-cover-seen`), then paper sections below |
-| `/journal` | desk, lean | book: the dream in hand on the left; what Dream Reel read, or the conversation, on the right; the developing room is a dark `<dialog>` |
+| `/journal` | desk, lean | book: the dream in hand on the left; what Dream Reel read, or the conversation, on the right; the darkroom (`Darkroom.tsx`) is a full-screen `<dialog>`: expose, develop, stop, fix under an amber safelight, then lights on for the wash and the print hangs on a line to dry; skip from the second time, straight to the line when reopening a print, no motion under reduced motion |
 | `/morning-pages` | desk, lean | book: date, about and contents on the left; the ruled sheet (text or drawing) on the right |
 | `/archive` | desk, lean | book with paper bookmarks: calendar, 人物与地点, recent dreams; the editor opens as a second book over the desk |
 | `/login`, `/pricing`, `/account`, `/blog/…` | paper | one sheet (`nb-auth` on login, `nb-paper-main` on pricing/account, the blog's own module) |
