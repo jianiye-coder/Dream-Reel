@@ -189,7 +189,7 @@ principle(7, "Payments and auth changes come with tests", ({ add, metrics }) => 
   const critical = srcCode.filter((f) => !f.includes("[...nextauth]") && /^src\/(app\/api\/(billing|auth|user)\/|lib\/(billing|stripe|session|authRateLimit|dreamTextEncryption)\.ts$|auth(\.config)?\.ts$|middleware\.ts$)/.test(f));
   const tests = files.filter((f) => /^tests\/(unit|integration)\/.*\.test\.ts$/.test(f)).map(read).join("\n");
   const imported = new Set();
-  for (const m of tests.matchAll(/(?:from\s+|import\(\s*)["']([^"']+)["']/g)) imported.add(m[1].replace(/^@\//, "src/"));
+  for (const m of tests.matchAll(/(?:from\s+|import\s*\(?\s*)["']([^"']+)["']/g)) imported.add(m[1].replace(/^@\//, "src/"));
   let covered = 0;
   for (const f of critical) {
     const mod = f.replace(/\.tsx?$/, "");
