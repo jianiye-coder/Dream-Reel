@@ -18,6 +18,8 @@ test("anonymous users are redirected from protected pages", async ({ page }) => 
 });
 
 test("register, sign in, switch language, and update account", async ({ page, context }) => {
+  // two sign-ins, a 2 s autosave debounce and first compiles of the journal and its API
+  test.slow();
   await primeCsrfCookie(page);
   await page.goto("/login");
   await page.getByRole("button", { name: /register|注册/i }).first().click();
@@ -67,11 +69,11 @@ test("register, sign in, switch language, and update account", async ({ page, co
   await page.getByLabel(/Fell Asleep|入睡时间/i).fill("23:15");
   await page.getByLabel(/What you ate|昨晚吃了什么/i).fill("tea");
   await page.locator(".quick-textarea").fill("first draft of a station dream");
-  await expect.poll(() => savedBodies.length, { timeout: 5_000 }).toBeGreaterThan(0);
+  await expect.poll(() => savedBodies.length, { timeout: 15_000 }).toBeGreaterThan(0);
   await page.locator(".quick-textarea").fill("latest draft of a station dream");
   await expect.poll(
     () => savedBodies.some((body) => body.rawText === "latest draft of a station dream"),
-    { timeout: 6_000 },
+    { timeout: 15_000 },
   ).toBe(true);
   expect(savedBodies.at(-1)).toMatchObject({
     rawText: "latest draft of a station dream",
