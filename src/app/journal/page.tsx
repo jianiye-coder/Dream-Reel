@@ -20,6 +20,7 @@ import { edgeFade } from "@/lib/edgeFade";
 import { localDayKey, writtenDate } from "@/lib/dates";
 import { DreamConversationControls } from "@/components/DreamConversationControls";
 import type { DreamConversationGoal } from "@/lib/dreamSupport";
+import { Darkroom } from "./Darkroom";
 import css from "./journal.module.css";
 
 type SpeechRecognitionConstructor = new () => SpeechRecognitionLike;
@@ -160,6 +161,8 @@ export default function JournalPage() {
   const [downloadError, setDownloadError] = useState("");
   const [imageError, setImageError] = useState("");
   const [isDevelopingRoomOpen, setIsDevelopingRoomOpen] = useState(false);
+  // a new print gets a new darkroom (the ceremony starts over)
+  const [darkroomRun, setDarkroomRun] = useState(0);
 
   // Analysis
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -859,6 +862,7 @@ export default function JournalPage() {
     setIsGeneratingImage(true);
     setImageError("");
     setDownloadError("");
+    setDarkroomRun((n) => n + 1);
     setIsDevelopingRoomOpen(true);
     try {
       const userGender = (() => { try { return localStorage.getItem("dreamReel_userGender") ?? ""; } catch { return ""; } })();
@@ -1450,7 +1454,6 @@ export default function JournalPage() {
   );
 
   const roomFragments = dreamFragments.length ? dreamFragments : N.room.fallbackFragments;
-  const developed = !!generatedImageUrl && !isGeneratingImage && !imageError;
 
   return (
     <NotebookShell lean>
@@ -1638,7 +1641,7 @@ export default function JournalPage() {
 
       {billingMessage && <div className={css.toast} role="status">{billingMessage}</div>}
 
-      {/* ── the developing room: a print surfacing in the tray under the safelight ── */}
+      {/* ── the darkroom: exposed, developed, stopped, fixed, washed and hung to dry ── */}
       <dialog
         ref={roomRef}
         className={css.room}
@@ -1646,64 +1649,28 @@ export default function JournalPage() {
         onClose={handleRoomClosed}
       >
         {isDevelopingRoomOpen && (
-          <div className={css.roomIn}>
-            <button type="button" className={css.roomClose} onClick={() => setIsDevelopingRoomOpen(false)}>{N.room.close}</button>
-
-            <div className={css.roomCopy}>
-              <p className={css.roomKicker}>{N.room.label}</p>
-              <h2>{isGeneratingImage ? N.room.appearing : imageError ? N.room.failed : N.room.surfaced}</h2>
-            </div>
-
-            <figure className={`${css.polaroid}${developed ? ` ${css.developed}` : ""}${isGeneratingImage ? ` ${css.developing}` : ""}`}>
-              <div className={css.emulsion}>
-                {generatedImageUrl
-                  ? <Image src={generatedImageUrl} alt={N.room.alt} width={1024} height={1024} unoptimized />
-                  : <span className={css.latent} aria-hidden />}
-              </div>
-              <figcaption>{printCaption}</figcaption>
-            </figure>
-
-            {isGeneratingImage && (
-              <ol className={css.roomSteps} aria-live="polite">
-                {N.room.steps.map((text) => <li key={text}>{text}</li>)}
-              </ol>
-            )}
-
-            <div className={css.fragments} role="group" aria-label={N.room.fragmentsLabel}>
-              {roomFragments.map((fragment, index) => (
-                <span key={`${fragment}-${index}`} style={{ "--i": index } as React.CSSProperties}>{fragment}</span>
-              ))}
-            </div>
-
-            {developed && (
-              <div className={css.roomNext}>
-                <p role="status">
-                  {autoSaveStatus === "error" ? N.room.saveFailed : savedImageUrl === generatedImageUrl ? N.room.saved : N.room.savingImage}
-                </p>
-                <div className={css.roomActs}>
-                  <button type="button" onClick={() => void downloadDreamImage()} disabled={isDownloadingImage}>
-                    {isDownloadingImage ? N.room.downloading : N.room.download}
-                  </button>
-                  <button type="button" onClick={() => router.push("/archive")} disabled={savedImageUrl !== generatedImageUrl || autoSaveStatus === "saving" || autoSaveStatus === "error"}>
-                    {N.room.archive}
-                  </button>
-                  <button type="button" className={css.roomPrimary} onClick={continueFromImage}>{N.room.continueChat}</button>
-                  {autoSaveStatus === "error" && (
-                    <button type="button" onClick={() => void autoSave({ pendingImageUrl: generatedImageUrl })}>{N.room.retrySave}</button>
-                  )}
-                </div>
-                {downloadError && <p role="alert" className={css.roomError}>{downloadError}</p>}
-              </div>
-            )}
-
-            {imageError && <p className={css.roomError}>{imageError}</p>}
-            {imageError && !isGeneratingImage && (
-              <div className={css.roomActs}>
-                <button type="button" className={css.roomPrimary} onClick={() => void generateImage()}>{N.room.tryAgain}</button>
-                <button type="button" onClick={() => setIsDevelopingRoomOpen(false)}>{N.room.back}</button>
-              </div>
-            )}
-          </div>
+          <Darkroom
+            key={darkroomRun}
+            t={N.room}
+            imageUrl={generatedImageUrl}
+            generating={isGeneratingImage}
+            error={imageError}
+            caption={printCaption}
+            fragments={roomFragments}
+            note={autoSaveStatus === "error" ? N.room.saveFailed : savedImageUrl === generatedImageUrl ? N.room.saved : N.room.savingImage}
+            alert={downloadError}
+            actions={[
+              { label: isDownloadingImage ? N.room.downloading : N.room.download, onClick: () => void downloadDreamImage(), disabled: isDownloadingImage },
+              { label: N.room.archive, onClick: () => router.push("/archive"), disabled: savedImageUrl !== generatedImageUrl || autoSaveStatus === "saving" || autoSaveStatus === "error" },
+              { label: N.room.continueChat, onClick: continueFromImage, primary: true },
+              ...(autoSaveStatus === "error" ? [{ label: N.room.retrySave, onClick: () => void autoSave({ pendingImageUrl: generatedImageUrl }) }] : []),
+            ]}
+            failureActions={[
+              { label: N.room.tryAgain, onClick: () => void generateImage(), primary: true },
+              { label: N.room.back, onClick: () => setIsDevelopingRoomOpen(false) },
+            ]}
+            onClose={() => setIsDevelopingRoomOpen(false)}
+          />
         )}
       </dialog>
     </NotebookShell>
