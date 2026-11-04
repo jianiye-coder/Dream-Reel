@@ -42,6 +42,10 @@ test("register, sign in, switch language, and update account", async ({ page, co
   await page.locator('input[type="password"]').fill(password);
   await page.locator('button[type="submit"]').click();
   await expect(page).toHaveURL(/\/journal/);
+  // On a cold dev server the journal hydrates seconds after the URL changes, and hydration
+  // resets anything typed before it. The account link only appears once the client session
+  // has loaded, so once it shows the page is hydrated.
+  await expect(page.locator('nav a[href="/account"]')).toBeVisible({ timeout: 15_000 });
 
   let firstDreamWrite = true;
   const savedBodies: Array<{ rawText?: string; sleepStart?: string; preSleepMeal?: string }> = [];
