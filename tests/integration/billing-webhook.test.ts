@@ -204,13 +204,15 @@ databaseDescribe("Stripe webhook → Plus in PostgreSQL", () => {
 
   it("turns Plus on after checkout and back off when the subscription is cancelled", async () => {
     expect(await plan()).toBe("free");
-    stripeSubscriptions.set(current.subscription, subscription("active"));
+    // built once: a second subscription() would read the clock again and can land on the next second
+    const active = subscription("active");
+    stripeSubscriptions.set(current.subscription, active);
 
     expect(await deliver(checkoutCompleted())).toEqual({ status: 200, body: { received: true } });
     const on = await getBillingStatus(userId);
     expect(on).toMatchObject({ plan: "plus", subscriptionStatus: "active", cancelAtPeriodEnd: false });
     expect(on.limits.analysis).toBe(20);
-    expect(new Date(on.periodEnd).getTime()).toBe((subscription("active").items.data[0].current_period_end) * 1000);
+    expect(new Date(on.periodEnd).getTime()).toBe(active.items.data[0].current_period_end * 1000);
 
     // cancelled in the portal: Plus stays until the period ends
     stripeSubscriptions.set(current.subscription, subscription("active", { cancel_at_period_end: true }));
