@@ -146,7 +146,7 @@ changed lines.
 **How it's checked.** The sweep only publishes, and
 `.github/workflows/quality-automerge.yml` only auto-merges, changes of ≤150 lines
 in ≤10 files outside the protected paths that edit no existing test. Branch
-protection on `main` (a pull request and a green `verify` check, with no bypass
+protection on `main` (a pull request and green `verify` and `audit` checks, with no bypass
 for GitHub Actions or the Claude app) is the backstop behind both. Agent
 judgement for everything else (not scored).
 
