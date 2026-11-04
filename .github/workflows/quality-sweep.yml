@@ -14,9 +14,9 @@ name: Quality sweep
 # - verify: a fresh checkout with the diff applied runs lint, tsc, knip, the unit tests and the score,
 #   with no secrets and a read-only token. This is the only place the agent's code runs.
 # - publish (write token, runs no repository code): validates the diff against an allowlist, commits
-#   it as github-actions[bot], pushes quality-sweep/<date>-<slug>, opens the PR and dispatches CI and
-#   the auto-merge gate with this run's id (PRs opened with GITHUB_TOKEN don't start pull_request
-#   workflows; workflow_dispatch ones do). Or it files the drafted issue.
+#   it as github-actions[bot], pushes quality-sweep/<date>-<slug>, opens the PR and dispatches CI, the
+#   dependency audit and the auto-merge gate with this run's id (PRs opened with GITHUB_TOKEN don't
+#   start pull_request workflows; workflow_dispatch ones do). Or it files the drafted issue.
 # - main-guard: main may only have moved through merged PRs during the run.
 # Branch protection on main is the backstop: see README.
 
@@ -347,6 +347,7 @@ jobs:
           url=$(gh pr create --repo "$REPO" --base main --head "$branch" --title "$title" --body-file "$RUNNER_TEMP/pr-body.md" --label quality-sweep)
           echo "Opened $url" >> "$GITHUB_STEP_SUMMARY"
           gh workflow run ci.yml --repo "$REPO" --ref "$branch"
+          gh workflow run dependency-audit.yml --repo "$REPO" --ref "$branch"
           gh workflow run quality-automerge.yml --repo "$REPO" --ref main -f pr="${url##*/}" -f run_id="$GITHUB_RUN_ID"
 
   # Backstop next to branch protection, for the window of this run (the sweep PR itself merges later,

@@ -259,7 +259,7 @@ Owner setup (once):
 1. Run `claude setup-token` locally (Claude Pro or Max) and add the token as the repository secret `CLAUDE_CODE_OAUTH_TOKEN` (Settings → Secrets and variables → Actions). Sweep runs draw from that subscription's usage limits. Until the secret exists, the sweep skips itself with a notice instead of failing. The Claude GitHub App (https://github.com/apps/claude) is not needed for the sweep, which runs Claude with the workflow's own read-only token; install it only if you also want `@claude` on issues and PRs.
 2. Settings → Actions → General → Workflow permissions: enable **Allow GitHub Actions to create and approve pull requests** (the publish job opens the PR with the workflow token).
 3. Settings → General → enable **Allow auto-merge**.
-4. Settings → Branches (or Rules) → protect `main`: **Require a pull request before merging** and **Require status checks to pass** with the check **verify** (the CI job); no bypass for anyone automated. Auto-merge only waits for required checks. Requiring one approval instead of zero keeps every sweep PR waiting for you, which is a fine stricter setting.
+4. Settings → Branches (or Rules) → protect `main`: **Require a pull request before merging** and **Require status checks to pass** with the checks **verify** (CI) and **audit** (dependency audit; the sweep dispatches both on its PR branch), plus **Vercel** if you require the preview deploy; no bypass for anyone automated. Auto-merge only waits for required checks. Requiring one approval instead of zero keeps every sweep PR waiting for you, which is a fine stricter setting.
 
 Merges done by auto-merge are made with the workflow token, so the `push` run of CI on `main` does not start for them; the PR's dispatched CI run is the check.
 
