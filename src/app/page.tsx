@@ -43,11 +43,14 @@ export default function LandingPage() {
     p.textContent = "";
     c.textContent = "";
     await handwrite(p, L.demo, { speed: 1.35, cancelled: () => id !== run.current });
+    // reduced motion: the clues are already written too, like the entry above them
+    const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
     for (const line of L.clues) {
       if (id !== run.current) return;
       const el = document.createElement("p");
       el.className = "nb-note";
       c.appendChild(el);
+      if (still) { el.textContent = line; continue; }
       await sleep(350);
       for (const ch of line) {
         if (id !== run.current) return;
