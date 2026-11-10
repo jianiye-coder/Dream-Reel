@@ -17,8 +17,14 @@ export async function PUT(request: NextRequest) {
   const userId = await requireUserId();
   if (userId instanceof NextResponse) return userId;
 
-  const parsed = schema.safeParse(await request.json());
-  if (!parsed.success) return NextResponse.json({ error: API_ERROR_CODES.invalidNewPassword }, { status: 400 });
+  const parsed = schema.safeParse(await request.json().catch(() => null));
+  if (!parsed.success) {
+    const newPasswordOnly = parsed.error.issues.every((issue) => issue.path[0] === "newPassword");
+    return NextResponse.json(
+      { error: newPasswordOnly ? API_ERROR_CODES.invalidNewPassword : API_ERROR_CODES.invalidRequest },
+      { status: 400 },
+    );
+  }
 
   const identifier = `user:${userId}`;
   const ipAddress = getTrustedClientIp(request.headers);

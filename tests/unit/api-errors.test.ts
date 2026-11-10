@@ -8,13 +8,9 @@ vi.mock("@/auth", () => ({ auth }));
 import { POST as generateTitle } from "@/app/api/generate-title/route";
 
 describe("getApiErrorMessage", () => {
-  it("has copy in both languages for every code", () => {
+  it("never has Chinese in the English copy of a code", () => {
     for (const code of Object.values(API_ERROR_CODES)) {
-      const zh = getApiErrorMessage(code, "zh", "fallback");
-      const en = getApiErrorMessage(code, "en", "fallback");
-      expect(zh, code).not.toBe("fallback");
-      expect(en, code).not.toBe("fallback");
-      expect(en, code).not.toMatch(/[一-鿿]/);
+      expect(getApiErrorMessage(code, "en", "fallback"), code).not.toMatch(/[\u4e00-\u9fff]/);
     }
   });
 

@@ -14,7 +14,7 @@ export async function PUT(request: NextRequest) {
   const userId = await requireUserId();
   if (userId instanceof NextResponse) return userId;
 
-  const parsed = schema.safeParse(await request.json());
+  const parsed = schema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: API_ERROR_CODES.invalidName }, { status: 400 });
 
   const pool = getPool();
