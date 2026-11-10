@@ -179,7 +179,6 @@ function ensureRealityQuestion(questions: string[], lang: "zh" | "en") {
   return [...questions.slice(0, 2), requiredQuestion];
 }
 
-
 function unwrapAnalysisPayload(raw: unknown) {
   if (!raw || typeof raw !== "object") return raw;
   const record = raw as Record<string, unknown>;

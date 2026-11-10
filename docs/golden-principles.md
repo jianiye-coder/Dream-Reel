@@ -29,8 +29,8 @@ drifts from the first.
   `archive.module.css`, …), using the `.nb-root` tokens (`var(--ink)`, never raw hex).
 - No new rules in `src/app/globals.css`: it only holds what sits outside the
   notebook (base reset, canvas colour, selection, skip link, iOS field size).
-- No CSS framework, no new global stylesheets (`src/app/fonts.css`, which only
-  names the self-hosted font families, is the one other global sheet), prefer classes over inline
+- No CSS framework, no new global stylesheets (`src/app/fonts.css`, which
+  names the self-hosted font families and their metric-adjusted fallbacks, is the one other global sheet), prefer classes over inline
   `style={{…}}` (inline is for values computed at runtime).
 
 **How it's checked.** Quality score: `globals.css` line count against
@@ -175,8 +175,9 @@ Chinese-numeral date writer and the API routes parsed the session user id five
 ways before the lean-cleanup PR.
 
 **Rule.** Before writing a utility, look in `src/lib`. Known homes:
-`src/lib/session.ts` (`requireUserId`, `sessionUserId`), `src/lib/dates.ts`
-(`localDayKey`, `cnNumber`, `writtenDate`), `src/lib/edgeFade.ts`,
+`src/lib/session.ts` (`requireUserId`, `sessionUserId`, `sessionUser`,
+`parseUserId`), `src/lib/dates.ts` (`localDayKey`, `cnNumber`, `writtenDate`),
+`src/lib/text.ts` (`limitText`, `cleanList`), `src/lib/edgeFade.ts`,
 `src/lib/apiErrors.ts`, `src/lib/safeServerLog.ts`. A second copy moves to the
 shared helper, with a unit test.
 

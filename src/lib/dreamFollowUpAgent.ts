@@ -287,7 +287,6 @@ function parseRelaxedAgentPayload(raw: unknown): Partial<AgentResponsePayload> {
   };
 }
 
-
 function applyQuestionTimingPolicy(
   questions: string[],
   lang: "zh" | "en",
