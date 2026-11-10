@@ -103,6 +103,12 @@ test("register, sign in, switch language, and update account", async ({ page, co
   await page.getByRole("button", { name: "Switch to English" }).first().click();
   await expect(page.locator("html")).toHaveAttribute("lang", "en");
   await expect(page.getByRole("button", { name: "切换中文" }).first()).toBeVisible();
+
+  // the password route answers with a code, so the English page shows English
+  await page.getByLabel("Current password").fill("not-my-password");
+  await page.getByLabel("New password (min. 6 characters)").fill("another-password");
+  await page.getByRole("button", { name: "Update password", exact: true }).click();
+  await expect(page.getByRole("status").filter({ hasText: "The current password is incorrect." })).toBeVisible();
 });
 
 test("keyboard focus is visible and mobile microcopy stays readable", async ({ page }) => {
