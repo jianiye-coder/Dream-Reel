@@ -61,6 +61,7 @@ describe("admin agent feedback metrics", () => {
     mocks.auth.mockResolvedValue({ user: { email: "other@example.com" } });
     const response = await GET(new NextRequest("http://localhost/api/admin/agent-feedback"));
     expect(response.status).toBe(403);
+    expect(await response.json()).toEqual({ error: "FORBIDDEN" });
     expect(mocks.getAgentFeedbackMetrics).not.toHaveBeenCalled();
     expect(mocks.getDreamAgentFunnelMetrics).not.toHaveBeenCalled();
     expect(mocks.getDreamAgentReliabilityMetrics).not.toHaveBeenCalled();

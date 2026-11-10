@@ -3,6 +3,7 @@ export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { requireUserId } from "@/lib/session";
+import { API_ERROR_CODES } from "@/lib/apiErrors";
 
 const requestSchema = z.object({
   text: z.string().trim().min(1).max(3000),
@@ -64,10 +65,10 @@ export async function POST(request: NextRequest) {
   if (signedIn instanceof NextResponse) return signedIn;
 
   const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) return NextResponse.json({ error: "Missing API key" }, { status: 500 });
+  if (!apiKey) return NextResponse.json({ error: API_ERROR_CODES.configurationError }, { status: 500 });
 
-  const parsed = requestSchema.safeParse(await request.json());
-  if (!parsed.success) return NextResponse.json({ error: "Invalid input" }, { status: 400 });
+  const parsed = requestSchema.safeParse(await request.json().catch(() => null));
+  if (!parsed.success) return NextResponse.json({ error: API_ERROR_CODES.invalidRequest }, { status: 400 });
 
   const { text, lang, mood, people, locations, symbols } = parsed.data;
 
@@ -99,7 +100,7 @@ export async function POST(request: NextRequest) {
       }),
     });
 
-    if (!res.ok) return NextResponse.json({ error: "AI unavailable" }, { status: 502 });
+    if (!res.ok) return NextResponse.json({ error: API_ERROR_CODES.upstreamError }, { status: 502 });
 
     const payload = (await res.json()) as { choices?: Array<{ message?: { content?: string } }> };
     const raw = payload.choices?.[0]?.message?.content?.trim() ?? "";
@@ -107,6 +108,6 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ title });
   } catch {
-    return NextResponse.json({ error: "Failed" }, { status: 500 });
+    return NextResponse.json({ error: API_ERROR_CODES.internalError }, { status: 500 });
   }
 }

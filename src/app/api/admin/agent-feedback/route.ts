@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { getAgentFeedbackMetrics } from "@/lib/agentFeedback";
+import { API_ERROR_CODES } from "@/lib/apiErrors";
 import { safeErrorMetadata } from "@/lib/safeServerLog";
 import {
   getDreamAgentFunnelMetrics,
@@ -12,11 +13,11 @@ export const runtime = "nodejs";
 export async function GET(request: NextRequest) {
   const session = await auth() as { user?: { email?: string | null } } | null;
   if (!process.env.ADMIN_EMAIL || session?.user?.email !== process.env.ADMIN_EMAIL) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    return NextResponse.json({ error: API_ERROR_CODES.forbidden }, { status: 403 });
   }
   const rawDays = Number(new URL(request.url).searchParams.get("days") ?? "7");
   if (!Number.isInteger(rawDays) || rawDays < 1 || rawDays > 90) {
-    return NextResponse.json({ error: "Invalid input" }, { status: 400 });
+    return NextResponse.json({ error: API_ERROR_CODES.invalidRequest }, { status: 400 });
   }
   try {
     const [feedback, funnel, reliability] = await Promise.all([
@@ -39,6 +40,6 @@ export async function GET(request: NextRequest) {
     );
   } catch (error) {
     console.error("GET /api/admin/agent-feedback failed", safeErrorMetadata(error));
-    return NextResponse.json({ error: "Internal error" }, { status: 500 });
+    return NextResponse.json({ error: API_ERROR_CODES.internalError }, { status: 500 });
   }
 }

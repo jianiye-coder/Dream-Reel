@@ -2,6 +2,7 @@ import type { Lang } from "@/lib/i18n";
 
 export const API_ERROR_CODES = {
   unauthorized: "UNAUTHORIZED",
+  forbidden: "FORBIDDEN",
   invalidRequest: "INVALID_REQUEST",
   rateLimited: "RATE_LIMITED",
   quotaExceeded: "QUOTA_EXCEEDED",
@@ -15,12 +16,18 @@ export const API_ERROR_CODES = {
   paymentError: "PAYMENT_ERROR",
   noSubscription: "NO_SUBSCRIPTION",
   alreadySubscribed: "ALREADY_SUBSCRIBED",
+  // account page
+  invalidName: "INVALID_NAME",
+  invalidNewPassword: "INVALID_NEW_PASSWORD",
+  wrongPassword: "WRONG_PASSWORD",
+  noPassword: "NO_PASSWORD",
 } as const;
 
 export type ApiErrorCode = typeof API_ERROR_CODES[keyof typeof API_ERROR_CODES];
 
 const messages: Record<ApiErrorCode, Record<Lang, string>> = {
   UNAUTHORIZED: { zh: "请先登录。", en: "Please sign in first." },
+  FORBIDDEN: { zh: "这个账号没有访问权限。", en: "This account doesn’t have access." },
   INVALID_REQUEST: { zh: "请求参数不合法。", en: "The request is invalid." },
   RATE_LIMITED: { zh: "请求过于频繁，请稍后重试。", en: "Too many requests. Please try again shortly." },
   QUOTA_EXCEEDED: { zh: "本月额度已用完，请升级 Plus 或下月继续。", en: "Your monthly limit is used up. Upgrade to Plus or try again next month." },
@@ -34,6 +41,10 @@ const messages: Record<ApiErrorCode, Record<Lang, string>> = {
   PAYMENT_ERROR: { zh: "付款页面暂时打不开，请稍后再试。没有产生任何扣款。", en: "The payment page couldn’t open. Nothing was charged. Please try again shortly." },
   NO_SUBSCRIPTION: { zh: "还没有可以管理的订阅。", en: "There’s no subscription to manage yet." },
   ALREADY_SUBSCRIBED: { zh: "你已经有一份订阅了，可以在“管理订阅”里查看。", en: "You already have a subscription. You can review it under Manage subscription." },
+  INVALID_NAME: { zh: "名字需要 1 到 100 个字。", en: "Your name needs 1 to 100 characters." },
+  INVALID_NEW_PASSWORD: { zh: "新密码需要 6 到 100 位。", en: "The new password needs 6 to 100 characters." },
+  WRONG_PASSWORD: { zh: "当前密码不正确。", en: "The current password is incorrect." },
+  NO_PASSWORD: { zh: "这个账号通过第三方登录，没有可以修改的密码。", en: "This account signs in with another provider, so it has no password to change." },
 };
 
 export function getApiErrorMessage(
