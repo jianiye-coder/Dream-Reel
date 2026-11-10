@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { mentionsRealityContext } from "./dreamQuestions";
+import { cleanList, limitText } from "./text";
 
 export type DreamAgentStage = "exploring" | "deepening" | "ready";
 export type DreamAgentNextAction = "ask_followup" | "summarize" | "ready_to_analyze";
@@ -286,27 +287,6 @@ function parseRelaxedAgentPayload(raw: unknown): Partial<AgentResponsePayload> {
   };
 }
 
-function limitText(value: string, maxLength: number) {
-  const text = value.trim();
-  return text.length > maxLength ? text.slice(0, maxLength).trim() : text;
-}
-
-function cleanList(values: string[], limit: number, maxLength: number) {
-  const seen = new Set<string>();
-  const cleaned: string[] = [];
-
-  for (const value of values) {
-    const item = limitText(value, maxLength);
-    if (!item) continue;
-    const key = item.toLowerCase();
-    if (seen.has(key)) continue;
-    seen.add(key);
-    cleaned.push(item);
-    if (cleaned.length >= limit) break;
-  }
-
-  return cleaned;
-}
 
 function applyQuestionTimingPolicy(
   questions: string[],

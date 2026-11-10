@@ -6,6 +6,7 @@ import { ZH_DREAM_EMOTION_CALIBRATION } from "@/lib/dreamEmotionCalibration";
 import { getRealityQuestion, mentionsRealityContext } from "@/lib/dreamQuestions";
 import { API_ERROR_CODES } from "@/lib/apiErrors";
 import { safeErrorMetadata, safeValidationIssues } from "@/lib/safeServerLog";
+import { cleanList, limitText } from "@/lib/text";
 
 export const runtime = "nodejs";
 
@@ -178,26 +179,6 @@ function ensureRealityQuestion(questions: string[], lang: "zh" | "en") {
   return [...questions.slice(0, 2), requiredQuestion];
 }
 
-function limitText(value: string, maxLength: number) {
-  return value.length > maxLength ? value.slice(0, maxLength).trim() : value;
-}
-
-function cleanList(values: string[], limit: number, maxLength: number) {
-  const seen = new Set<string>();
-  const cleaned: string[] = [];
-
-  for (const value of values) {
-    const item = limitText(value.trim(), maxLength);
-    if (!item) continue;
-    const key = item.toLowerCase();
-    if (seen.has(key)) continue;
-    seen.add(key);
-    cleaned.push(item);
-    if (cleaned.length >= limit) break;
-  }
-
-  return cleaned;
-}
 
 function unwrapAnalysisPayload(raw: unknown) {
   if (!raw || typeof raw !== "object") return raw;

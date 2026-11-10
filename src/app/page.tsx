@@ -195,7 +195,7 @@ export default function LandingPage() {
             </ol>
             <div className="nb-cta-row">
               <Link className="nb-act" href="/journal">{L.laterCta} <span aria-hidden>→</span></Link>
-              <span className="nb-mono" style={{ color: "var(--ink-faint)" }}>{L.laterMeta}</span>
+              <span className="nb-mono">{L.laterMeta}</span>
             </div>
           </div>
         </section>
