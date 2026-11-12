@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { LangToggle } from "@/components/LangToggle";
 import { NotebookShell } from "@/components/notebook/NotebookShell";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { getApiErrorMessage } from "@/lib/apiErrors";
 import { fetchBillingStatus, isUnlimitedQuota, needsPaymentFix, openStripe, useBillingReturn, type ClientBillingStatus } from "@/lib/billingClient";
 
 type Quota = ClientBillingStatus["limits"];
@@ -45,8 +46,8 @@ export default function AccountPage() {
         await updateSession({ name: name.trim() });
         setNameMsg(P.nameSaved);
       } else {
-        const d = (await res.json()) as { error?: string };
-        setNameErr(d.error ?? P.updateFailed);
+        const d = (await res.json().catch(() => ({}))) as { error?: unknown };
+        setNameErr(getApiErrorMessage(d.error, lang, P.updateFailed));
       }
     } catch { setNameErr(P.networkError); }
     finally { setNameSaving(false); }
@@ -85,8 +86,8 @@ export default function AccountPage() {
         setCurrentPw(""); setNewPw("");
         setPwMsg(P.passwordSaved);
       } else {
-        const d = (await res.json()) as { error?: string };
-        setPwErr(d.error ?? P.updateFailed);
+        const d = (await res.json().catch(() => ({}))) as { error?: unknown };
+        setPwErr(getApiErrorMessage(d.error, lang, P.updateFailed));
       }
     } catch { setPwErr(P.networkError); }
     finally { setPwSaving(false); }

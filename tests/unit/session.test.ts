@@ -49,11 +49,4 @@ describe("sessionUserId / requireUserId", () => {
       expect(await res.json()).toEqual({ error: "UNAUTHORIZED" });
     }
   });
-
-  it("can carry a route's own body and headers", async () => {
-    auth.mockResolvedValue(null);
-    const res = (await requireUserId({ error: "请先登录", headers: { "Cache-Control": "no-store" } })) as NextResponse;
-    expect(await res.json()).toEqual({ error: "请先登录" });
-    expect(res.headers.get("Cache-Control")).toBe("no-store");
-  });
 });

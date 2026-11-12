@@ -6,6 +6,7 @@ import { z } from "zod";
 import { normalizeEmail } from "@/lib/email";
 import { API_ERROR_CODES } from "@/lib/apiErrors";
 import { consumeAuthAttempt, getTrustedClientIp } from "@/lib/authRateLimit";
+import { safeErrorMetadata } from "@/lib/safeServerLog";
 
 const registerSchema = z.object({
   name: z.string().trim().min(1).max(100),
@@ -52,9 +53,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: true }, { status: 201 });
   } catch (error) {
     if (typeof error === "object" && error && "code" in error && error.code === "23505") {
-      return NextResponse.json({ error: "该邮箱已注册" }, { status: 409 });
+      // the same answer as the email check above, for two sign-ups racing on one address
+      return NextResponse.json({ error: API_ERROR_CODES.invalidRequest }, { status: 409 });
     }
-    console.error("POST /api/auth/register failed", error);
+    console.error("POST /api/auth/register failed", safeErrorMetadata(error));
     return NextResponse.json({ error: API_ERROR_CODES.internalError }, { status: 500 });
   }
 }
