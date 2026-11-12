@@ -618,6 +618,7 @@ html[lang="en"] .nb-root {
   .nb-index-list .nb-n { font-family: var(--hand); font-size: 15px; color: var(--red-ink); }
   .nb-thread { position: absolute; right: -18px; width: 10px; border: 1.5px solid var(--red-ink); border-left: 0; border-radius: 0 9px 9px 0; opacity: .85; }
   .nb-later .nb-cta-row { margin-top: 34px; justify-content: space-between; }
+  .nb-later .nb-cta-row .nb-mono { color: var(--ink-faint); }
 
   .nb-morning { width: min(1080px, 88vw); margin: 0 auto; padding: 110px 0 20px; display: grid; grid-template-columns: 1fr 2.2fr; gap: 70px; }
   .nb-morning h2 { font-weight: 900; font-size: clamp(28px, 2.6vw, 38px); line-height: 1.3; margin-top: 14px; }
@@ -690,9 +691,10 @@ html[lang="en"] .nb-root {
 /* pricing */
 .nb-pricing-head { max-width: 40em; }
 .nb-pricing-head h1 { font-weight: 900; font-size: clamp(36px, 4vw, 58px); line-height: 1.16; letter-spacing: -.02em; margin-top: 14px; }
-.nb-pricing-head .nb-body { margin-top: 18px; }
+.nb-pricing-head .nb-body, .nb-pricing-head .nb-msg { margin-top: 18px; }
 .nb-plans { display: grid; grid-template-columns: 1fr 1px 1fr; gap: 0 64px; margin-top: 70px; border-top: 1px solid var(--ink); padding-top: 40px; }
 .nb-plans > .nb-rule { background: rgba(31,28,23,.18); }
+.nb-plans .nb-msg { margin-top: 12px; }
 .nb-plan { position: relative; display: flex; flex-direction: column; }
 .nb-plan-name { font-weight: 600; font-size: 20px; }
 .nb-price { display: flex; align-items: baseline; gap: 10px; margin-top: 12px; }
@@ -735,6 +737,13 @@ html[lang="en"] .nb-root {
 .nb-card-foot { display: flex; justify-content: space-between; align-items: center; margin-top: 14px; }
 .nb-card-foot .nb-mono { font-size: 10.5px; color: var(--ink-faint); }
 .nb-upsell { margin-top: 40px; display: flex; justify-content: space-between; align-items: baseline; gap: 24px; border-top: 1px solid rgba(31,28,23,.18); padding-top: 22px; }
+.nb-card-head .nb-mono { color: var(--ink-faint); }
+.nb-card th.nb-num { text-align: right; }
+.nb-card > .nb-msg { margin-top: 16px; }
+.nb-upsell .nb-body { max-width: 20em; }
+.nb-upsell-acts { display: grid; gap: 10px; justify-items: end; }
+.nb-upsell-acts > .nb-mono { color: var(--ink-faint); }
+.nb-account section > .nb-msg { margin-top: 12px; }
 
 @media (max-width: 900px) {
   .nb-auth { grid-template-columns: 1fr; gap: 40px; width: auto; padding: 24px 26px 60px; }

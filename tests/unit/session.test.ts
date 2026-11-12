@@ -4,7 +4,7 @@ import { NextResponse } from "next/server";
 const auth = vi.hoisted(() => vi.fn());
 vi.mock("@/auth", () => ({ auth }));
 
-import { parseUserId, requireUserId, sessionUserId } from "@/lib/session";
+import { parseUserId, requireUserId, sessionUser, sessionUserId } from "@/lib/session";
 
 describe("parseUserId", () => {
   it("accepts positive integer ids within the Postgres integer range", () => {
@@ -27,6 +27,15 @@ describe("sessionUserId / requireUserId", () => {
     auth.mockResolvedValue({ user: { id: "7" } });
     expect(await sessionUserId()).toBe(7);
     expect(await requireUserId()).toBe(7);
+  });
+
+  it("returns the id with the email for the billing routes", async () => {
+    auth.mockResolvedValue({ user: { id: "7", email: "reader@example.test" } });
+    expect(await sessionUser()).toEqual({ id: 7, email: "reader@example.test" });
+    auth.mockResolvedValue({ user: { id: "7" } });
+    expect(await sessionUser()).toEqual({ id: 7, email: null });
+    auth.mockResolvedValue({ user: { id: "0", email: "reader@example.test" } });
+    expect(await sessionUser()).toBeNull();
   });
 
   it("answers 401 with the UNAUTHORIZED code without a valid session", async () => {

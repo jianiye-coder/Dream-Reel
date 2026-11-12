@@ -99,6 +99,9 @@ img {
   transition: transform .2s ease;
 }
 .skip-link:focus-visible { transform: translateY(0); }
+@media (prefers-reduced-motion: reduce) {
+  .skip-link { transition: none; }
+}
 
 /* iOS Safari zooms into any field set below 16px; page modules that need a larger hand override this */
 @media (max-width: 520px) {

@@ -156,7 +156,7 @@ export default function AccountPage() {
             <div className="nb-account-block">
               <h2>{P.displayName}</h2>
               <label className="nb-field">
-                <input value={name} onChange={(e) => setName(e.target.value)} placeholder={P.namePlaceholder} onKeyDown={(e) => e.key === "Enter" && void saveName()} />
+                <input value={name} onChange={(e) => setName(e.target.value)} aria-label={P.displayName} placeholder={P.namePlaceholder} onKeyDown={(e) => e.key === "Enter" && void saveName()} />
               </label>
               <div className="nb-row">
                 <button type="button" className="nb-act" onClick={() => void saveName()} disabled={nameSaving || !name.trim()}>{nameSaving ? P.saving : P.save}</button>
@@ -199,11 +199,11 @@ export default function AccountPage() {
           <section>
             <span className="nb-kicker">{B.usageLabel}</span>
             <div className="nb-card">
-              <div className="nb-card-head"><b>{P.cardTitle}</b><span className="nb-mono" style={{ color: "var(--ink-faint)" }}>{billing ? planLabel.toUpperCase() : ""}</span></div>
+              <div className="nb-card-head"><b>{P.cardTitle}</b><span className="nb-mono">{billing ? planLabel.toUpperCase() : ""}</span></div>
               {billingState === "ready" && billing ? (
                 <>
                   <table>
-                    <thead><tr><th>{P.cardItem}</th><th>{P.cardUsed}</th><th style={{ textAlign: "right" }}>{P.cardLeft}</th></tr></thead>
+                    <thead><tr><th>{P.cardItem}</th><th>{P.cardUsed}</th><th className="nb-num">{P.cardLeft}</th></tr></thead>
                     <tbody>
                       {rows.map(([label, key]) => (
                         <tr key={key}>
@@ -217,30 +217,30 @@ export default function AccountPage() {
                   <div className="nb-card-foot"><span className="nb-mono">{P.cardResets.replace("{date}", resetDate)}</span></div>
                 </>
               ) : (
-                <p className="nb-msg" role="status" style={{ marginTop: 16 }}>{billingState === "error" ? P.cardError : P.cardLoading}</p>
+                <p className="nb-msg" role="status">{billingState === "error" ? P.cardError : P.cardLoading}</p>
               )}
             </div>
             {billing && !billing.isUnlimited && (
               <div className="nb-upsell">
-                <p className="nb-body" style={{ maxWidth: "20em" }}>
+                <p className="nb-body">
                   {needsPaymentFix(billing) ? B.pastDue
                     : billing.plan === "plus" ? (billing.cancelAtPeriodEnd ? B.endsOn.replace("{date}", resetDate) : "")
                     : billing.checkoutAvailable ? P.upsell : B.comingSoonNote}
                 </p>
-                <div style={{ display: "grid", gap: 10, justifyItems: "end" }}>
+                <div className="nb-upsell-acts">
                   {managesSubscription || billing.checkoutAvailable ? (
                     <button type="button" className="nb-act" onClick={() => void openBilling()} disabled={opening}>
                       {opening ? B.opening : managesSubscription ? B.manage : B.upgrade} <span aria-hidden>→</span>
                     </button>
                   ) : (
-                    <span className="nb-mono" style={{ color: "var(--ink-faint)" }}>{B.comingSoon}</span>
+                    <span className="nb-mono">{B.comingSoon}</span>
                   )}
                   {!managesSubscription && <Link className="nb-act-quiet" href="/pricing">{P.seePlans}</Link>}
                 </div>
               </div>
             )}
-            {billingNote && <p className="nb-msg nb-ok" role="status" style={{ marginTop: 12 }}>{B[billingNote]}</p>}
-            {billingErr && <p className="nb-msg" role="alert" style={{ marginTop: 12 }}>{billingErr}</p>}
+            {billingNote && <p className="nb-msg nb-ok" role="status">{B[billingNote]}</p>}
+            {billingErr && <p className="nb-msg" role="alert">{billingErr}</p>}
           </section>
         </div>
       </main>

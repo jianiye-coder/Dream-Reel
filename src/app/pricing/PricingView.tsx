@@ -67,7 +67,7 @@ export function PricingView({ checkoutAvailable }: { checkoutAvailable: boolean 
           <span className="nb-kicker">{P.pricingKicker}</span>
           <h1>{P.pricingTitle}</h1>
           <p className="nb-body">{P.pricingBody}</p>
-          {note && <p className="nb-msg nb-ok" role="status" style={{ marginTop: 18 }}>{B[note]}</p>}
+          {note && <p className="nb-msg nb-ok" role="status">{B[note]}</p>}
         </div>
 
         <div className="nb-plans">
@@ -88,7 +88,7 @@ export function PricingView({ checkoutAvailable }: { checkoutAvailable: boolean 
                 {i === 0
                   ? <Link className="nb-act" href={signedIn ? "/journal" : "/login?callbackUrl=%2Fjournal"}>{plan.cta} {arrow}</Link>
                   : plusAction(plan.cta)}
-                {i === 1 && error && <p className="nb-msg" role="alert" style={{ marginTop: 12 }}>{error}</p>}
+                {i === 1 && error && <p className="nb-msg" role="alert">{error}</p>}
               </section>,
             ];
           })}
