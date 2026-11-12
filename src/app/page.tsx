@@ -200,6 +200,30 @@ export default function LandingPage() {
           </div>
         </section>
 
+        <section className="nb-film" aria-labelledby="nb-film-title">
+          <div className="nb-film-head">
+            <span className="nb-kicker">{L.filmKicker}</span>
+            <h2 id="nb-film-title">{L.filmTitleA}<br />{L.filmTitleB}</h2>
+            <p className="nb-body" id="nb-film-desc">{L.filmBody}</p>
+          </div>
+          <figure className="nb-print nb-film-print">
+            <span className="nb-tape" />
+            <video
+              controls
+              playsInline
+              preload="metadata"
+              poster="/images/dream-reel-film-poster.jpg"
+              aria-label={L.filmLabel}
+              aria-describedby="nb-film-desc"
+              width={1920}
+              height={1080}
+            >
+              <source src="/videos/dream-reel-film.mp4" type="video/mp4" />
+            </video>
+            <figcaption className="nb-cap">{L.filmCaption}</figcaption>
+          </figure>
+        </section>
+
         <section className="nb-price-line">
           <div className="nb-pl-in">
             <span className="nb-kicker">{L.priceKicker}</span>
