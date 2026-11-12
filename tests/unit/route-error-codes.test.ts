@@ -35,7 +35,7 @@ describe("route error codes", () => {
       body: JSON.stringify({ name: "A", email: "race@example.test", password: "123456" }),
     }));
     expect(res.status).toBe(409);
-    expect(await res.json()).toEqual({ error: "INVALID_REQUEST" });
+    expect(await res.json()).toEqual({ error: "EMAIL_TAKEN" });
   });
 
   it("answers a malformed archive cursor with a code, not the error message", async () => {

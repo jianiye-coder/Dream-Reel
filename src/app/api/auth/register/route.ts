@@ -41,7 +41,9 @@ export async function POST(request: NextRequest) {
     );
 
     if (existing.length > 0) {
-      return NextResponse.json({ error: API_ERROR_CODES.invalidRequest }, { status: 409 });
+      // a deliberate product choice: say so plainly (this does reveal that the address has an account;
+      // the per-address and per-IP rate limit above keeps that from being used to sweep many addresses)
+      return NextResponse.json({ error: API_ERROR_CODES.emailTaken }, { status: 409 });
     }
 
     const passwordHash = await bcrypt.hash(password, 12);
@@ -54,7 +56,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     if (typeof error === "object" && error && "code" in error && error.code === "23505") {
       // the same answer as the email check above, for two sign-ups racing on one address
-      return NextResponse.json({ error: API_ERROR_CODES.invalidRequest }, { status: 409 });
+      return NextResponse.json({ error: API_ERROR_CODES.emailTaken }, { status: 409 });
     }
     console.error("POST /api/auth/register failed", safeErrorMetadata(error));
     return NextResponse.json({ error: API_ERROR_CODES.internalError }, { status: 500 });

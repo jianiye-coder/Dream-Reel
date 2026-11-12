@@ -20,6 +20,11 @@ describe("getApiErrorMessage", () => {
     expect(getApiErrorMessage("INVALID_NAME", "en", "Update failed")).toBe("Your name needs 1 to 100 characters.");
   });
 
+  it("tells a sign-up plainly that the email already has an account", () => {
+    expect(getApiErrorMessage("EMAIL_TAKEN", "en", "Registration failed")).toBe("This email is already registered. Try signing in instead.");
+    expect(getApiErrorMessage("EMAIL_TAKEN", "zh", "注册失败")).toBe("这个邮箱已经注册过了，可以直接登录。");
+  });
+
   it("never shows a server sentence in English, or a non-string anywhere", () => {
     expect(getApiErrorMessage("当前密码不正确", "en", "Update failed")).toBe("Update failed");
     expect(getApiErrorMessage(undefined, "zh", "更新失败")).toBe("更新失败");

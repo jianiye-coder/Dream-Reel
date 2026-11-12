@@ -21,6 +21,8 @@ export const API_ERROR_CODES = {
   invalidNewPassword: "INVALID_NEW_PASSWORD",
   wrongPassword: "WRONG_PASSWORD",
   noPassword: "NO_PASSWORD",
+  // sign-up
+  emailTaken: "EMAIL_TAKEN",
 } as const;
 
 export type ApiErrorCode = typeof API_ERROR_CODES[keyof typeof API_ERROR_CODES];
@@ -45,6 +47,7 @@ const messages: Record<ApiErrorCode, Record<Lang, string>> = {
   INVALID_NEW_PASSWORD: { zh: "新密码需要 6 到 100 位。", en: "The new password needs 6 to 100 characters." },
   WRONG_PASSWORD: { zh: "当前密码不正确。", en: "The current password is incorrect." },
   NO_PASSWORD: { zh: "这个账号通过第三方登录，没有可以修改的密码。", en: "This account signs in with another provider, so it has no password to change." },
+  EMAIL_TAKEN: { zh: "这个邮箱已经注册过了，可以直接登录。", en: "This email is already registered. Try signing in instead." },
 };
 
 export function getApiErrorMessage(

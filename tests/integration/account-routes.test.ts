@@ -95,7 +95,7 @@ databaseDescribe("account routes in PostgreSQL", () => {
       expect((await register(request("POST", "/api/auth/register", body))).status).toBe(201);
       const res = await register(request("POST", "/api/auth/register", { ...body, name: "Second", email: address.toUpperCase() }));
       expect(res.status).toBe(409);
-      expect(await res.json()).toEqual({ error: "INVALID_REQUEST" });
+      expect(await res.json()).toEqual({ error: "EMAIL_TAKEN" });
       expect((await userRow(address)).name).toBe("First");
     });
 
