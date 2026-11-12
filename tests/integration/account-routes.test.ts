@@ -116,12 +116,14 @@ databaseDescribe("account routes in PostgreSQL", () => {
     it("requires a session", async () => {
       const res = await changePassword(request("PUT", "/api/user/password", { currentPassword: "a", newPassword: "123456" }));
       expect(res.status).toBe(401);
+      expect(await res.json()).toEqual({ error: "UNAUTHORIZED" });
     });
 
     it("rejects a new password under six characters and keeps the hash", async () => {
       const user = await registered();
       const res = await changePassword(request("PUT", "/api/user/password", { currentPassword: "old-password", newPassword: "12345" }));
       expect(res.status).toBe(400);
+      expect(await res.json()).toEqual({ error: "INVALID_NEW_PASSWORD" });
       expect((await userRow(user.email)).password_hash).toBe(user.password_hash);
     });
 
@@ -129,6 +131,7 @@ databaseDescribe("account routes in PostgreSQL", () => {
       const user = await registered();
       const res = await changePassword(request("PUT", "/api/user/password", { currentPassword: "wrong-password", newPassword: "new-password" }));
       expect(res.status).toBe(400);
+      expect(await res.json()).toEqual({ error: "WRONG_PASSWORD" });
       expect((await userRow(user.email)).password_hash).toBe(user.password_hash);
     });
 
@@ -169,6 +172,7 @@ databaseDescribe("account routes in PostgreSQL", () => {
       auth.mockResolvedValue({ user: { id: String(rows[0].id) } });
       const res = await changePassword(request("PUT", "/api/user/password", { currentPassword: "anything", newPassword: "new-password" }));
       expect(res.status).toBe(400);
+      expect(await res.json()).toEqual({ error: "NO_PASSWORD" });
       expect((await userRow(address)).password_hash).toBeNull();
     });
   });
@@ -177,6 +181,7 @@ databaseDescribe("account routes in PostgreSQL", () => {
     it("requires a session", async () => {
       const res = await updateProfile(request("PUT", "/api/user/profile", { name: "Someone" }));
       expect(res.status).toBe(401);
+      expect(await res.json()).toEqual({ error: "UNAUTHORIZED" });
     });
 
     it.each([["blank", "   "], ["over 100 characters", "n".repeat(101)], ["missing", undefined]])(
@@ -184,6 +189,7 @@ databaseDescribe("account routes in PostgreSQL", () => {
         const user = await registered();
         const res = await updateProfile(request("PUT", "/api/user/profile", { name }));
         expect(res.status).toBe(400);
+        expect(await res.json()).toEqual({ error: "INVALID_NAME" });
         expect((await userRow(user.email)).name).toBe("Reader");
       },
     );

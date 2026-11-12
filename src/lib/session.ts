@@ -24,13 +24,8 @@ export async function sessionUserId(): Promise<number | null> {
  *   const userId = await requireUserId();
  *   if (userId instanceof NextResponse) return userId;
  */
-export async function requireUserId(
-  init: { error?: string; headers?: HeadersInit } = {},
-): Promise<number | NextResponse> {
+export async function requireUserId(): Promise<number | NextResponse> {
   const userId = await sessionUserId();
   if (userId !== null) return userId;
-  return NextResponse.json(
-    { error: init.error ?? API_ERROR_CODES.unauthorized },
-    { status: 401, headers: init.headers },
-  );
+  return NextResponse.json({ error: API_ERROR_CODES.unauthorized }, { status: 401 });
 }
