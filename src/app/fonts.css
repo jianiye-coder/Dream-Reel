@@ -12,7 +12,6 @@
   --font-nb-latin: "Instrument Serif", "Instrument Serif Fallback";
   --font-nb-mono: "IBM Plex Mono", "IBM Plex Mono Fallback";
   --font-nb-script: "Pinyon Script", "Pinyon Script Fallback";
-  --font-sub: "Work Sans", "Work Sans Fallback";
 }
 
 @font-face {
@@ -54,12 +53,4 @@
   descent-override: 48%;
   line-gap-override: 0%;
   size-adjust: 80.07%;
-}
-@font-face {
-  font-family: "Work Sans Fallback";
-  src: local("Arial");
-  ascent-override: 83.09%;
-  descent-override: 21.71%;
-  line-gap-override: 0%;
-  size-adjust: 111.93%;
 }

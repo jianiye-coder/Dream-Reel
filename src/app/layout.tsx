@@ -11,7 +11,6 @@ import "@fontsource/instrument-serif/400-italic.css";
 import "@fontsource/ibm-plex-mono/400.css"; // --font-nb-mono
 import "@fontsource/ibm-plex-mono/500.css";
 import "@fontsource/pinyon-script/400.css"; // --font-nb-script
-import "@fontsource/work-sans/700.css"; // --font-sub: outside .nb-root only the bold skip link uses it
 import "lxgw-wenkai-webfont/lxgwwenkai-regular.css"; // --hand
 import "./fonts.css";
 import { SessionProvider } from "next-auth/react";
