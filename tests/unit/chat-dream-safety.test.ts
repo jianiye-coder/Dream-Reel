@@ -30,7 +30,6 @@ describe("dream chat safety routing", () => {
     delete process.env.GROQ_API_KEY;
     delete process.env.GROQ_MODEL;
     delete process.env.DREAM_AGENT_FEEDBACK_SECRET;
-    delete process.env.DREAM_AGENT_JSON_SCHEMA_PERCENT;
     delete process.env.DREAM_AGENT_GUARDED_PERCENT;
     vi.restoreAllMocks();
   });
@@ -200,7 +199,6 @@ describe("dream chat safety routing", () => {
   });
 
   it("returns normalized evidence-based state and signed metadata from the model path", async () => {
-    process.env.DREAM_AGENT_JSON_SCHEMA_PERCENT = "100";
     vi.spyOn(console, "info").mockImplementation(() => undefined);
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({
       choices: [{ message: { content: JSON.stringify({
@@ -229,10 +227,10 @@ describe("dream chat safety routing", () => {
     expect(body).toMatchObject({
       stage: "ready",
       nextAction: "ready_to_analyze",
-      meta: { variant: "json-schema-v1", source: "model", provider: "openai", feedbackToken: expect.any(String) },
+      meta: { variant: "json-object-v1", source: "model", provider: "openai", feedbackToken: expect.any(String) },
     });
     const upstreamBody = JSON.parse(String(fetchSpy.mock.calls[0][1]?.body));
-    expect(upstreamBody.response_format).toMatchObject({ type: "json_schema" });
+    expect(upstreamBody.response_format).toEqual({ type: "json_object" });
     expect(billing.checkAndConsumeUsage).toHaveBeenCalledWith(7, "analysis");
     expect(billing.refundConsumedUsage).not.toHaveBeenCalled();
     expect(agentMetrics.scheduleDreamAgentInteraction).toHaveBeenCalledWith(

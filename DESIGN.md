@@ -53,9 +53,10 @@ and the build never downloads one (so it cannot fail on Google Fonts).
   `src/app/layout.tsx`: Noto Serif SC (`--font-nb-serif`), Noto Serif
   (`--font-nb-serif-latin`, placed first on English pages so apostrophes and
   dashes aren't set full-width), Instrument Serif (`--font-nb-latin`), IBM Plex
-  Mono (`--font-nb-mono`), Pinyon Script (`--font-nb-script`), and Work Sans 700
-  for the skip link only. The two Noto faces are the variable builds, one file
-  per unicode-range slice for every weight. `src/app/fonts.css` sets the
+  Mono (`--font-nb-mono`), and Pinyon Script (`--font-nb-script`). The skip
+  link, the only text outside `.nb-root`, uses the system font. The two Noto
+  faces are the variable builds, one file per unicode-range slice for every
+  weight. `src/app/fonts.css` sets the
   `--font-*` variables and a metric-adjusted local fallback face per family.
   The serif comes in 400, 600 and 900 only; set one of those, not `bold`.
 - `lxgw-wenkai-webfont` (霞鹜文楷) for `--hand`, imported in the layout.

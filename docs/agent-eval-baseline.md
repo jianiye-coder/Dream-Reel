@@ -22,7 +22,7 @@ The corpus now has 27 Chinese and 27 English cases. It adds user corrections, ex
 | State/recovery improvements, `json_object` | 54/54 | 100% | 4.4s | 7.3s | 808 |
 | Same code, strict `json_schema` | 54/54 after targeted regression | 100% | 4.5s | 7.0s | 907 |
 
-Saved-output replay separates evaluator calibration from new model sampling. The final production-format artifact replayed at 54/54 after a Chinese synonym matcher was corrected; no output was regenerated for that adjudication. Strict schema added roughly 12% token use with no demonstrated quality gain, so production remains on `json_object`. A stable, environment-controlled canary (`DREAM_AGENT_JSON_SCHEMA_PERCENT`) is available but defaults to 0%.
+Saved-output replay separates evaluator calibration from new model sampling. The final production-format artifact replayed at 54/54 after a Chinese synonym matcher was corrected; no output was regenerated for that adjudication. Strict schema added roughly 12% token use with no demonstrated quality gain, so production remains on `json_object`. The `DREAM_AGENT_JSON_SCHEMA_PERCENT` canary was removed on 2026-11-16; `npm run eval:agent` can still score strict `json_schema` offline.
 
 The improved state machine returns deterministic, localized responses for imminent self-harm, explicit stop, no-more-recall, and clearly off-topic weather requests. Those paths do not consume AI quota or call a model. Operational logs contain only interaction ID, variant, stage, action, question count, latency, and token counts—never dream text or agent memory.
 

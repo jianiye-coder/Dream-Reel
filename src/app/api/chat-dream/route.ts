@@ -9,7 +9,6 @@ import {
 import {
   buildDreamFollowUpAgentPrompt,
   deriveDreamAgentConversationContext,
-  dreamAgentStrictResponseFormat,
   inferAgentStageFromConversation,
   parseDreamAgentContent,
   resolveDeterministicAgentResponse,
@@ -17,7 +16,6 @@ import {
 import {
   createDreamAgentResponseMeta,
   logDreamAgentCompletion,
-  selectDreamAgentModelVariant,
   selectDreamAgentPolicyVariant,
 } from "@/lib/dreamAgentTelemetry";
 import {
@@ -230,7 +228,7 @@ export async function POST(req: NextRequest) {
 
   const userTurns = messages.filter((m) => m.role === "user").length;
   const stage = goal === "support" ? "deepening" : inferAgentStageFromConversation(messages, lang, conversationContext, guardedRecall);
-  const variant = selectDreamAgentModelVariant(userId, process.env.DREAM_AGENT_JSON_SCHEMA_PERCENT);
+  const variant = "json-object-v1";
   const systemPrompt = goal === "support"
     ? buildDreamSupportPrompt(lang, contextLines)
     : buildDreamFollowUpAgentPrompt(lang, userTurns, stage, contextLines, conversationContext);
@@ -270,7 +268,7 @@ export async function POST(req: NextRequest) {
             messages: [{ role: "system", content: systemPrompt }, ...upstreamMessages],
             max_completion_tokens: provider.name === "groq" ? 1600 : 800,
             reasoning_effort: provider.name === "groq" && provider.model.startsWith("openai/gpt-oss-") ? "low" : undefined,
-            response_format: variant === "json-schema-v1" ? dreamAgentStrictResponseFormat : { type: "json_object" },
+            response_format: { type: "json_object" },
           }),
         });
       } finally {
