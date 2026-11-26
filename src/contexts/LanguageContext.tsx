@@ -10,13 +10,13 @@ interface LanguageContextValue {
 }
 
 const LanguageContext = createContext<LanguageContextValue>({
-  lang: "zh",
+  lang: "en",
   setLang: () => {},
-  T: translations.zh,
+  T: translations.en,
 });
 
 export function LanguageProvider({ children }: { children: React.ReactNode }) {
-  const [lang, setLangState] = useState<Lang>("zh");
+  const [lang, setLangState] = useState<Lang>("en"); // English first; a saved choice (dreamreel-lang) still wins
 
   useEffect(() => {
     const saved = localStorage.getItem("dreamreel-lang") as Lang | null;

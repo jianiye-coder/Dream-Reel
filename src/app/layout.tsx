@@ -15,6 +15,7 @@ import "lxgw-wenkai-webfont/lxgwwenkai-regular.css"; // --hand
 import "./fonts.css";
 import { SessionProvider } from "next-auth/react";
 import { LanguageProvider } from "@/contexts/LanguageContext";
+import { SkipLink } from "@/components/SkipLink";
 
 export const metadata: Metadata = {
   title: "Dream Reel — Dream Journal · 梦境日记",
@@ -28,14 +29,19 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="zh-CN" suppressHydrationWarning>
+    <html lang="en" suppressHydrationWarning>
       <head>
         <link rel="manifest" href="/manifest.json" />
+        {/* English is the server default; set lang from a saved Chinese choice before first paint */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `try{if(localStorage.getItem("dreamreel-lang")==="zh")document.documentElement.lang="zh-CN"}catch(e){}`,
+          }}
+        />
       </head>
       <body>
-        <a className="skip-link" href="#main-content">跳至主要内容</a>
         <SessionProvider>
-          <LanguageProvider><div id="main-content" tabIndex={-1}>{children}</div></LanguageProvider>
+          <LanguageProvider><SkipLink /><div id="main-content" tabIndex={-1}>{children}</div></LanguageProvider>
         </SessionProvider>
       </body>
     </html>

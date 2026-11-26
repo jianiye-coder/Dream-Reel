@@ -24,7 +24,7 @@ export async function POST(request: NextRequest) {
     const session = await requireStripe().billingPortal.sessions.create({
       customer: customerId,
       return_url: `${origin}/account`,
-      locale: body.lang === "en" ? "en" : "zh",
+      locale: body.lang === "zh" ? "zh" : "en",
     });
     if (!session.url) return errorJson(API_ERROR_CODES.paymentError, 502);
     return privateJson({ url: session.url });

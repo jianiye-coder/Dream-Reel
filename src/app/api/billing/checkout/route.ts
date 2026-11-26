@@ -53,7 +53,7 @@ export async function POST(request: NextRequest) {
   if (!isCheckoutConfigured()) return errorJson(API_ERROR_CODES.billingUnavailable, 503);
 
   const body = await request.json().catch(() => ({})) as { lang?: unknown; from?: unknown };
-  const lang: BillingLang = body.lang === "en" ? "en" : "zh";
+  const lang: BillingLang = body.lang === "zh" ? "zh" : "en";
   const priceId = plusPriceId();
   const origin = appOrigin(request.nextUrl.origin);
   if (!priceId || !origin) return errorJson(API_ERROR_CODES.billingUnavailable, 503);

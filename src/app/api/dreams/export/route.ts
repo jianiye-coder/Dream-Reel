@@ -10,7 +10,7 @@ export const runtime = "nodejs";
 
 const querySchema = z.object({
   format: z.enum(["markdown", "json"]).default("markdown"),
-  lang: z.enum(["zh", "en"]).default("zh"),
+  lang: z.enum(["zh", "en"]).default("en"),
 });
 
 export async function GET(request: NextRequest) {

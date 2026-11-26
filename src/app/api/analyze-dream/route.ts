@@ -12,7 +12,7 @@ export const runtime = "nodejs";
 
 const requestSchema = z.object({
   text: z.string().trim().min(1).max(4000),
-  lang: z.enum(["zh", "en"]).default("zh"),
+  lang: z.enum(["zh", "en"]).default("en"),
   preSleepMeal: z.string().trim().max(500).optional(),
   preSleepActivity: z.string().trim().max(500).optional(),
 });

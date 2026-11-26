@@ -7,7 +7,7 @@ import { API_ERROR_CODES } from "@/lib/apiErrors";
 
 const requestSchema = z.object({
   text: z.string().trim().min(1).max(3000),
-  lang: z.enum(["zh", "en"]).default("zh"),
+  lang: z.enum(["zh", "en"]).default("en"),
   mood: z.string().trim().max(80).optional(),
   people: z.array(z.string()).optional(),
   locations: z.array(z.string()).optional(),
