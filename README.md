@@ -104,9 +104,8 @@ Image prompts are assembled from dream content and structured fields in `src/lib
 | --- | --- |
 | `DREAM_TEXT_PREVIOUS_ENCRYPTION_KEYS` | Key rotation: comma-separated `old-id=old-secret` pairs; retain keys needed to read existing data |
 | `DREAM_AGENT_FEEDBACK_SECRET` | Separate signing secret for short-lived, user-bound feedback tokens; otherwise falls back to the auth secret |
-| `DREAM_AGENT_JSON_SCHEMA_PERCENT` | Strict-output canary allocation; defaults to `0` |
 | `DREAM_AGENT_GUARDED_PERCENT` | Guarded recall-policy canary allocation; defaults to `0` |
-| `ADMIN_EMAIL` | Access to administrator credit and agent-feedback endpoints |
+| `ADMIN_EMAIL` | Access to the admin agent-feedback endpoint |
 | `ADMIN_UNLIMITED_EMAILS` | Comma-separated accounts exempt from quotas; set explicitly rather than relying on the creator-account default in `billing.ts` |
 | `STRIPE_SECRET_KEY`, `STRIPE_PLUS_PRICE_ID_USD`, `STRIPE_WEBHOOK_SECRET` | Plus subscriptions; see [Payments (Stripe)](#payments-stripe). All three or none |
 

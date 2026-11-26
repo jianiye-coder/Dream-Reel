@@ -33,7 +33,6 @@ body {
   line-height: inherit;
   background: #fffbeb;
   color: #0f172a;
-  font-family: var(--font-sub), system-ui, sans-serif;
 }
 
 h1, h2, h3, h4, h5, h6 {
