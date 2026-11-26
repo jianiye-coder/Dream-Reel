@@ -33,7 +33,6 @@ body {
   line-height: inherit;
   background: #fffbeb;
   color: #0f172a;
-  font-family: var(--font-sub), system-ui, sans-serif;
 }
 
 h1, h2, h3, h4, h5, h6 {
@@ -99,6 +98,9 @@ img {
   transition: transform .2s ease;
 }
 .skip-link:focus-visible { transform: translateY(0); }
+@media (prefers-reduced-motion: reduce) {
+  .skip-link { transition: none; }
+}
 
 /* iOS Safari zooms into any field set below 16px; page modules that need a larger hand override this */
 @media (max-width: 520px) {

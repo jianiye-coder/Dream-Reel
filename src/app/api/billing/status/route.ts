@@ -1,6 +1,7 @@
 import { API_ERROR_CODES } from "@/lib/apiErrors";
 import { getBillingStatus } from "@/lib/billing";
-import { errorJson, privateJson, sessionUser } from "@/lib/billingHttp";
+import { errorJson, privateJson } from "@/lib/billingHttp";
+import { sessionUser } from "@/lib/session";
 import { safeErrorMetadata } from "@/lib/safeServerLog";
 import { isCheckoutConfigured } from "@/lib/stripe";
 

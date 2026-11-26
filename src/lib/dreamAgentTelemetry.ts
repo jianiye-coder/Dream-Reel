@@ -1,6 +1,8 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import type { DreamAgentResult } from "./dreamFollowUpAgent";
 
+// json-schema-v1 is no longer served (strict schema cost ~12% more tokens for no quality gain, see
+// docs/agent-eval-baseline.md); it stays in the union so stored rows and older feedback tokens still parse.
 export type DreamAgentVariant = "deterministic-v1" | "json-object-v1" | "json-schema-v1";
 export type DreamAgentProvider = "deterministic" | "openai" | "groq";
 export type DreamAgentPolicyVariant = "legacy-v1" | "guarded-v2" | "support-v1";
@@ -73,13 +75,6 @@ export function verifyDreamAgentFeedbackToken(token: string, userId: number): Fe
   } catch {
     return null;
   }
-}
-
-export function selectDreamAgentModelVariant(userId: number, percentageValue?: string) {
-  const parsed = Number.parseFloat(percentageValue ?? "0");
-  const percentage = Number.isFinite(parsed) ? Math.min(100, Math.max(0, parsed)) : 0;
-  const bucket = ((userId * 2_654_435_761) >>> 0) % 100;
-  return bucket < percentage ? "json-schema-v1" as const : "json-object-v1" as const;
 }
 
 export function selectDreamAgentPolicyVariant(userId: number, percentageValue?: string) {

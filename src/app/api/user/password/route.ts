@@ -13,12 +13,18 @@ const schema = z.object({
 });
 
 export async function PUT(request: NextRequest) {
-  // the account page shows this body as is
-  const userId = await requireUserId({ error: "请先登录" });
+  // the account page turns these codes into copy with getApiErrorMessage
+  const userId = await requireUserId();
   if (userId instanceof NextResponse) return userId;
 
-  const parsed = schema.safeParse(await request.json());
-  if (!parsed.success) return NextResponse.json({ error: "新密码至少 6 位" }, { status: 400 });
+  const parsed = schema.safeParse(await request.json().catch(() => null));
+  if (!parsed.success) {
+    const newPasswordOnly = parsed.error.issues.every((issue) => issue.path[0] === "newPassword");
+    return NextResponse.json(
+      { error: newPasswordOnly ? API_ERROR_CODES.invalidNewPassword : API_ERROR_CODES.invalidRequest },
+      { status: 400 },
+    );
+  }
 
   const identifier = `user:${userId}`;
   const ipAddress = getTrustedClientIp(request.headers);
@@ -33,11 +39,11 @@ export async function PUT(request: NextRequest) {
   const pool = getPool();
   const { rows } = await pool.query("SELECT password_hash FROM users WHERE id = $1", [userId]);
   if (!rows[0]?.password_hash) {
-    return NextResponse.json({ error: "该账号使用第三方登录，无法修改密码" }, { status: 400 });
+    return NextResponse.json({ error: API_ERROR_CODES.noPassword }, { status: 400 });
   }
 
   const valid = await bcrypt.compare(parsed.data.currentPassword, rows[0].password_hash as string);
-  if (!valid) return NextResponse.json({ error: "当前密码不正确" }, { status: 400 });
+  if (!valid) return NextResponse.json({ error: API_ERROR_CODES.wrongPassword }, { status: 400 });
 
   const newHash = await bcrypt.hash(parsed.data.newPassword, 12);
   await pool.query("UPDATE users SET password_hash = $1 WHERE id = $2", [newHash, userId]);

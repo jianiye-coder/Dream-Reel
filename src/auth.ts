@@ -7,6 +7,7 @@ import { z } from "zod";
 import { authConfig } from "@/auth.config";
 import { normalizeEmail } from "@/lib/email";
 import { clearAuthAttempts, consumeAuthAttempt, getTrustedClientIp } from "@/lib/authRateLimit";
+import { safeErrorMetadata } from "@/lib/safeServerLog";
 
 const DUMMY_PASSWORD_HASH = "$2b$12$C6UzMDM.H6dfI/f/IKcEe.ou7q9r7w7N1Gq6V4ZJ6f4WnT5fYQw8K";
 
@@ -77,7 +78,7 @@ export const { handlers, auth } = NextAuth({
           );
           if (rows[0]) token.name = rows[0].name;
         } catch (error) {
-          console.error("Could not refresh the session name", error);
+          console.error("Could not refresh the session name", safeErrorMetadata(error));
         }
       }
       return token;

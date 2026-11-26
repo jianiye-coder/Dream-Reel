@@ -72,8 +72,9 @@ principle(1, "Notebook design system only", ({ add, metrics }) => {
     add("src/app/globals.css", baseline.globalsCssLines, `globals.css grew to ${globals} lines (baseline ${baseline.globalsCssLines}); page styles belong in notebook.css (nb- classes) or a CSS module`, Math.min(40, 2 * (globals - baseline.globalsCssLines)));
   }
   for (const f of inSrc(/\.css$/)) {
-    if (f === "src/app/globals.css" || f === "src/app/notebook.css" || f.endsWith(".module.css")) continue;
-    add(f, 1, "global stylesheet outside notebook.css / globals.css; use a CSS module", 25);
+    // fonts.css names the self-hosted families and their fallbacks for the --font-* variables (DESIGN.md, Fonts)
+    if (f === "src/app/globals.css" || f === "src/app/notebook.css" || f === "src/app/fonts.css" || f.endsWith(".module.css")) continue;
+    add(f, 1, "global stylesheet outside notebook.css / globals.css / fonts.css; use a CSS module", 25);
   }
   const nb = read("src/app/notebook.css");
   for (const m of stripStrings(nb.replace(/\/\*[\s\S]*?\*\//g, "")).matchAll(/(?<![\w-])\.([a-zA-Z][\w-]*)/g)) {

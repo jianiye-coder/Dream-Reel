@@ -4,7 +4,7 @@ import { NextResponse } from "next/server";
 const auth = vi.hoisted(() => vi.fn());
 vi.mock("@/auth", () => ({ auth }));
 
-import { parseUserId, requireUserId, sessionUserId } from "@/lib/session";
+import { parseUserId, requireUserId, sessionUser, sessionUserId } from "@/lib/session";
 
 describe("parseUserId", () => {
   it("accepts positive integer ids within the Postgres integer range", () => {
@@ -29,6 +29,15 @@ describe("sessionUserId / requireUserId", () => {
     expect(await requireUserId()).toBe(7);
   });
 
+  it("returns the id with the email for the billing routes", async () => {
+    auth.mockResolvedValue({ user: { id: "7", email: "reader@example.test" } });
+    expect(await sessionUser()).toEqual({ id: 7, email: "reader@example.test" });
+    auth.mockResolvedValue({ user: { id: "7" } });
+    expect(await sessionUser()).toEqual({ id: 7, email: null });
+    auth.mockResolvedValue({ user: { id: "0", email: "reader@example.test" } });
+    expect(await sessionUser()).toBeNull();
+  });
+
   it("answers 401 with the UNAUTHORIZED code without a valid session", async () => {
     for (const session of [null, {}, { user: {} }, { user: { id: "abc" } }]) {
       auth.mockResolvedValue(session);
@@ -39,12 +48,5 @@ describe("sessionUserId / requireUserId", () => {
       expect(res.status).toBe(401);
       expect(await res.json()).toEqual({ error: "UNAUTHORIZED" });
     }
-  });
-
-  it("can carry a route's own body and headers", async () => {
-    auth.mockResolvedValue(null);
-    const res = (await requireUserId({ error: "请先登录", headers: { "Cache-Control": "no-store" } })) as NextResponse;
-    expect(await res.json()).toEqual({ error: "请先登录" });
-    expect(res.headers.get("Cache-Control")).toBe("no-store");
   });
 });

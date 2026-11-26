@@ -11,7 +11,8 @@ import {
   upsertStripeSubscription,
   userExists,
 } from "@/lib/billing";
-import { errorJson, parseUserId, privateJson } from "@/lib/billingHttp";
+import { errorJson, privateJson } from "@/lib/billingHttp";
+import { parseUserId } from "@/lib/session";
 import { safeErrorMetadata } from "@/lib/safeServerLog";
 import {
   billsPlusPrice,

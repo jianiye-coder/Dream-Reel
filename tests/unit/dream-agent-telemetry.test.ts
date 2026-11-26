@@ -2,18 +2,13 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   createDreamAgentResponseMeta,
   logDreamAgentCompletion,
-  selectDreamAgentModelVariant,
   selectDreamAgentPolicyVariant,
   verifyDreamAgentFeedbackToken,
 } from "@/lib/dreamAgentTelemetry";
 
 describe("dream agent telemetry", () => {
   afterEach(() => { delete process.env.DREAM_AGENT_FEEDBACK_SECRET; });
-  it("assigns canary variants deterministically and honors the rollout bounds", () => {
-    expect(selectDreamAgentModelVariant(42, "0")).toBe("json-object-v1");
-    expect(selectDreamAgentModelVariant(42, "100")).toBe("json-schema-v1");
-    expect(selectDreamAgentModelVariant(42, "12.5")).toBe(selectDreamAgentModelVariant(42, "12.5"));
-    expect(selectDreamAgentModelVariant(42, "invalid")).toBe("json-object-v1");
+  it("assigns policy variants deterministically and honors the rollout bounds", () => {
     expect(selectDreamAgentPolicyVariant(42, "0")).toBe("legacy-v1");
     expect(selectDreamAgentPolicyVariant(42, "100")).toBe("guarded-v2");
     expect(selectDreamAgentPolicyVariant(42, "12.5")).toBe(selectDreamAgentPolicyVariant(42, "12.5"));

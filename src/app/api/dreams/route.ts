@@ -15,6 +15,7 @@ import { requireUserId } from "@/lib/session";
 import { z } from "zod";
 import { checkAndConsumeUsage, refundConsumedUsage } from "@/lib/billing";
 import { API_ERROR_CODES } from "@/lib/apiErrors";
+import { safeErrorMetadata } from "@/lib/safeServerLog";
 import { scheduleDreamAgentJournalSaved } from "@/lib/dreamAgentMetrics";
 
 const deleteSchema = z.object({ id: z.number().int().positive() });
@@ -52,10 +53,11 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (error) {
+    // a malformed archive cursor
     if (error instanceof RangeError) {
-      return NextResponse.json({ error: error.message }, { status: 400 });
+      return NextResponse.json({ error: API_ERROR_CODES.invalidRequest }, { status: 400 });
     }
-    console.error("GET /api/dreams failed", error);
+    console.error("GET /api/dreams failed", safeErrorMetadata(error));
     return NextResponse.json({ error: API_ERROR_CODES.internalError }, { status: 500 });
   }
 }
@@ -92,7 +94,7 @@ export async function POST(request: NextRequest) {
     }
     return NextResponse.json({ entry }, { status: 201 });
   } catch (error) {
-    console.error("POST /api/dreams failed", error);
+    console.error("POST /api/dreams failed", safeErrorMetadata(error));
     return NextResponse.json({ error: API_ERROR_CODES.internalError }, { status: 500 });
   }
 }
@@ -111,7 +113,7 @@ export async function PATCH(request: NextRequest) {
     const entry = await patchDreamEntryTags(parsed.data, userId);
     return NextResponse.json({ entry });
   } catch (error) {
-    console.error("PATCH /api/dreams failed", error);
+    console.error("PATCH /api/dreams failed", safeErrorMetadata(error));
     return NextResponse.json({ error: API_ERROR_CODES.internalError }, { status: 500 });
   }
 }
@@ -133,7 +135,7 @@ export async function PUT(request: NextRequest) {
     }
     return NextResponse.json({ entry });
   } catch (error) {
-    console.error("PUT /api/dreams failed", error);
+    console.error("PUT /api/dreams failed", safeErrorMetadata(error));
     return NextResponse.json({ error: API_ERROR_CODES.internalError }, { status: 500 });
   }
 }
@@ -152,7 +154,7 @@ export async function DELETE(request: NextRequest) {
     await deleteDreamEntry(parsed.data.id, userId);
     return NextResponse.json({ ok: true });
   } catch (error) {
-    console.error("DELETE /api/dreams failed", error);
+    console.error("DELETE /api/dreams failed", safeErrorMetadata(error));
     return NextResponse.json({ error: API_ERROR_CODES.internalError }, { status: 500 });
   }
 }

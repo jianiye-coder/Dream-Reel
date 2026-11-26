@@ -1,7 +1,8 @@
 import { NextRequest } from "next/server";
 import { API_ERROR_CODES } from "@/lib/apiErrors";
 import { getStripeCustomerId } from "@/lib/billing";
-import { errorJson, privateJson, sessionUser } from "@/lib/billingHttp";
+import { errorJson, privateJson } from "@/lib/billingHttp";
+import { sessionUser } from "@/lib/session";
 import { safeErrorMetadata } from "@/lib/safeServerLog";
 import { appOrigin, requireStripe, stripeErrorInfo, stripeSecretKey } from "@/lib/stripe";
 
