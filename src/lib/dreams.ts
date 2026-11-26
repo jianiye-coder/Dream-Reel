@@ -30,7 +30,8 @@ export const dreamEntryInputSchema = z.object({
   locations: listField,
   symbols: listField,
   capturedAt: z.coerce.date().optional(),
-  imageUrl: z.string().trim().url().optional().nullable(),
+  // only hosted images (Vercel Blob); inline data URLs were moved out of the table on 2026-11-25
+  imageUrl: z.string().trim().url().refine((value) => value.startsWith("https://"), "imageUrl must be https").optional().nullable(),
   assetStatus: z.string().trim().max(30).optional().nullable(),
   // Sleep tracking
   sleepStart: z.string().trim().max(10).optional().nullable(),
@@ -76,7 +77,6 @@ export type DreamEntry = {
   symbols: string[];
   imageUrl: string | null;
   thumbnailUrl: string | null;
-  imageUrlOmitted?: boolean;
   assetStatus: string | null;
   // Sleep tracking
   sleepStart: string | null;
@@ -103,14 +103,7 @@ const ARCHIVE_LIST_SELECT = `
     people,
     locations,
     symbols,
-    CASE
-      WHEN image_url LIKE 'data:image/%' THEN NULL
-      ELSE image_url
-    END AS image_url,
-    CASE
-      WHEN image_url LIKE 'data:image/%' THEN TRUE
-      ELSE FALSE
-    END AS image_url_omitted,
+    image_url,
     asset_status,
     sleep_start,
     wake_time,
@@ -122,17 +115,10 @@ const ARCHIVE_LIST_SELECT = `
   FROM dream_entries
 `;
 
-function isDataImageUrl(value: string | null): boolean {
-  return Boolean(value?.startsWith("data:image/"));
-}
-
 function mapDreamRow(row: Record<string, unknown>, options: { lightweight?: boolean } = {}): DreamEntry {
   const rawText = String(row.raw_text);
   const cleanText = String(row.clean_text);
   const imageUrl = row.image_url == null ? null : String(row.image_url);
-  const shouldOmitImageUrl = Boolean(
-    options.lightweight && (isDataImageUrl(imageUrl) || row.image_url_omitted === true),
-  );
 
   return {
     id: Number(row.id),
@@ -148,9 +134,8 @@ function mapDreamRow(row: Record<string, unknown>, options: { lightweight?: bool
     people: Array.isArray(row.people) ? (row.people as string[]) : [],
     locations: Array.isArray(row.locations) ? (row.locations as string[]) : [],
     symbols: Array.isArray(row.symbols) ? (row.symbols as string[]) : [],
-    imageUrl: shouldOmitImageUrl ? null : imageUrl,
-    thumbnailUrl: shouldOmitImageUrl ? null : getThumbnailUrl(imageUrl),
-    imageUrlOmitted: shouldOmitImageUrl || undefined,
+    imageUrl,
+    thumbnailUrl: getThumbnailUrl(imageUrl),
     assetStatus: row.asset_status == null ? null : String(row.asset_status),
     sleepStart: row.sleep_start == null ? null : String(row.sleep_start),
     wakeTime: row.wake_time == null ? null : String(row.wake_time),

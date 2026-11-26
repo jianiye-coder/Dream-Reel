@@ -34,7 +34,7 @@ Voice input uses the browser's `SpeechRecognition` / `webkitSpeechRecognition` A
 | Styling | Plain CSS notebook design system (`notebook.css` + per-page CSS modules, see [DESIGN.md](DESIGN.md)); a small base reset in `globals.css`; no CSS framework |
 | Server | Next.js Route Handlers on the Node.js runtime; Zod validation |
 | Database | PostgreSQL through `pg`, parameterized SQL, no ORM |
-| Authentication | Auth.js v5 beta, PostgreSQL adapter, JWT sessions, bcrypt password hashes |
+| Authentication | Auth.js v5 beta (credentials provider), JWT sessions, bcrypt password hashes |
 | Text AI | Groq and OpenAI HTTP APIs; custom conversation and structured-output logic |
 | Image AI | Flatkey or OpenAI Images API |
 | Image storage | Vercel Blob, with Sharp-generated WebP thumbnails |
@@ -205,7 +205,7 @@ docs/                     Agent evaluation and design documentation
 
 - Raw and cleaned dream narratives are encrypted at rest with AES-256-GCM. This is **not** end-to-end encryption: the server decrypts text for the application, and requested AI operations send relevant content to external providers.
 - Structured metadata such as titles, people, locations, and analysis fields is not covered by narrative encryption. Generated images use **public Blob URLs**; anyone with the URL can access them.
-- Use a dedicated encryption key independent of `AUTH_SECRET`. Without it, the app can use an auth-derived transition key, but the health check reports a degraded state. Key IDs and previous keys support batched re-encryption; do not discard old secrets before migration is complete.
+- Use a dedicated encryption key independent of `AUTH_SECRET`; production refuses to store or read dream text without it, and the health check reports `"encryption": "missing"`. To rotate, set a new `DREAM_TEXT_ENCRYPTION_KEY_ID` and list the old key in `DREAM_TEXT_PREVIOUS_ENCRYPTION_KEYS`: while that list is set, cold starts re-encrypt dream entries in batches. Morning Pages are not re-encrypted: keep the old key listed until existing pages have been re-saved, then clear `DREAM_TEXT_PREVIOUS_ENCRYPTION_KEYS`, which also stops the cold-start scan.
 - Person relationships, person genders, and keyword aliases in the archive are stored in browser `localStorage`; they are not server-synchronized records.
 - Keep application logs limited to operational metadata. Do not log dream text, prompts, model responses, credentials, or encryption keys. Agent aggregates are designed to exclude journal content.
 - AI-generated emotions, stress scores, images, and interpretations can be inaccurate. They are not diagnoses or validated clinical measurements.
@@ -288,7 +288,7 @@ Dream Reel 起源于我自己记录梦境的习惯。过去散落在备忘录里
 
 ### 技术栈与后端
 
-Next.js 16 App Router、React 19、TypeScript、纯 CSS 笔记本设计系统（不用 CSS 框架）；后端是运行于 Node.js 的 Next.js Route Handlers。数据库通过 `pg` 直接连接 PostgreSQL，无 ORM，使用 Zod 校验输入。认证采用 Auth.js v5 beta、PostgreSQL Adapter、JWT Session 和 bcrypt 密码哈希。
+Next.js 16 App Router、React 19、TypeScript、纯 CSS 笔记本设计系统（不用 CSS 框架）；后端是运行于 Node.js 的 Next.js Route Handlers。数据库通过 `pg` 直接连接 PostgreSQL，无 ORM，使用 Zod 校验输入。认证采用 Auth.js v5 beta（账号密码登录）、JWT Session 和 bcrypt 密码哈希。
 
 文本 AI 接入 Groq / OpenAI，图片接入 Flatkey / OpenAI；原图与 Sharp 生成的缩略图存入 Vercel Blob。Stripe 通过 REST API 接入，订阅、额度扣减/退回与 webhook 去重由 PostgreSQL 管理。具体目录与接口见上方 [Architecture](#architecture)。
 
@@ -314,7 +314,7 @@ Next.js 16 App Router、React 19、TypeScript、纯 CSS 笔记本设计系统（
 
 梦境原文与整理后的正文使用 AES-256-GCM 静态加密，但不是端到端加密。服务端会解密使用，用户发起 AI 操作时，相关内容会传给外部供应商。标题、人物、地点和分析等结构化字段不在正文加密范围内；生成图片使用公共 Blob URL，持有链接的人可以访问。
 
-请使用独立于 `AUTH_SECRET` 的加密密钥。轮换时设置新的 `DREAM_TEXT_ENCRYPTION_KEY_ID`，并在 `DREAM_TEXT_PREVIOUS_ENCRYPTION_KEYS` 中保留旧密钥直到重加密完成。未配置独立密钥时可使用认证密钥派生的过渡方案，但健康检查会标记为降级。
+请使用独立于 `AUTH_SECRET` 的加密密钥；生产环境缺少它时会拒绝读写梦境文本，健康检查显示 `"encryption": "missing"`。轮换时设置新的 `DREAM_TEXT_ENCRYPTION_KEY_ID`，并把旧密钥写进 `DREAM_TEXT_PREVIOUS_ENCRYPTION_KEYS`：设置期间，冷启动会分批重加密梦境条目。晨间书写不会被重加密：旧密钥要一直留在列表里，直到已有的晨间书写都重新保存过；之后清空 `DREAM_TEXT_PREVIOUS_ENCRYPTION_KEYS`，冷启动的重加密扫描也会随之停止。
 
 人物关系、人物性别与关键词别名保存在浏览器 `localStorage`，不是跨设备同步数据。日志仅应保留运行元数据，不应记录梦境、提示词、模型响应或密钥。AI 情绪、压力分数和解读不应被当作诊断或经过验证的临床指标。
 

@@ -1,6 +1,7 @@
 import { Pool, type PoolClient } from "pg";
 import {
   getCurrentDreamEncryptionKeyId,
+  hasPreviousDreamEncryptionKeys,
   needsDreamTextReencryption,
   reencryptDreamText,
 } from "./dreamTextEncryption";
@@ -32,7 +33,7 @@ export function getPool(): Pool {
 
 // Bump this whenever you add new migrations. ensureSchema will skip all DDL
 // once this version is recorded in the DB, making cold starts near-instant.
-const SCHEMA_VERSION = 11;
+const SCHEMA_VERSION = 12;
 
 let schemaReady = false;
 let schemaReadyPromise: Promise<void> | null = null;
@@ -170,7 +171,9 @@ async function ensureSchemaInternal(): Promise<void> {
     }
   }
 
-  await migrateDreamTextEncryption(pool);
+  // Re-encrypt only while a key rotation is configured; otherwise every row already uses the
+  // current key and the scan would be wasted on each cold start.
+  if (hasPreviousDreamEncryptionKeys()) await migrateDreamTextEncryption(pool);
   schemaReady = true;
 }
 
@@ -194,14 +197,6 @@ async function applySchema(pool: Pool): Promise<void> {
         "emailVerified" TIMESTAMPTZ,
         image TEXT,
         password_hash TEXT
-      );
-    `),
-    pool.query(`
-      CREATE TABLE IF NOT EXISTS verification_tokens (
-        identifier TEXT NOT NULL,
-        expires TIMESTAMPTZ NOT NULL,
-        token TEXT NOT NULL,
-        PRIMARY KEY (identifier, token)
       );
     `),
     pool.query(`
@@ -241,31 +236,6 @@ async function applySchema(pool: Pool): Promise<void> {
         revision INTEGER NOT NULL DEFAULT 1 CHECK (revision > 0),
         updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         PRIMARY KEY (user_id, date)
-      );
-    `),
-    pool.query(`
-      CREATE TABLE IF NOT EXISTS accounts (
-        id SERIAL PRIMARY KEY,
-        "userId" INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-        type VARCHAR(255) NOT NULL,
-        provider VARCHAR(255) NOT NULL,
-        "providerAccountId" VARCHAR(255) NOT NULL,
-        refresh_token TEXT,
-        access_token TEXT,
-        expires_at BIGINT,
-        id_token TEXT,
-        scope TEXT,
-        session_state TEXT,
-        token_type TEXT,
-        UNIQUE(provider, "providerAccountId")
-      );
-    `),
-    pool.query(`
-      CREATE TABLE IF NOT EXISTS sessions (
-        id SERIAL PRIMARY KEY,
-        "userId" INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-        expires TIMESTAMPTZ NOT NULL,
-        "sessionToken" VARCHAR(255) NOT NULL UNIQUE
       );
     `),
     pool.query(`
@@ -406,6 +376,19 @@ async function applySchema(pool: Pool): Promise<void> {
     pool.query("CREATE INDEX IF NOT EXISTS idx_dream_agent_request_outcomes_policy ON dream_agent_request_outcomes (policy_variant, outcome, created_at DESC);"),
   ]);
 
+  // v12: tables nothing reads any more. user_credits was the first usage meter (usage_periods
+  // replaced it); accounts, sessions and verification_tokens belonged to the Auth.js adapter, which
+  // sign-in never used (credentials + JWT sessions). All four were empty or stale on 2026-11-25.
+  // A failed drop only warns: these tables are unused, so they must never block startup.
+  await pool.query(`
+    DO $$
+    BEGIN
+      DROP TABLE IF EXISTS user_credits, accounts, sessions, verification_tokens;
+    EXCEPTION WHEN OTHERS THEN
+      RAISE WARNING 'schema v12: could not drop unused tables: %', SQLERRM;
+    END
+    $$;
+  `);
   await normalizeUserEmails(pool);
   await lockDownPublicApi(pool);
 

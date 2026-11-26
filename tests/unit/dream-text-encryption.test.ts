@@ -89,14 +89,36 @@ describe("dream text key rotation", () => {
     expect(decryptDreamText(String(updates[0][2]))).toBe("clean private dream");
   });
 
-  it("keeps production authentication available during key provisioning", () => {
+  it("refuses to encrypt in production without a dedicated key, even with an auth secret", () => {
     delete process.env.DREAM_TEXT_ENCRYPTION_KEY;
     delete process.env.DREAM_TEXT_PREVIOUS_ENCRYPTION_KEYS;
-    process.env.AUTH_SECRET = "production-auth-transition-secret";
+    process.env.AUTH_SECRET = "production-auth-secret";
     vi.stubEnv("NODE_ENV", "production");
 
-    const encrypted = encryptDreamText("transition dream");
-    expect(encrypted).toMatch(/^dre2:auth-transition:/);
-    expect(decryptDreamText(encrypted)).toBe("transition dream");
+    expect(() => encryptDreamText("a dream")).toThrow(/DREAM_TEXT_ENCRYPTION_KEY is missing/);
+  });
+
+  it("encrypts text that merely looks like ciphertext", () => {
+    process.env.DREAM_TEXT_ENCRYPTION_KEY = "current-secret";
+    const stored = encryptDreamText("dre2:primary: a dream that starts oddly");
+    expect(stored).not.toBe("dre2:primary: a dream that starts oddly");
+    expect(decryptDreamText(stored)).toBe("dre2:primary: a dream that starts oddly");
+  });
+
+  it("uses the auth secret as a development key outside production", () => {
+    delete process.env.DREAM_TEXT_ENCRYPTION_KEY;
+    delete process.env.DREAM_TEXT_PREVIOUS_ENCRYPTION_KEYS;
+    process.env.AUTH_SECRET = "local-auth-secret";
+    vi.stubEnv("NODE_ENV", "development");
+
+    const encrypted = encryptDreamText("a local dream");
+    expect(encrypted).toMatch(/^dre2:development:/);
+    expect(decryptDreamText(encrypted)).toBe("a local dream");
+  });
+
+  it("treats anything that is not dre2 ciphertext as corrupt", () => {
+    process.env.DREAM_TEXT_ENCRYPTION_KEY = "current-secret";
+    expect(() => decryptDreamText("a plaintext dream")).toThrow(/not encrypted/);
+    expect(() => decryptDreamText("dre1:aaa.bbb.ccc")).toThrow(/not encrypted/);
   });
 });
