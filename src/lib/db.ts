@@ -37,149 +37,12 @@ const SCHEMA_VERSION = 11;
 let schemaReady = false;
 let schemaReadyPromise: Promise<void> | null = null;
 
+// Sign-up and sign-in normalise emails (lib/email), and the unique index on LOWER(email)
+// keeps a mixed-case duplicate from ever being stored. Production has had the index since v5 (#18);
+// a database that predates it and holds case-duplicates must merge them by hand first.
 async function normalizeUserEmails(pool: Pool): Promise<void> {
-  const client = await pool.connect();
-  try {
-    await client.query("BEGIN");
-    await client.query("SELECT pg_advisory_xact_lock(7240318)");
-    const duplicates = await client.query<{
-      normalized_email: string;
-      user_ids: number[];
-    }>(
-      `
-        SELECT LOWER(TRIM(email)) AS normalized_email,
-               ARRAY_AGG(id ORDER BY id) AS user_ids
-        FROM users
-        WHERE email IS NOT NULL
-        GROUP BY LOWER(TRIM(email))
-        HAVING COUNT(*) > 1
-      `,
-    );
-
-    for (const group of duplicates.rows) {
-      const [canonicalId, ...duplicateIds] = group.user_ids.map(Number);
-      if (!canonicalId || duplicateIds.length === 0) continue;
-
-      await client.query(
-        `UPDATE dream_entries SET user_id = $1 WHERE user_id = ANY($2::int[])`,
-        [canonicalId, duplicateIds],
-      );
-      await client.query(
-        `UPDATE accounts SET "userId" = $1 WHERE "userId" = ANY($2::int[])`,
-        [canonicalId, duplicateIds],
-      );
-      await client.query(
-        `UPDATE sessions SET "userId" = $1 WHERE "userId" = ANY($2::int[])`,
-        [canonicalId, duplicateIds],
-      );
-      await client.query(
-        `UPDATE subscriptions SET user_id = $1 WHERE user_id = ANY($2::int[])`,
-        [canonicalId, duplicateIds],
-      );
-
-      const duplicateUsage = await client.query<{
-        plan: string;
-        period_start: Date;
-        period_end: Date;
-        dream_entries_used: number;
-        analysis_used: number;
-        image_generations_used: number;
-      }>(
-        `
-          SELECT plan, period_start, period_end, dream_entries_used,
-                 analysis_used, image_generations_used
-          FROM usage_periods
-          WHERE user_id = ANY($1::int[])
-        `,
-        [duplicateIds],
-      );
-      for (const usage of duplicateUsage.rows) {
-        await client.query(
-          `
-            INSERT INTO usage_periods (
-              user_id, plan, period_start, period_end,
-              dream_entries_used, analysis_used, image_generations_used
-            )
-            VALUES ($1, $2, $3, $4, $5, $6, $7)
-            ON CONFLICT (user_id, period_start, period_end)
-            DO UPDATE SET
-              dream_entries_used = usage_periods.dream_entries_used + EXCLUDED.dream_entries_used,
-              analysis_used = usage_periods.analysis_used + EXCLUDED.analysis_used,
-              image_generations_used = usage_periods.image_generations_used + EXCLUDED.image_generations_used,
-              updated_at = NOW()
-          `,
-          [
-            canonicalId,
-            usage.plan,
-            usage.period_start,
-            usage.period_end,
-            usage.dream_entries_used,
-            usage.analysis_used,
-            usage.image_generations_used,
-          ],
-        );
-      }
-      await client.query(
-        `DELETE FROM usage_periods WHERE user_id = ANY($1::int[])`,
-        [duplicateIds],
-      );
-
-      const credits = await client.query<{
-        bonus: number;
-        used_today: number;
-        reset_date: Date;
-      }>(
-        `
-          SELECT COALESCE(SUM(bonus), 0)::int AS bonus,
-                 COALESCE(SUM(used_today), 0)::int AS used_today,
-                 MAX(reset_date) AS reset_date
-          FROM user_credits
-          WHERE user_id = ANY($1::int[])
-        `,
-        [[canonicalId, ...duplicateIds]],
-      );
-      if (credits.rows[0]?.reset_date) {
-        await client.query(
-          `
-            INSERT INTO user_credits (user_id, bonus, used_today, reset_date)
-            VALUES ($1, $2, $3, $4)
-            ON CONFLICT (user_id)
-            DO UPDATE SET
-              bonus = EXCLUDED.bonus,
-              used_today = EXCLUDED.used_today,
-              reset_date = EXCLUDED.reset_date
-          `,
-          [
-            canonicalId,
-            credits.rows[0].bonus,
-            credits.rows[0].used_today,
-            credits.rows[0].reset_date,
-          ],
-        );
-      }
-      await client.query(
-        `DELETE FROM user_credits WHERE user_id = ANY($1::int[])`,
-        [duplicateIds],
-      );
-      await client.query(
-        `DELETE FROM users WHERE id = ANY($1::int[])`,
-        [duplicateIds],
-      );
-      await client.query(
-        `UPDATE users SET email = $2 WHERE id = $1`,
-        [canonicalId, group.normalized_email],
-      );
-    }
-
-    await client.query(`UPDATE users SET email = LOWER(TRIM(email)) WHERE email IS NOT NULL`);
-    await client.query(`CREATE UNIQUE INDEX IF NOT EXISTS users_email_lower_unique ON users (LOWER(email))`);
-    await client.query("COMMIT");
-  } catch (error) {
-    await client.query("ROLLBACK");
-    throw error;
-  } finally {
-    client.release();
-  }
+  await pool.query(`UPDATE users SET email = LOWER(TRIM(email)) WHERE email <> LOWER(TRIM(email))`);
+  await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS users_email_lower_unique ON users (LOWER(email))`);
 }
 
 export async function migrateDreamTextEncryption(pool: Pool): Promise<void> {
@@ -421,14 +284,6 @@ async function applySchema(pool: Pool): Promise<void> {
         symbols TEXT[] NOT NULL DEFAULT '{}',
         image_url TEXT,
         asset_status TEXT
-      );
-    `),
-    pool.query(`
-      CREATE TABLE IF NOT EXISTS user_credits (
-        user_id     INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
-        bonus       INTEGER NOT NULL DEFAULT 0,
-        used_today  INTEGER NOT NULL DEFAULT 0,
-        reset_date  DATE    NOT NULL DEFAULT CURRENT_DATE
       );
     `),
     pool.query(`
