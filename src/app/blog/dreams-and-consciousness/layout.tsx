@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "梦与意识：弗洛伊德、荣格、普鲁斯特与阿德勒 | Dream Reel",
+  title: "Dreams and consciousness: Freud, Jung, Proust and Adler | Dream Reel",
   description:
-    "从心理分析、文学与现代睡眠科学理解梦如何连接欲望、记忆、意识与未来行动。",
+    "How psychoanalysis, literature and modern sleep science connect dreams to desire, memory, consciousness and what we do next.",
 };
 
 export default function DreamsAndConsciousnessLayout({

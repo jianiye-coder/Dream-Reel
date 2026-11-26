@@ -88,27 +88,28 @@ test("register, sign in, switch language, and update account", async ({ page, co
   // and clicks are handled.
   await expect(page.getByText(email)).toBeVisible();
 
-  const nameInput = page.getByPlaceholder("写在扉页上的名字");
+  const nameInput = page.getByPlaceholder("The name on the bookplate");
   await expect(nameInput).toHaveValue("E2E User");
   await nameInput.fill("Renamed Dreamer");
-  await page.getByRole("button", { name: "保存", exact: true }).click();
-  await expect(page.getByRole("status").filter({ hasText: "名字已更新" })).toBeVisible();
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(page.getByRole("status").filter({ hasText: "Name updated" })).toBeVisible();
 
   await page.reload();
   await expect(page.getByText(email)).toBeVisible();
   await expect(nameInput).toHaveValue("Renamed Dreamer");
   await expect(page.locator(".nb-account .nb-owner")).toHaveText("Renamed Dreamer");
 
-  await expect(page.locator("html")).toHaveAttribute("lang", "zh-CN");
-  await page.getByRole("button", { name: "Switch to English" }).first().click();
+  // English is the default; Chinese is one click away and is remembered
   await expect(page.locator("html")).toHaveAttribute("lang", "en");
-  await expect(page.getByRole("button", { name: "切换中文" }).first()).toBeVisible();
+  await page.getByRole("button", { name: "切换中文" }).first().click();
+  await expect(page.locator("html")).toHaveAttribute("lang", "zh-CN");
+  await expect(page.getByRole("button", { name: "Switch to English" }).first()).toBeVisible();
 
-  // the password route answers with a code, so the English page shows English
-  await page.getByLabel("Current password").fill("not-my-password");
-  await page.getByLabel("New password (min. 6 characters)").fill("another-password");
-  await page.getByRole("button", { name: "Update password", exact: true }).click();
-  await expect(page.getByRole("status").filter({ hasText: "The current password is incorrect." })).toBeVisible();
+  // the password route answers with a code, so the Chinese page shows Chinese
+  await page.getByLabel("当前密码").fill("not-my-password");
+  await page.getByLabel("新密码（至少 6 位）").fill("another-password");
+  await page.getByRole("button", { name: "更新密码", exact: true }).click();
+  await expect(page.getByRole("status").filter({ hasText: "当前密码不正确。" })).toBeVisible();
 });
 
 test("keyboard focus is visible and mobile microcopy stays readable", async ({ page }) => {

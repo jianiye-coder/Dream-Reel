@@ -43,7 +43,7 @@ const msgSchema = z.object({
 
 const bodySchema = z.object({
   messages: z.array(msgSchema).min(1).max(30),
-  lang: z.enum(["zh", "en"]).default("zh"),
+  lang: z.enum(["zh", "en"]).default("en"),
   goal: z.enum(["recall", "support"]).default("recall"),
   preSleepMeal: z.string().trim().max(200).optional(),
   preSleepActivity: z.string().trim().max(200).optional(),

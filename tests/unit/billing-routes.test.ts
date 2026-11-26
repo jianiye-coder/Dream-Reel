@@ -77,6 +77,12 @@ describe("POST /api/billing/checkout", () => {
     },
   );
 
+  it("opens Checkout in English when the page sends no language", async () => {
+    const res = await checkout(post("/api/billing/checkout", {}));
+    expect(res.status).toBe(200);
+    expect(sentParams().params.locale).toBe("en");
+  });
+
   it("sends zh readers the USD price with exactly the documented Checkout parameters", async () => {
     const res = await checkout(post("/api/billing/checkout", { lang: "zh", from: "/journal" }));
     expect(res.status).toBe(200);
@@ -238,6 +244,13 @@ describe("POST /api/billing/portal", () => {
     const { url, params } = sentParams();
     expect(url).toBe("https://api.stripe.com/v1/billing_portal/sessions");
     expect(params).toEqual({ customer: "cus_existing", return_url: "https://dream-reel.example/account", locale: "en" });
+  });
+
+  it("opens the portal in English when the page sends no language", async () => {
+    billing.getStripeCustomerId.mockResolvedValue("cus_existing");
+    fetchMock.mockResolvedValue(stripeOk({ url: "https://billing.stripe.com/p/session/test_1" }));
+    await portal(post("/api/billing/portal", {}));
+    expect(sentParams().params.locale).toBe("en");
   });
 
   it("treats a customer Stripe no longer knows as NO_SUBSCRIPTION", async () => {
