@@ -32,3 +32,39 @@ it("creates morning_pages with a separate owner/date key and cascading user refe
     "INSERT INTO schema_version (version) VALUES ($1) ON CONFLICT DO NOTHING", [expect.any(Number)],
   );
 });
+
+it.each([
+  ["skips", undefined, false],
+  ["runs", "old=old-secret", true],
+] as const)("%s the cold-start re-encryption scan (previous keys: %s)", async (_label, previous, expected) => {
+  vi.resetModules();
+  database.query.mockReset();
+  globalThis.dreamPool = undefined;
+  vi.stubEnv("DATABASE_URL", "postgresql://invalid:invalid@localhost:1/no-real-database");
+  vi.stubEnv("DREAM_TEXT_ENCRYPTION_KEY", "schema-unit-test-key");
+  if (previous) vi.stubEnv("DREAM_TEXT_PREVIOUS_ENCRYPTION_KEYS", previous);
+  else vi.stubEnv("DREAM_TEXT_PREVIOUS_ENCRYPTION_KEYS", "");
+  database.query.mockResolvedValue({ rows: [] });
+  const { ensureSchema } = await import("@/lib/db");
+
+  await ensureSchema();
+
+  const scanned = database.query.mock.calls.some(([sql]) => String(sql).includes("FOR UPDATE SKIP LOCKED"));
+  expect(scanned).toBe(expected);
+});
+
+it("drops the unused v12 tables without letting a failure block startup", async () => {
+  vi.resetModules();
+  database.query.mockReset();
+  globalThis.dreamPool = undefined;
+  vi.stubEnv("DATABASE_URL", "postgresql://invalid:invalid@localhost:1/no-real-database");
+  vi.stubEnv("DREAM_TEXT_ENCRYPTION_KEY", "schema-unit-test-key");
+  database.query.mockResolvedValue({ rows: [] });
+  const { ensureSchema } = await import("@/lib/db");
+
+  await ensureSchema();
+
+  const drop = database.query.mock.calls.map(([sql]) => String(sql)).find((sql) => sql.includes("DROP TABLE IF EXISTS"));
+  expect(drop).toContain("user_credits, accounts, sessions, verification_tokens");
+  expect(drop).toContain("EXCEPTION WHEN OTHERS THEN");
+});

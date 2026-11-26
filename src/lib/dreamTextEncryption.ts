@@ -1,6 +1,5 @@
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from "crypto";
 
-const LEGACY_PREFIX = "dre1:";
 const CURRENT_PREFIX = "dre2:";
 const DEFAULT_KEY_ID = "primary";
 const IV_LENGTH = 12;
@@ -21,13 +20,6 @@ function deriveKey(secret: string) {
   return decoded.length === 32 ? decoded : createHash("sha256").update(secret).digest();
 }
 
-function deriveTransitionKey(secret: string) {
-  return createHash("sha256")
-    .update("dream-reel:dream-text:v2\0")
-    .update(secret)
-    .digest();
-}
-
 function validateKeyId(value: string) {
   if (!/^[A-Za-z0-9_-]{1,32}$/.test(value)) {
     throw new Error("DREAM_TEXT_ENCRYPTION_KEY_ID must contain only letters, numbers, _ or -.");
@@ -44,13 +36,14 @@ function getCurrentKey(): EncryptionKey {
     };
   }
 
-  const developmentSecret = process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET;
+  // Local development may borrow the auth secret; production never does.
+  const developmentSecret = process.env.NODE_ENV === "production"
+    ? undefined
+    : process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET;
   if (!developmentSecret) {
     throw new Error("DREAM_TEXT_ENCRYPTION_KEY is missing. Refusing to store dream text in plaintext.");
   }
-  return process.env.NODE_ENV === "production"
-    ? { id: "auth-transition", key: deriveTransitionKey(developmentSecret) }
-    : { id: "development", key: deriveKey(developmentSecret) };
+  return { id: "development", key: deriveKey(developmentSecret) };
 }
 
 function getPreviousKeys(): EncryptionKey[] {
@@ -70,17 +63,7 @@ function getPreviousKeys(): EncryptionKey[] {
 }
 
 function getDecryptionKeys() {
-  const current = getCurrentKey();
-  const keys = [current, ...getPreviousKeys()];
-
-  // Read-only compatibility for dre1 ciphertext created before a dedicated key
-  // was required. New ciphertext never uses an Auth.js secret.
-  const legacyAuthSecret = process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET;
-  if (legacyAuthSecret) {
-    keys.push({ id: "auth-transition", key: deriveTransitionKey(legacyAuthSecret) });
-    keys.push({ id: "legacy-auth", key: deriveKey(legacyAuthSecret) });
-  }
-
+  const keys = [getCurrentKey(), ...getPreviousKeys()];
   return keys.filter((candidate, index, all) =>
     all.findIndex((item) => item.key.equals(candidate.key)) === index,
   );
@@ -111,16 +94,20 @@ export function getCurrentDreamEncryptionKeyId() {
 }
 
 function isEncryptedDreamText(value: string) {
-  return value.startsWith(LEGACY_PREFIX) || value.startsWith(CURRENT_PREFIX);
+  return value.startsWith(CURRENT_PREFIX);
+}
+
+/** Whether a key rotation is in progress, i.e. stored text may still use an older key. */
+export function hasPreviousDreamEncryptionKeys() {
+  return Boolean(process.env.DREAM_TEXT_PREVIOUS_ENCRYPTION_KEYS?.trim());
 }
 
 export function needsDreamTextReencryption(value: string) {
   return !value.startsWith(`${CURRENT_PREFIX}${getCurrentDreamEncryptionKeyId()}:`);
 }
 
+// Always encrypts: a dream that happens to start with "dre2:" is still the reader's text.
 export function encryptDreamText(plainText: string) {
-  if (isEncryptedDreamText(plainText)) return plainText;
-
   const { id, key } = getCurrentKey();
   const iv = randomBytes(IV_LENGTH);
   const cipher = createCipheriv("aes-256-gcm", key, iv, { authTagLength: TAG_LENGTH });
@@ -130,23 +117,22 @@ export function encryptDreamText(plainText: string) {
   return `${CURRENT_PREFIX}${id}:${base64UrlEncode(iv)}.${base64UrlEncode(tag)}.${base64UrlEncode(encrypted)}`;
 }
 
+// Every stored row is dre2 (checked in production 2026-11-25: 42 dreams, 2 morning pages), so
+// anything else is corrupt data, not an old format to pass through.
 export function decryptDreamText(storedText: string) {
-  if (!isEncryptedDreamText(storedText)) return storedText;
+  if (!isEncryptedDreamText(storedText)) {
+    throw new Error("Stored dream text is not encrypted.");
+  }
 
-  const isCurrent = storedText.startsWith(CURRENT_PREFIX);
-  const currentPayload = isCurrent ? storedText.slice(CURRENT_PREFIX.length) : "";
-  const separator = currentPayload.indexOf(":");
-  if (isCurrent && separator <= 0) {
+  const payloadWithId = storedText.slice(CURRENT_PREFIX.length);
+  const separator = payloadWithId.indexOf(":");
+  if (separator <= 0) {
     throw new Error("Encrypted dream text is malformed.");
   }
-  const keyId = isCurrent && separator > 0 ? currentPayload.slice(0, separator) : null;
-  const payload = isCurrent
-    ? currentPayload.slice(separator + 1)
-    : storedText.slice(LEGACY_PREFIX.length);
+  const keyId = payloadWithId.slice(0, separator);
+  const payload = payloadWithId.slice(separator + 1);
   const keys = getDecryptionKeys();
-  const candidates = keyId
-    ? [...keys.filter((item) => item.id === keyId), ...keys.filter((item) => item.id !== keyId)]
-    : keys;
+  const candidates = [...keys.filter((item) => item.id === keyId), ...keys.filter((item) => item.id !== keyId)];
 
   for (const candidate of candidates) {
     try {
@@ -155,7 +141,7 @@ export function decryptDreamText(storedText: string) {
       // Try the next configured key without logging sensitive ciphertext.
     }
   }
-  throw new Error(`Unable to decrypt dream text with the configured key ring${keyId ? ` (${keyId})` : ""}.`);
+  throw new Error(`Unable to decrypt dream text with the configured key ring (${keyId}).`);
 }
 
 export function reencryptDreamText(storedText: string) {

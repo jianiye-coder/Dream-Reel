@@ -14,7 +14,7 @@ export async function GET() {
       {
         status: dedicatedEncryptionKey ? "ok" : "degraded",
         database: "reachable",
-        encryption: dedicatedEncryptionKey ? "dedicated" : "transition",
+        encryption: dedicatedEncryptionKey ? "dedicated" : "missing",
         latencyMs: Date.now() - startedAt,
       },
       {

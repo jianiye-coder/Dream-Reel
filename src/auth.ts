@@ -1,6 +1,5 @@
 import NextAuth, { CredentialsSignin } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
-import PostgresAdapter from "@auth/pg-adapter";
 import { ensureSchema, getPool } from "@/lib/db";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
@@ -22,7 +21,6 @@ const credentialsSchema = z.object({
 
 export const { handlers, auth } = NextAuth({
   ...authConfig,
-  adapter: PostgresAdapter(getPool()),
   providers: [
     CredentialsProvider({
       name: "credentials",

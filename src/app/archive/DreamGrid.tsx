@@ -1426,7 +1426,7 @@ export default function DreamGrid({
   const [tagBusy, setTagBusy] = useState(false);
   const [tagError, setTagError] = useState("");
   const bookRef = useRef<HTMLDivElement>(null);
-  // the fields list pages leave out (inline image, visual brief), per dream, once a full copy was seen;
+  // the field list pages leave out (the visual brief), per dream, once a full copy was seen;
   // the editor can then open it straight away without a refetch
   const fullCopies = useRef(new Map<number, Pick<DreamEntry, "imageUrl" | "thumbnailUrl" | "assetStatus" | "visualBrief">>());
   const rememberFull = (full: DreamEntry) => {
@@ -1595,30 +1595,6 @@ export default function DreamGrid({
   const monthSymbol = monthTop && monthTop.count >= 2 ? monthTop.item : null;
   const hasSymbol = (entry: DreamEntry, symbol: string) => entry.symbols.some((item) => normalizeKeyword(item) === normalizeKeyword(symbol));
 
-  // List pages leave out inline (data URL) images. Fetch them for the open night so its photo can be
-  // taped on, and merge only the image fields: anything edited meanwhile (autosave, rename, merge) stays.
-  const shownId = shownEntry?.id ?? null;
-  const shownOmitted = Boolean(shownEntry?.imageUrlOmitted) && activeTab === "calendar";
-  useEffect(() => {
-    if (shownId == null || !shownOmitted) return;
-    const controller = new AbortController();
-    fetch(`/api/dreams?id=${shownId}`, { cache: "no-store", signal: controller.signal })
-      .then((response) => (response.ok ? response.json() as Promise<{ entry?: DreamEntry }> : null))
-      .then((payload) => {
-        const full = payload?.entry;
-        if (!full || controller.signal.aborted) return;
-        setLocalEntries((current) => current.map((item) => (
-          // a newer full copy (e.g. from a save) already replaced the list version: leave it alone
-          item.id === full.id && item.imageUrlOmitted
-            ? { ...item, imageUrl: full.imageUrl, thumbnailUrl: full.thumbnailUrl, imageUrlOmitted: undefined, assetStatus: full.assetStatus, visualBrief: full.visualBrief }
-            : item
-        )));
-        rememberFull(full);
-      })
-      .catch(() => {}); // stays omitted; the next visit to this night tries again
-    return () => controller.abort();
-  }, [shownId, shownOmitted]);
-
   /** How many times this symbol had appeared by this dream (inclusive), across the loaded archive. */
   function symbolOrdinal(entry: DreamEntry, symbol: string): number {
     const at = +new Date(entry.capturedAt);
@@ -1722,11 +1698,11 @@ export default function DreamGrid({
     setOpeningEntryId(null);
     const known = fullCopies.current.get(entry.id);
     if (known) {
-      setSelected({ ...entry, ...known, imageUrlOmitted: undefined });
+      setSelected({ ...entry, ...known });
       setReadyId(entry.id);
       return;
     }
-    // the list copy lacks inline images and the visual brief; the editor stays read-only until the
+    // the list copy lacks the visual brief; the editor stays read-only until the
     // full entry arrives, so no save can overwrite those fields with nulls
     setSelected(entry);
     setReadyId(null);
@@ -2548,7 +2524,7 @@ export default function DreamGrid({
 
       <DreamEditorModal
         entry={selected}
-        ready={selected != null && readyId === selected.id && !selected.imageUrlOmitted}
+        ready={selected != null && readyId === selected.id}
         loadError={openError}
         onRetry={() => { if (selected) void openEntry(selected, "retry"); }}
         thisYear={thisYear}

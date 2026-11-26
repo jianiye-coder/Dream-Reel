@@ -20,7 +20,7 @@ databaseDescribe("PostgreSQL integration", () => {
   beforeEach(async () => {
     await getPool().query(`
       TRUNCATE payment_events, usage_periods, subscriptions,
-               dream_entries, sessions, accounts, users RESTART IDENTITY CASCADE
+               dream_entries, users RESTART IDENTITY CASCADE
     `);
   });
 
